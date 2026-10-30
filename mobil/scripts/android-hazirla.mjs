@@ -1,6 +1,7 @@
 // `npx cap add android` ile üretilen projeye Biz İkimiz ayarlarını uygular. Java gerekmez.
 // CI (.github/workflows/android.yml) her derlemede çalıştırır; tekrar çalıştırmak zararsızdır.
 //   1. SCHEDULE_EXACT_ALARM iznini kaldırır (hatırlatıcılar kesin olmayan alarmla kurulur).
+//      WebView'ın mikrofon ve konum izinlerini bildirir (WEB_IZINLERI).
 //   2. versionCode / versionName: BIZ_SURUM_KODU (CI'da github.run_number), BIZ_SURUM_ADI.
 //   3. Release imzası: derleme anında BIZ_KEYSTORE_PATH varsa PKCS12 depoyla imzalar.
 //   4. android-ek/res/ altındaki ek kaynakları (bildirim ikonu, widget) projeye kopyalar.
@@ -14,15 +15,34 @@ const TOOLS_NS = 'http://schemas.android.com/tools';
 const EXACT_ALARM = 'android.permission.SCHEDULE_EXACT_ALARM';
 const IMZA_ISARET = '// --- Biz İkimiz: CI imzası';
 
-/** Manifest'e tools ad alanını ve SCHEDULE_EXACT_ALARM kaldırma kuralını ekler. */
+/**
+ * WebView'ın çalışma anında istediği izinler. Capacitor 8 BridgeWebChromeClient kendisi ister:
+ * getUserMedia ses (sohbette sesli mesaj) → RECORD_AUDIO + MODIFY_AUDIO_SETTINGS;
+ * navigator.geolocation (anı haritası, Ayarlar › Mesafe) → ACCESS_COARSE_LOCATION + ACCESS_FINE_LOCATION.
+ * Manifest'te bildirilmezse istek hemen reddedilir; ek kod gerekmez.
+ */
+export const WEB_IZINLERI = [
+  'android.permission.RECORD_AUDIO',
+  'android.permission.MODIFY_AUDIO_SETTINGS',
+  'android.permission.ACCESS_COARSE_LOCATION',
+  'android.permission.ACCESS_FINE_LOCATION',
+];
+
+/** Manifest'e WebView izinlerini (yoksa), tools ad alanını ve SCHEDULE_EXACT_ALARM kaldırma kuralını ekler. */
 export function manifestYamala(xml) {
   let out = xml;
+  const nl = out.includes('\r\n') ? '\r\n' : '\n';
+  const sona = (satir) => { out = out.replace(/<\/manifest>\s*$/, `    ${satir}${nl}</manifest>${nl}`); };
   if (!out.includes('xmlns:tools=')) {
     out = out.replace(/<manifest\b/, `<manifest xmlns:tools="${TOOLS_NS}"`);
   }
+  for (const izin of WEB_IZINLERI) {
+    if (!new RegExp(`<uses-permission\\s+android:name="${izin.replace(/\./g, '\\.')}"`).test(out)) {
+      sona(`<uses-permission android:name="${izin}" />`);
+    }
+  }
   if (!out.includes(`"${EXACT_ALARM}" tools:node="remove"`)) {
-    const satir = `    <uses-permission android:name="${EXACT_ALARM}" tools:node="remove" />\n`;
-    out = out.replace(/<\/manifest>\s*$/, `${satir}</manifest>\n`);
+    sona(`<uses-permission android:name="${EXACT_ALARM}" tools:node="remove" />`);
   }
   return out;
 }

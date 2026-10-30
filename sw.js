@@ -1,6 +1,6 @@
 // Biz İkimiz service worker (site kökünde; kapsam = site kökü, alt klasörde de doğru). Sahip: Sunucu ajanı.
-// - HTML ve JS: ağ önce, önbellek yedek (yeni sürüm hemen gelir; çevrimdışında son kopya açılır).
-// - CSS, görsel, ikon, font: önbellekten hemen, arkada tazele (stale-while-revalidate).
+// - HTML, JS ve CSS: ağ önce, önbellek yedek (yeni sürüm hemen ve birlikte gelir; çevrimdışında son kopya).
+// - Görsel, ikon, font: önbellekten hemen, arkada tazele (stale-while-revalidate).
 // - Supabase, YouTube ve diğer dış adresler önbelleğe alınmaz (yalnız Google Fonts alınır).
 // - push → bildirim gösterir; bildirime dokununca açık pencereyi odaklar ya da sayfayı açar.
 // Tüm önbelleği atmak için SURUM'u değiştir.
@@ -9,8 +9,8 @@ const ONBELLEK = `biz-${SURUM}`;
 const KOK = new URL('./', self.location.href).href;
 const ON_YUKLE = ['./', 'css/base.css', 'assets/favicon.svg', 'manifest.webmanifest', 'assets/icons/icon-192.png', 'assets/icons/rozet-96.png'];
 const FONT_HOST = new Set(['fonts.googleapis.com', 'fonts.gstatic.com']);
-const VARLIK_RE = /\.(css|png|jpe?g|webp|gif|svg|ico|woff2?|ttf|otf|webmanifest)$/i;
-const VARLIK_HEDEF = new Set(['style', 'image', 'font', 'manifest']);
+const VARLIK_RE = /\.(png|jpe?g|webp|gif|svg|ico|woff2?|ttf|otf|webmanifest)$/i;
+const VARLIK_HEDEF = new Set(['image', 'font', 'manifest']);
 
 self.addEventListener('install', (e) => {
   e.waitUntil((async () => {

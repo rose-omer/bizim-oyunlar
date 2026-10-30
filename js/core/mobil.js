@@ -2,7 +2,8 @@
 // Android uygulaması canlı siteyi açar (mobil/capacitor.config.json server.url). Capacitor köprüsü
 // sayfaya window.Capacitor olarak gelir; eklentiler window.Capacitor.Plugins.<Ad> altındadır.
 // npm import ve build yok. Saf yardımcılar (hatirlaticiId, bildirimListesi, titresimAdimlari,
-// renkHex, cubukStili) Node'da test edilir: tests/mobil-*.test.mjs.
+// renkHex, cubukStili, apkSurumu, kabukKarari) Node'da test edilir: tests/mobil-*.test.mjs.
+import { APK_URL } from '../../sayfalar/daha/mantik.js';
 
 const EN_COK_HATIRLATICI = 64; // Android alarm sınırının çok altında kalır.
 const EN_BUYUK_ID = 0x7fffffff; // Java int
@@ -236,17 +237,77 @@ function geriTusu() {
   });
 }
 
+// ---------- Kabuk (APK) güncellemesi ----------
+// Site güncellemesi uygulamaya kendiliğinden gelir (canlı siteyi açar). Kabuk (mobil/) değişince yeni
+// APK gerekir; Android, Play Store dışından kurulumu kullanıcı onayı olmadan yapmaz. Burada haber verilir.
+
+export const APK_SURUM_API = 'https://api.github.com/repos/rose-omer/bizim-oyunlar/releases/tags/android-latest';
+const APK_DEPO_KEY = 'bizim.apk';
+const APK_KONTROL_MS = 12 * 3_600_000; // GitHub API: IP başına saatte 60 istek
+
+/** Sürüm notundaki "sürüm 1.0.N" → N (.github/workflows/android.yml yazar; N = versionCode). Yoksa null. */
+export function apkSurumu(metin) {
+  const m = /sürüm 1\.0\.(\d+)/.exec(String(metin ?? ''));
+  return m ? Number(m[1]) : null;
+}
+
+/** Son APK kuruludan yeni ve henüz haber verilmemiş mi? */
+export function kabukKarari({ kurulu, son, gosterilen = null } = {}) {
+  return Number.isFinite(kurulu) && Number.isFinite(son) && son > kurulu && son !== gosterilen;
+}
+
+function yerelDepo() {
+  try {
+    return globalThis.localStorage || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Uygulamada 12 saatte bir son APK sürümüne bakar; yeniyse bir kez bildir(APK_URL) çağırır.
+ * -> haber verildi mi. Hata fırlatmaz; web'de hiçbir şey yapmaz.
+ */
+export async function kabukGuncellemeKontrol({ bildir, fetchFn = (...a) => globalThis.fetch(...a), depo = yerelDepo(), simdi = Date.now() } = {}) {
+  const app = eklenti('App');
+  if (typeof app?.getInfo !== 'function') return false;
+  let kayit = {};
+  try {
+    kayit = JSON.parse(depo?.getItem(APK_DEPO_KEY) || '{}') || {};
+  } catch { /* bozuk kayıt: baştan */ }
+  if (simdi - (kayit.kontrol || 0) < APK_KONTROL_MS) return false;
+  try {
+    const kurulu = Number((await app.getInfo())?.build);
+    const res = await fetchFn(APK_SURUM_API, { headers: { Accept: 'application/vnd.github+json' } });
+    if (!res.ok) return false;
+    const son = apkSurumu((await res.json())?.body);
+    const yeni = kabukKarari({ kurulu, son, gosterilen: kayit.gosterilen ?? null });
+    kayit.kontrol = simdi;
+    if (yeni) kayit.gosterilen = son;
+    try {
+      depo?.setItem(APK_DEPO_KEY, JSON.stringify(kayit));
+    } catch { /* depo dolu */ }
+    if (yeni) bildir?.(APK_URL);
+    return yeni;
+  } catch (e) {
+    console.warn('[mobil] apk sürümü', e);
+    return false;
+  }
+}
+
 let basladi = false;
 
 /**
  * Uygulama içinde bir kez: geri tuşu (geçmişte geri; kökte uygulamayı küçült), durum çubuğu
- * rengi ve stili temaya uyar, açılış ekranı kapanır. Web'de hiçbir şey yapmaz.
- * Her sayfada çağrılmalı (ui.js startAppServices); sayfa değişince köprü dinleyicileri sıfırlanır.
+ * rengi ve stili temaya uyar, açılış ekranı kapanır, yeni APK varsa yeniApk(url) çağrılır.
+ * Web'de hiçbir şey yapmaz. Her sayfada çağrılmalı (ui.js startAppServices); sayfa değişince köprü
+ * dinleyicileri sıfırlanır.
  */
-export function mobilBaslat() {
+export function mobilBaslat({ yeniApk } = {}) {
   if (basladi || !isNative() || typeof document === 'undefined') return;
   basladi = true;
   geriTusu();
   durumCubugu();
   sessiz(cagir('SplashScreen', 'hide'), 'açılış ekranı');
+  kabukGuncellemeKontrol({ bildir: yeniApk });
 }

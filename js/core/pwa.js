@@ -22,6 +22,36 @@ export function kurulumKarari({ standalone = false, kuruldu = false, istemVar = 
   return 'yok';
 }
 
+const YENILE_GIZLI_MS = 30_000; // en az bu kadar arka planda kalan boştaki sayfa kendini yeniler
+const NATIVE_ONBELLEK_MS = 10 * 60_000; // GitHub Pages max-age=600: uygulamada eski dosya bu kadar kalabilir
+
+/** Oyun ya da Birlikte İzle sayfası mı? (yenileme oyunu ve videoyu keser) */
+export function mesgulYol(yol = '') {
+  return /\/(games\/[^/]+|sayfalar\/izle)\//.test(yol);
+}
+
+/**
+ * Yeni yayın kararı. ilk = sayfanın geldiği yayın, son = sunucudaki yayın (ms, Last-Modified).
+ * -> 'yok' | 'bekle' (uygulamada HTTP önbelleği tazelenene dek) | 'yenile' | 'bildir' (toast)
+ */
+export function guncellemeKarari({ ilk, son, simdi = Date.now(), gizliMs = 0, doluAlan = false, mesgul = false, native = false } = {}) {
+  if (!Number.isFinite(ilk) || !Number.isFinite(son) || son <= ilk) return 'yok';
+  if (native && simdi - son < NATIVE_ONBELLEK_MS) return 'bekle';
+  if (gizliMs >= YENILE_GIZLI_MS && !doluAlan && !mesgul) return 'yenile';
+  return 'bildir';
+}
+
+/** Sunucudaki yayın zamanı (ms): site köküne önbelleksiz HEAD, Last-Modified. Bilinmiyorsa null. */
+export async function sunucuSurumu(fetchFn = (...a) => globalThis.fetch(...a)) {
+  try {
+    const res = await fetchFn(KOK_URL.href, { method: 'HEAD', cache: 'no-store' });
+    const t = res.ok ? Date.parse(res.headers.get('Last-Modified') || '') : NaN;
+    return Number.isFinite(t) ? t : null;
+  } catch {
+    return null;
+  }
+}
+
 // ---------- Tarayıcı ----------
 
 let kayit = null; // Promise<ServiceWorkerRegistration | null>
@@ -71,6 +101,75 @@ export function registerPwa() {
       return null;
     });
   return kayit;
+}
+
+// ---------- Otomatik güncelleme ----------
+// GitHub Pages her yayında bütün dosyalara aynı Last-Modified'ı verir: yayın sürümü odur.
+// HTML ve JS her açılışta ağdan gelir; bu bölüm açık kalmış sayfanın yeni yayına geçmesini sağlar.
+
+const KONTROL_ARASI_MS = 60_000;
+const ACIKKEN_KONTROL_MS = 30 * 60_000;
+let izleniyor = false;
+
+/** Sayfada doldurulmuş yazı alanı var mı? (yenileme yazılanı siler) */
+function doluAlanVar() {
+  const alanlar = document.querySelectorAll('textarea, input:not([type]), input[type="text"], input[type="search"], '
+    + 'input[type="email"], input[type="url"], [contenteditable="true"]');
+  return [...alanlar].some((el) => String(el.value ?? el.textContent ?? '').trim() !== '');
+}
+
+/**
+ * Yeni yayını izler. Her sayfada startAppServices çağırır; tekrar çağrı zararsız.
+ * Sayfa öne gelince ve görünürken yarım saatte bir sunucuya bakar. Boştaki sayfa kendini yeniler;
+ * oyunda, izlemede, açık pencerede ya da yazı yazılırken bildir() çağrılır (ui.js: "Yenile" toast'u).
+ */
+export function guncellemeIzle({ bildir } = {}) {
+  if (izleniyor || typeof document === 'undefined') return;
+  izleniyor = true;
+  let ilk = Date.parse(document.lastModified); // başlık yoksa tarayıcı "şimdi" verir: güncelleme görünmez
+  let sonKontrol = 0;
+  let gizlendi = 0;
+  let bildirilen = null;
+  let bekleme = 0;
+
+  const kontrol = async (gizliMs = 0) => {
+    if (Date.now() - sonKontrol < KONTROL_ARASI_MS) return;
+    sonKontrol = Date.now();
+    const son = await sunucuSurumu();
+    if (!Number.isFinite(ilk)) {
+      ilk = son ?? NaN;
+      return;
+    }
+    const karar = guncellemeKarari({
+      ilk, son, simdi: Date.now(), gizliMs, doluAlan: doluAlanVar(), native: isNative(),
+      mesgul: mesgulYol(location.pathname) || !!document.querySelector('dialog[open]'),
+    });
+    if (karar === 'yenile') {
+      location.reload();
+    } else if (karar === 'bekle') {
+      clearTimeout(bekleme);
+      bekleme = setTimeout(() => {
+        sonKontrol = 0;
+        if (document.visibilityState === 'visible') kontrol();
+      }, NATIVE_ONBELLEK_MS - (Date.now() - son) + 5000);
+    } else if (karar === 'bildir' && bildirilen !== son) {
+      bildirilen = son;
+      bildir?.();
+    }
+  };
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      gizlendi = Date.now();
+      return;
+    }
+    const gizliMs = gizlendi ? Date.now() - gizlendi : 0;
+    gizlendi = 0;
+    kontrol(gizliMs);
+  });
+  setInterval(() => {
+    if (document.visibilityState === 'visible') kontrol();
+  }, ACIKKEN_KONTROL_MS);
 }
 
 /** -> { durum: 'kurulu' | 'kurulabilir' | 'ios-elle' | 'yok', kur(): Promise<boolean> } */

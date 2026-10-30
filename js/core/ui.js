@@ -506,8 +506,17 @@ export function startAppServices() {
   });
   window.addEventListener('storage', (e) => { if (e.key === TEMA_KEY) applyTheme(); });
   import('./kilit.js').then((m) => m.kilitKontrol()).catch((e) => console.warn('[kilit]', e));
-  import('./pwa.js').then((m) => m.registerPwa()).catch((e) => console.warn('[pwa]', e));
-  import('./mobil.js').then((m) => m.mobilBaslat()).catch((e) => console.warn('[mobil]', e));
+  import('./pwa.js').then((m) => {
+    m.registerPwa();
+    m.guncellemeIzle({
+      bildir: () => toast('Yeni sürüm hazır.', { action: { label: 'Yenile', onClick: () => location.reload() }, ms: 20000 }),
+    });
+  }).catch((e) => console.warn('[pwa]', e));
+  import('./mobil.js').then((m) => m.mobilBaslat({
+    yeniApk: (url) => toast('Uygulamanın yeni sürümü var.', {
+      action: { label: 'İndir', onClick: () => { location.href = url; } }, ms: 20000,
+    }),
+  })).catch((e) => console.warn('[mobil]', e));
   tazeleBildirim();
 }
 

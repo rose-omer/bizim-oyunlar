@@ -287,10 +287,13 @@ test('yetkiler: anon yalnız istemci RPC\'leri; tablolar ve yardımcılar kapal�
   await db.exec('reset role');
 });
 
-test('3. bölüm: photos kovası (5 MB, yalnız resim) ve anon yükleme politikası; tekrar çalıştırınca çoğalmaz', ATLA, async () => {
+test('3. bölüm: photos kovası (5 MB, resim ve sesli mesaj) ve anon yükleme politikası; tekrar çalıştırınca çoğalmaz', ATLA, async () => {
   const { q } = await kur();
   const b = await q('select id, public, file_size_limit::int as boyut, allowed_mime_types as tur from storage.buckets');
-  assert.deepEqual(b, [{ id: 'photos', public: true, boyut: 5242880, tur: ['image/jpeg', 'image/webp', 'image/png'] }]);
+  assert.deepEqual(b, [{
+    id: 'photos', public: true, boyut: 5242880,
+    tur: ['image/jpeg', 'image/webp', 'image/png', 'audio/webm', 'audio/mp4'],
+  }]);
   const p = await q(`select policyname, cmd from pg_catalog.pg_policies where schemaname = 'storage'`);
   assert.deepEqual(p.map((x) => [x.policyname, x.cmd]), [['photos_insert_anon', 'INSERT']]);
 });

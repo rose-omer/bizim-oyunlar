@@ -4,6 +4,7 @@ import { celebrate, toast, confirmDialog, h } from '../../js/core/ui.js';
 import { lobbyUrl } from '../../js/core/identity.js';
 import { sfx } from '../../js/core/sound.js';
 import { logGame } from '../../js/core/db.js';
+import { skorKaydet, toplamSatiri } from '../../js/core/skor.js';
 import { fitToViewport } from '../hafiza/ekran.js';
 import { bootMasa, agoText, bulunma, mountAway, resumeCard, boardSpace } from '../dama/masa.js';
 import * as K from './kurallar.js';
@@ -403,10 +404,14 @@ function celebrateEnd(s, info) {
   }
   const score = s.players.map((id) => `${nameOf(s, id)} ${s.tally?.[id] || 0}`).join(' · ');
   announce(`${title}. ${why}`);
-  if (M.authority && !info?.adopted) logGame(M.roomId, NS, S.resultOf(s));
+  let kayit = null;
+  if (M.authority && !info?.adopted) {
+    logGame(M.roomId, NS, S.resultOf(s));
+    kayit = skorKaydet(M.room, NS, { kazanan: w === -1 ? null : s.players[w] });
+  }
   closeCelebrate = celebrate({
     title,
-    lines: [why, `Skor: ${score}`],
+    lines: [why, `Skor: ${score}`, toplamSatiri(M.room, NS, s.players, s.names, kayit)],
     buttons: [
       { label: 'Rövanş', primary: true, onClick: () => { closeCelebrate = null; M.sync.dispatch({ type: 'new', no: s.no }); } },
       { label: 'Tahtaya bak', onClick: () => { closeCelebrate = null; } },

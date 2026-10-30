@@ -4,6 +4,7 @@ import { celebrate, toast, confirmDialog, h, ICONS } from '../../js/core/ui.js';
 import { lobbyUrl } from '../../js/core/identity.js';
 import { sfx } from '../../js/core/sound.js';
 import { logGame } from '../../js/core/db.js';
+import { skorKaydet, toplamSatiri } from '../../js/core/skor.js';
 import { newSeed } from '../hafiza/rng.js';
 import { fitToViewport } from '../hafiza/ekran.js';
 import { bootMasa, agoText, bulunma, mountAway, resumeCard } from '../dama/masa.js';
@@ -424,7 +425,12 @@ function celebrateEnd(s, info) {
   const pistiTotal = s.pp?.[seat] || 0;
   if (pistiTotal) lines.push(`Son elde ${pistiTotal} pişti puanı`);
   announce(`${title}. ${lines.join('. ')}`);
-  if (M.authority && !info?.adopted) logGame(M.roomId, NS, P.resultOf(s));
+  let kayit = null;
+  if (M.authority && !info?.adopted) {
+    logGame(M.roomId, NS, P.resultOf(s));
+    kayit = skorKaydet(M.room, NS, { kazanan: w === -1 ? null : s.players[w] });
+  }
+  lines.push(toplamSatiri(M.room, NS, s.players, s.names, kayit));
   closeCelebrate = celebrate({
     title,
     lines,

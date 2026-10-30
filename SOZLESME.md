@@ -434,3 +434,52 @@ await fotoSecVeYukle(roomId, { coklu }) // -> [url]; games/yapboz/image.js norma
 - Her HTML `<head>`'i: theme-color, favicon, manifest, apple-touch-icon, apple/mobile meta, erken.js.
 - `games/hafiza/sync.js`, `rng.js`, `ekran.js` artık ortak (Çiz, Dört Taş, Amiral, Dama, Tavla). API'leri sabit kalmalı.
 - Yerel duman testi: `iki.mjs` service worker'ı varsayılan engeller; PWA testi için `{ sw: true }`.
+
+---
+
+# v3 — Cihaz üyeliği, otomatik güncelleme ve yeni özellikler
+
+v3 bölümleri v1 ve v2'nin üstüne gelir. Çatışmada v3 geçerli.
+
+## 24. Cihaz üyeliği ve yetki
+- Oda kodu tek başına veriye erişim vermez. Her cihaz (`clientId`) odaya onayla girer.
+- **anahtar:** cihaz başına 32 bayt rastgele, base64url (43 karakter). localStorage `bizim.anahtar.<oda>`. Sunucuda yalnız sha256 özeti.
+- **Kimlik** = `(p_cihaz, p_anahtar)`. `js/core/uyelik.js` `kimlik(roomId)` verir. veri.js, db.js, bildirim.js her RPC'ye ekler. Yeni RPC'yi doğrudan çağırma; bu katmanı kullan.
+- **Durum:** `onayli | bekliyor | reddedildi`; istemcide ek olarak `cakisma` (aynı cihaz, farklı anahtar), `eski-sunucu` (RPC yok: kimliksiz eski davranış), `cevrimdisi`, `yok`.
+- **Onay yolları** (`oda_katil`): kurucu (veri olmayan yeni oda), geçiş (koruma başlamadan önce, odada `kisi` belgesi olan eski cihaz), tek kullanımlık davet (7 gün), kurtarma kodu (tek kullanım; çakışmayı da çözer). Başka cihaz Ayarlar › Cihazlar'dan onaylar.
+- **Koruma** (`oda.zorunlu`): yeni odada hemen; eski odada ilk girişten 3 gün sonra; bir cihaz çıkarılınca hemen. Koruma öncesinde kimliksiz çağrı çalışır, geçersiz kimlik her zaman reddedilir (42501).
+- **Kanal:** gerçek zamanlı konu `'oda:' + kanal`. Koruma öncesinde kanal = oda kodu; sonra gizli. Cihaz çıkarılınca yenilenir. İstemci 60 sn'de bir ve öne gelince `durumTazele` ile yakalar.
+- **Çıkarma:** cihazın satırı, push abonelikleri ve davetleri silinir; kanal yenilenir; o cihazın oluşturduğu kurtarma kodu silinir.
+- **42501:** yazma giden kutusunda kalır, eşitleme durur, `kapi.js` tam ekran kapıyı gösterir.
+- Modüller: `js/core/uyelik.js` (API), `uyelik-mantik.js` (saf; yerel sıkı öykünme), `kapi.js` (onay bekleme ekranı). Yerel modda varsayılan gevşek (herkes onaylı); sessionStorage `bizim.yerel.uyelik` = `'1'` ise sıkı öykünme.
+- Davet linki: `inviteUrl(roomId, davet)` → `<kök>/#oda=<id>&davet=<kod>`.
+- Sunucu: `supabase/schema.sql` 7. bölüm (`oda`, `oda_cihaz`, `oda_davet`, `oda_yetki`, `oda_katil`, `oda_durum`, `cihaz_*`, `davet_olustur`, `kurtarma_olustur`, `doc_ice_aktar`). Var olan RPC'ler sona `p_cihaz`, `p_anahtar` (`default null`) aldı.
+- Yedekten geri yükleme: Ayarlar › Verilerimiz. `doc_ice_aktar` 200'lük parçalar; yedekteki kopya daha yeniyse ya da mevcut kayıt silinmişse yazılır; yazılan `updated_at` = şimdi.
+
+## 25. Otomatik güncelleme
+- `js/core/pwa.js` `guncellemeIzle({ bildir })`: yayın sürümü = GitHub Pages `Last-Modified`. Öne gelince ve açıkken 30 dk'da bir bakar.
+  Boştaki sayfa (30 sn+ arka planda) yenilenir; oyunda, Birlikte İzle'de, açık pencerede ya da dolu yazı alanında "Yeni sürüm hazır" toast'u. Android uygulamasında yayından 10 dk sonra (HTTP önbelleği).
+- `sw.js`: HTML, JS ve CSS ağ önce; görsel ve font önbellekten.
+- `js/core/mobil.js` `kabukGuncellemeKontrol`: 12 saatte bir son APK sürümü; yeniyse bir kez "İndir" toast'u.
+
+## 26. Yeni veri türleri
+| Tür | id | data | Sahibi |
+|---|---|---|---|
+| `ruhgecmis` | `<YYYY-MM-DD>-<clientId>` | `{ emoji, not?, at }` (günün son seçimi) | Ruh Hâlimiz (`sayfalar/ruh/kayit.js`) |
+| `skor` | oyun id | `{ [clientId]: n, berabere, y<YYYY>: { [clientId]: n, berabere }, son: { kazanan, at } }` | `js/core/skor.js` |
+| `gunfoto` | `<YYYY-MM-DD>-<clientId>` | `{ foto, not?, at }` | Günün Fotoğrafı |
+| `haftalik` | `<YYYY-Www>-<clientId>` | `{ puanlar: { iletisim, yakinlik, eglence, destek } (1–5), not?, at }` | Haftalık Kontrol |
+| `harcama` | uuid (hesaplaşma `hesap-<hash>-<tutar>`) | `{ baslik, tutar (kuruş), odeyen, pay: { [clientId]: ağırlık }, tarih, kategori, hesaplasma? }` | Ortak Harcamalar |
+- Ek alanlar: `ani.konum = { lat, lng }` (4 ondalık); `mesaj.ses = { url, sure, tur }`; `mesaj.yildiz = { [clientId]: true }` (patch `yildiz.<clientId>`);
+  `liste.liste = 'sarki'` + `baglanti?` (yalnız https YouTube/Spotify/Apple Music) + `bizim?` (tek "Bizim şarkımız").
+- Yeni tür `sayfalar/ayarlar/mantik.js` `YEDEK_TURLERI` sonuna eklenir.
+
+## 27. Yeni sayfalar, oyunlar ve ortak modüller
+- SAYFALAR: `ruh`, `skor`, `yilimiz`, `rozetler`, `gunfoto`, `haftalik`, `harcama`. GAMES: `satranc`, `pisti`, `duello` (Kelime Düellosu), `sudoku`.
+- Rekabetçi oyun bitişinde ev sahibi `logGame` yanında `skorKaydet(room, oyunId, { kazanan })` çağırır; kutlamaya `toplamSatiri(...)` eklenir.
+- Masa oyunları `games/dama/masa.js` `bootMasa` üstüne kurulur. `game.save?(s)` kayda gideni belirler (varsayılan `view`). "Sıra sende" bildirimini sırayı devreden cihaz yollar; `partnerGoruyor(partner, ns)` doğruysa yollanmaz.
+- `storage.js`: `uploadAudio(blob, roomId)` (`<oda>/<uuid>.webm|m4a`, en çok 2 MB); `uploadPhoto` yolu `.webp` ya da `.jpg`. Kova: `image/jpeg|webp|png`, `audio/webm|mp4`.
+- `foto.js`: `fotoKucult(file)` (destek varsa WebP 0.82, yoksa JPEG).
+- `mobil.js`: `widgetGuncelle({ baslangic, bulusma, adlar })` → Android ana ekran widget'ı (yerel eklenti `BizWidget`, `mobil/android-ek/`). hub.js profil verisi gelince çağırır.
+- `mobil/scripts/android-hazirla.mjs` manifest'e `RECORD_AUDIO`, `MODIFY_AUDIO_SETTINGS`, `ACCESS_COARSE_LOCATION`, `ACCESS_FINE_LOCATION` ekler (Capacitor WebView istemi kendisi açar).
+- Dış kod: `vendor/supabase.js` ve `vendor/leaflet/` (Leaflet 1.9.4, BSD-2; yalnız `sayfalar/anilar/harita.js` dinamik yükler). Harita karoları OpenStreetMap; atıf zorunlu.

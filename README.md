@@ -5,13 +5,17 @@ Adres: https://rose-omer.github.io/bizim-oyunlar/
 
 ## Özellikler
 - **Biz:** kaç gündür birlikteyiz, yaklaşan özel günler, buluşma geri sayımı, dokunuş (💗 💋 🤗 🥺 💭), ruh hâli, mesafe (isteğe bağlı).
-- **Sohbet:** fotoğraf, tepki, yanıt, görüldü, yazıyor.
-- **Anılar:** fotoğraflı zaman çizelgesi, albüm, "geçen yıl bugün". **Mektuplar:** zaman kapsülü.
+- **Sohbet:** fotoğraf (WebP), sesli mesaj, tepki, yanıt, görüldü, yazıyor, arama, yıldızlı mesajlar.
+- **Anılar:** fotoğraflı zaman çizelgesi, albüm, harita, "geçen yıl bugün". **Mektuplar:** zaman kapsülü.
 - **Özel Günler:** takvim, doğum günleri, kilometre taşları, hatırlatma.
-- **Listelerimiz**, **Randevu Fikirleri** (200 fikir), **Günün Sorusu** (432 soru, seri), **Sevgi Dili Testi**, **Birlikte İzle** (YouTube eş zamanlı).
-- **Oyunlar (13):** Yapboz, Beni Ne Kadar Tanıyorsun, Aynı Kafa, Doğruluk mu Cesaret mi, Hafıza, Çiz Bakalım,
-  Kim Daha Çok, Hiç Yaptın mı, Derin Sohbet, Dama, Tavla, Dört Taş/XOX, Amiral Battı.
-- **Ayarlar:** profil, başlangıç tarihi, PIN kilidi, tema, bildirim, yedek indirme.
+- **Listelerimiz** (Şarkılarımız dahil), **Randevu Fikirleri** (200 fikir), **Günün Sorusu** (432 soru, seri), **Sevgi Dili Testi**,
+  **Birlikte İzle** (YouTube eş zamanlı), **Ruh Hâlimiz** (30/90 gün), **Günün Fotoğrafı**, **Haftalık Kontrol**, **Ortak Harcamalar**,
+  **Yılımız** (yıl özeti), **Rozetlerimiz**, **Skor Tablosu**.
+- **Oyunlar (17):** Yapboz, Beni Ne Kadar Tanıyorsun, Aynı Kafa, Doğruluk mu Cesaret mi, Hafıza, Çiz Bakalım,
+  Kim Daha Çok, Hiç Yaptın mı, Derin Sohbet, Dama, Tavla, Dört Taş/XOX, Amiral Battı, Satranç, Pişti, Kelime Düellosu, Birlikte Sudoku.
+- **Güvenlik:** her cihaz odaya onayla girer (Ayarlar › Cihazlar); tek kullanımlık davet linki; kurtarma kodu.
+- **Ayarlar:** profil, başlangıç tarihi, PIN kilidi, tema, bildirim, yedek indirme ve geri yükleme.
+- **Güncelleme:** açık uygulama yeni yayını kendiliğinden alır. Android ana ekran widget'ı (gün sayacı).
 - **Bildirim:** dokunuş, mesaj, mektup; her sabah 09:00 özel gün, akşam 20:00 günün sorusu hatırlatması.
 
 ## Telefona kurma
@@ -41,6 +45,8 @@ npm test
    npx supabase functions deploy bildir hatirlat --no-verify-jwt --use-api --project-ref blgtlflryxknyalutugw
    ```
 4. Kontrol: `select jobname, schedule from cron.job;` → 2 satır.
+- **Yayın sırası** (şema değişince): (1) `schema.sql` tamamı, (2) `functions deploy`, (3) `git push`. Sıra bozulursa istemci
+  "eski sunucu" moduna düşer, bozulmaz. Eski odalarda cihaz onayı (koruma) ilk girişten 3 gün sonra kendiliğinden başlar.
 - `js/config.js`'teki publishable anahtar ve VAPID genel anahtarı gizli değildir. Özel anahtarlar yalnız
   `C:/Users/koseo/.bizim-ikimiz/` klasöründe (yedekle). "service_role" / "secret" anahtarını siteye koyma.
 

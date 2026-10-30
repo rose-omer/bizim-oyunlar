@@ -7,6 +7,7 @@ import { celebrate, toast, confirmDialog, h } from '../../js/core/ui.js';
 import { lobbyUrl } from '../../js/core/identity.js';
 import { sfx } from '../../js/core/sound.js';
 import { logGame } from '../../js/core/db.js';
+import { skorKaydet, toplamSatiri } from '../../js/core/skor.js';
 import { fitToViewport } from '../hafiza/ekran.js';
 import { newSeed } from '../hafiza/rng.js';
 import { bootMasa, agoText, tamlayan, mountAway, resumeCard } from '../dama/masa.js';
@@ -597,9 +598,11 @@ function bitis(v, info) {
   const ad = pName(v);
   const k = v.sonuc?.kazanan;
   const s = M.sync.state;
+  let kayit = null;
   if (M.authority && M.roomId && !info?.adopted && logged !== s.no) {
     logged = s.no;
     logGame(M.roomId, NS, D.resultOf(s));
+    kayit = skorKaydet(M.room, NS, { kazanan: k === -1 || k == null ? null : s.players[k] });
   }
   try { localStorage.removeItem(GKEY); } catch { /* yok */ }
   if (celebrated === v.no) return;
@@ -619,7 +622,7 @@ function bitis(v, info) {
     if (!w || w.faz !== 'bitti' || w.no !== v.no) return;
     closeCelebrate = celebrate({
       title: baslik,
-      lines: satirlar,
+      lines: [...satirlar, toplamSatiri(M.room, NS, s.players, s.names, kayit)],
       buttons: [
         { label: 'Tekrar oyna', primary: true, onClick: () => { closeCelebrate = null; M.sync.dispatch({ type: 'yeni', no: v.no }); } },
         { label: 'Tahtaya bak', onClick: () => { closeCelebrate = null; } },

@@ -184,8 +184,11 @@ function renderDeck(s) {
     h('span', { class: 'ps-count' }, n ? `Destede ${n}` : 'Deste bitti'));
 }
 
+// Yerdeki kartlar; kapalılar null (ev sahibinin tam durumunda da gösterilmez).
+const openPile = (s) => s.pile.map((c, i) => (i < s.hidden ? null : c));
+
 function renderPile(s) {
-  const cards = s.pile.slice();
+  const cards = openPile(s);
   if (pending) cards.push(pending.card);
   const from = Math.max(0, cards.length - 6); // en çok son 6 kart çizilir
   const kids = cards.slice(from).map((c, k) => {
@@ -389,7 +392,7 @@ function effects(s, prev, info) {
     const who = mineCard ? 'Sen' : nameOf(s, s.players[l.by]);
     if (!mineCard && !l.took) sfx('snap');
     if (l.took) {
-      sweep([...prev.pile, l.card], mineCard);
+      sweep([...openPile(prev), l.card], mineCard);
       sfx(l.pisti ? 'match' : 'pop');
       if (l.pisti) flash(`${l.pisti === 20 ? 'Vale piştisi' : 'Pişti'}! +${l.pisti}`);
     }

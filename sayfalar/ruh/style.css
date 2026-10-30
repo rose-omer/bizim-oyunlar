@@ -1,0 +1,332 @@
+/* Ruh Hâlimiz — yalnız base.css değişkenleri. Sen = erik (--plum), sevgilin = gül (--accent). */
+
+.ruh-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  width: 100%;
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 18px var(--gutter) 40px;
+}
+.ruh-sec { display: flex; flex-direction: column; gap: 12px; }
+.ruh-sec-bas {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  min-height: 44px;
+}
+.ruh-sec-bas h2 { font-size: 1.375rem; }
+.ruh-wrap .avatar { box-shadow: none; }
+.ruh-zaman { color: var(--muted); font-size: 0.8125rem; font-weight: 650; line-height: 1.3; }
+
+/* ---------- Bugün: koyu erik kart, iki sütun ---------- */
+.ruh-bugun {
+  --ink: var(--hero-ink);
+  --ink-muted: var(--hero-muted);
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  background: var(--hero);
+  color: var(--ink);
+  box-shadow: var(--shadow-lg);
+}
+.ruh-bugun-bas {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 2px 12px;
+  padding: 18px 20px 0;
+}
+.ruh-bugun-bas h2 { font-size: 1.5rem; color: var(--ink); }
+.ruh-bugun-bas p { color: var(--ink-muted); font-size: 0.875rem; font-weight: 700; }
+.ruh-bugun-ikili { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.ruh-kisi {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 14px 12px 22px;
+  text-align: center;
+}
+.ruh-kisi + .ruh-kisi { border-left: 1px solid color-mix(in srgb, var(--ink) 16%, transparent); }
+.ruh-kisi-ad {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  font-weight: 800;
+  line-height: 1.2;
+}
+.ruh-kisi-ad > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ruh-kisi .avatar { --av: 28px; }
+.ruh-kisi .avatar.me { background: color-mix(in srgb, var(--ink) 18%, transparent); color: var(--ink); }
+.ruh-kisi .avatar.partner { background: var(--hero-accent); color: var(--hero); }
+.ruh-balon {
+  display: grid;
+  place-items: center;
+  width: 76px;
+  height: 76px;
+  margin: 6px 0 2px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--ink) 12%, transparent);
+  font-size: 42px;
+  line-height: 1;
+}
+.ruh-balon.eski { filter: saturate(0.55); opacity: 0.72; }
+.ruh-balon.bos {
+  background: transparent;
+  border: 2px dashed color-mix(in srgb, var(--ink) 34%, transparent);
+}
+.ruh-his {
+  font-family: var(--font-display);
+  font-variation-settings: 'SOFT' 100;
+  font-size: 1.1875rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+.ruh-his.soluk { color: var(--ink-muted); font-size: 1rem; }
+.ruh-not {
+  display: -webkit-box;
+  overflow: hidden;
+  max-width: 100%;
+  font-size: 0.9375rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+.ruh-bugun .ruh-zaman { color: var(--ink-muted); }
+.ruh-sec-btn {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin-top: 4px;
+  padding: 0 16px;
+  border-radius: var(--radius-pill);
+  background: var(--hero-accent);
+  color: var(--hero);
+  font-size: 0.9375rem;
+  font-weight: 800;
+  text-decoration: none;
+}
+.ruh-bugun :focus-visible { outline-color: var(--hero-accent); }
+
+/* ---------- Bu hafta ---------- */
+.ruh-hafta { display: flex; flex-direction: column; gap: 0; padding: 4px 16px; }
+.ruh-hafta-kisi {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px 12px;
+  padding: 14px 0;
+}
+.ruh-hafta-kisi + .ruh-hafta-kisi { border-top: 1px solid var(--line); }
+.ruh-hafta-kisi .avatar { --av: 36px; }
+.ruh-hafta-metin { min-width: 0; }
+.ruh-hafta-cumle { font-weight: 800; line-height: 1.3; overflow-wrap: anywhere; }
+.ruh-hafta-alt { color: var(--muted); font-size: 0.875rem; font-weight: 650; }
+.ruh-serit {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ruh-serit li {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 0 5px;
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+.ruh-serit .e { display: grid; place-items: center; height: 26px; font-size: 21px; line-height: 1; }
+.ruh-serit .g { color: var(--muted); font-size: 0.6875rem; font-weight: 800; line-height: 1.2; }
+.ruh-serit li.bugun { box-shadow: inset 0 0 0 2px var(--accent); }
+.ruh-serit li.bugun .g { color: var(--accent-strong); }
+.ruh-serit li.gelecek { background: transparent; box-shadow: inset 0 0 0 1px var(--line); }
+.ruh-nokta {
+  display: block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--muted) 45%, transparent);
+}
+.ruh-serit li.gelecek .ruh-nokta { background: transparent; }
+
+/* ---------- Takvim ---------- */
+.ruh-seg > button { padding: 0 14px; }
+.ruh-lejant {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  color: var(--muted);
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+.ruh-lejant > span { display: inline-flex; align-items: center; gap: 6px; }
+.ruh-lejant .avatar { --av: 20px; font-size: 10px; }
+.ruh-ayni-ornek {
+  display: block;
+  width: 16px;
+  height: 16px;
+  border-radius: 5px;
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+.ruh-takvim { display: flex; flex-direction: column; gap: 4px; }
+.ruh-gunadlari,
+.ruh-hafta-satir { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.ruh-gunadlari span { color: var(--muted); font-size: 0.75rem; font-weight: 800; text-align: center; }
+.ruh-gun,
+.ruh-bosluk { min-width: 0; min-height: 62px; }
+.ruh-gun {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 4px 0 5px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--text);
+  touch-action: manipulation;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease, transform 0.12s var(--ease);
+}
+.ruh-gun:active { transform: scale(0.96); }
+.ruh-gun-no {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.6875rem;
+  font-weight: 800;
+  line-height: 1.25;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.ruh-gun-no.ay { color: var(--accent-strong); }
+.ruh-gun .e { display: grid; place-items: center; height: 21px; font-size: 17px; line-height: 1; }
+.ruh-gun.ayni { background: var(--accent-soft); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent); }
+.ruh-gun.bugun { box-shadow: inset 0 0 0 2px var(--accent); }
+.ruh-gun[aria-expanded='true'] { background: var(--plum); box-shadow: none; color: var(--plum-ink); }
+.ruh-gun[aria-expanded='true'] .ruh-gun-no { color: var(--plum-ink); }
+.ruh-gun[aria-expanded='true'] .ruh-nokta { background: color-mix(in srgb, var(--plum-ink) 45%, transparent); }
+.ruh-gun:focus-visible { outline-offset: 1px; }
+@media (hover: hover) {
+  .ruh-gun:hover:not([aria-expanded='true']) { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 55%, var(--line)); }
+}
+
+.ruh-detay {
+  position: relative;
+  margin: 6px 0 4px;
+  padding: 12px 14px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  animation: ruh-ac 0.22s var(--ease);
+}
+.ruh-detay::before {
+  content: '';
+  position: absolute;
+  top: -7px;
+  left: calc((100% - 24px) / 7 * (var(--kol) + 0.5) + var(--kol) * 4px - 7px);
+  width: 12px;
+  height: 12px;
+  border-top: 1px solid var(--line);
+  border-left: 1px solid var(--line);
+  background: var(--surface);
+  transform: rotate(45deg);
+}
+.ruh-detay-bas { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: -4px -8px 4px 0; }
+.ruh-detay-bas h3 { font-size: 1.0625rem; }
+.ruh-detay-kisi { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 10px; padding: 8px 0; }
+.ruh-detay-kisi + .ruh-detay-kisi { border-top: 1px solid var(--line); }
+.ruh-detay-kisi .avatar { --av: 32px; }
+.ruh-detay-his { line-height: 1.35; overflow-wrap: anywhere; }
+.ruh-detay-not { margin-top: 2px; line-height: 1.4; overflow-wrap: anywhere; }
+@keyframes ruh-ac { from { opacity: 0; transform: translateY(-4px); } }
+
+/* ---------- Dönem özeti ---------- */
+.ruh-ozet {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.ruh-ozet h3 { font-size: 1.0625rem; }
+.ruh-ozet-satir { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.ruh-ozet-ad { font-weight: 800; }
+.ruh-ozet-bos { color: var(--muted); font-size: 0.9375rem; }
+.ruh-ciplar { display: flex; flex-wrap: wrap; gap: 6px; }
+.ruh-cip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 30px;
+  padding: 2px 10px 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  font-size: 0.875rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.ruh-cip > span { font-size: 16px; line-height: 1; }
+.ruh-ayni {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--accent-strong);
+  font-weight: 800;
+}
+.ruh-ayni svg { width: 16px; height: 16px; fill: currentColor; }
+
+/* ---------- Boş durum ---------- */
+.ruh-bos {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 40px 8px 24px;
+  text-align: center;
+}
+.ruh-bos h2 { font-size: 1.625rem; }
+.ruh-bos .subtitle { max-width: 30em; }
+.ruh-bos .btn { margin-top: 6px; }
+.ruh-bos-cizim { display: flex; gap: 8px; margin-bottom: 6px; }
+.ruh-bos-cizim > span {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 68px;
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1.5px var(--line);
+  transform: rotate(-6deg);
+}
+.ruh-bos-cizim > span:last-child { transform: rotate(6deg); }
+.ruh-bos-cizim > span.dolu {
+  background: var(--accent-soft);
+  color: var(--accent);
+  box-shadow: var(--shadow);
+  transform: translateY(-6px);
+}
+.ruh-bos-cizim svg { width: 26px; height: 26px; fill: currentColor; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ruh-detay { animation: none; }
+  .ruh-gun { transition: none; }
+  .ruh-gun:active { transform: none; }
+}

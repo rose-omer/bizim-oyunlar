@@ -111,6 +111,7 @@ export function bildirimGorunum(destek, durum) {
 export const YEDEK_TURLERI = [
   'kisi', 'cift', 'gun', 'mesaj', 'okundu', 'ani', 'mektup', 'liste',
   'randevu', 'gs', 'sevgidili', 'ruh', 'dokunus', 'konum', 'oyunkayit',
+  'ruhgecmis',
 ];
 
 /**

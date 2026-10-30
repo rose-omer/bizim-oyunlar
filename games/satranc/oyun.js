@@ -177,3 +177,13 @@ export function resultOf(s) {
 export function material(caps) {
   return caps.map((l) => l.reduce((n, t) => n + (VALUE[t] || 0), 0));
 }
+
+/** Tahtadaki taşların puanı: [beyaz, siyah] (terfiyle gelen taş dahil). */
+export function boardMaterial(board) {
+  const out = [0, 0];
+  for (const ch of board) {
+    const v = VALUE[ch.toLowerCase()];
+    if (v) out[ch === ch.toUpperCase() ? 0 : 1] += v;
+  }
+  return out;
+}

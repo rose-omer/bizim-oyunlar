@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseFen, sqOf, START_FEN } from '../games/satranc/kurallar.js';
 import {
-  initialState, newGame, reduce, toAction, seat, isNewer, notice, resultOf, material,
+  initialState, newGame, reduce, toAction, seat, isNewer, notice, resultOf, material, boardMaterial,
 } from '../games/satranc/oyun.js';
 
 const W = 'omer', B = 'gul';
@@ -186,6 +186,11 @@ test('resultOf ve material', () => {
   assert.deepEqual(resultOf(s), { winner: -1, reason: null, plies: 4, no: 1 });
   assert.deepEqual(material(s.caps), [1, 1]);
   assert.deepEqual(material([['q', 'p'], ['n']]), [10, 3]);
+});
+
+test('boardMaterial: tahtadaki taş puanı (terfi dahil)', () => {
+  assert.deepEqual(boardMaterial(parseFen(START_FEN).board), [39, 39]);
+  assert.deepEqual(boardMaterial(parseFen('7k/8/8/8/8/8/8/QQ5K w - - 0 1').board), [18, 0]);
 });
 
 test('newGame seq sürdürür', () => {

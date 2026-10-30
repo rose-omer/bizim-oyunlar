@@ -75,6 +75,14 @@ export function saveOp(s, finished, exists) {
   return 'put';
 }
 
+/**
+ * "Sıra sende" bildirimi bu cihazdan mı gitmeli? holder = sıradaki kişinin id'si (sıra yoksa null).
+ * Yalnız sırayı devreden cihazda true: sıra değişti ve artık partnerde (Amiral, Dört Taş).
+ */
+export function siraPartnere(prevHolder, holder, meId) {
+  return !!holder && holder !== prevHolder && holder !== meId && holder !== UNKNOWN;
+}
+
 /** Sıra karşı tarafa geçti mi? (bildirim için) */
 export function handedTo(prev, s) {
   if (!prev || !s || prev.seq === s.seq) return null;

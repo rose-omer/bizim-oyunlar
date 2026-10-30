@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- FCM bildirim rengi (yedek): AndroidManifest default_notification_color. Sunucu mesajı da aynı rengi yollar. -->
+<resources>
+    <color name="biz_bildirim">#C2375C</color>
+</resources>

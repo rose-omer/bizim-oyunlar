@@ -1,11 +1,12 @@
-// Anlık bildirim (Web Push). Sahip: Sunucu ajanı. Sözleşme §20.
+// Anlık bildirim (Web Push; Android uygulamasında FCM). Sahip: Sunucu ajanı. Sözleşme §20.
 // Abonelik: tarayıcı push adresi → RPC push_kaydet (supabase/schema.sql 5. bölüm).
-// Gönderim: Edge Function 'bildir' (supabase/functions/bildir) odadaki diğer cihazlara iletir.
+// Android uygulaması (Capacitor) Web Push desteklemez: FCM belirteci → RPC fcm_kaydet (7. bölüm; js/core/mobil.js).
+// Gönderim: Edge Function 'bildir' (supabase/functions/bildir) odadaki diğer cihazlara iki kanaldan iletir.
 // Yerel modda ya da Supabase ayarı yoksa hiçbir şey yapmaz. Üst kısım saf (Node'da test edilir).
 import { SUPABASE_URL, SUPABASE_ANON_KEY, VAPID_PUBLIC_KEY } from '../config.js';
 import { me, isLocalMode, isValidRoomId } from './identity.js';
 import { getSupabase } from './room.js';
-import { isNative } from './mobil.js';
+import { isNative, fcmVar, fcmIzin, fcmKayit, fcmAc, fcmKapat } from './mobil.js';
 import { KOK_URL, iosMu, standaloneMu, registerPwa } from './pwa.js';
 
 export const TURLER = ['dokunus', 'mesaj', 'mektup', 'ani', 'gun', 'oyun', 'soru', 'liste', 'izle'];
@@ -13,9 +14,10 @@ const KISIT_MS = 10000; // aynı türden bildirim en çok 10 sn'de bir (ör. art
 
 // ---------- Saf yardımcılar ----------
 
-/** -> 'var' | 'ana-ekran-gerek' | 'yok' */
-export function destekKarari({ sunucu = true, native = false, ios = false, standalone = false, guvenli = true, sw = false, push = false, bildirim = false } = {}) {
-  if (!sunucu || native) return 'yok';
+/** -> 'var' | 'ana-ekran-gerek' | 'yok'. Uygulamada (native) yalnız FCM eklentisi varsa 'var'. */
+export function destekKarari({ sunucu = true, native = false, fcm = false, ios = false, standalone = false, guvenli = true, sw = false, push = false, bildirim = false } = {}) {
+  if (native) return sunucu && fcm ? 'var' : 'yok';
+  if (!sunucu) return 'yok';
   if (ios && !standalone) return 'ana-ekran-gerek'; // iPhone'da Web Push yalnız ana ekrana eklenmiş uygulamada
   return guvenli && sw && push && bildirim ? 'var' : 'yok';
 }
@@ -84,9 +86,11 @@ function sunucuVar() {
 export function bildirimDestegi() {
   try {
     const nav = globalThis.navigator || {};
+    const native = isNative();
     return destekKarari({
-      sunucu: sunucuVar() && !!VAPID_PUBLIC_KEY,
-      native: isNative(),
+      sunucu: sunucuVar() && (native || !!VAPID_PUBLIC_KEY),
+      native,
+      fcm: native && fcmVar(),
       ios: iosMu(nav.userAgent || '', nav.maxTouchPoints || 0),
       standalone: standaloneMu(),
       guvenli: !!globalThis.isSecureContext,
@@ -108,6 +112,7 @@ async function aboneligiBul() {
 export async function bildirimDurumu() {
   const destek = bildirimDestegi();
   if (destek !== 'var') return 'yok';
+  if (isNative()) return durumKarari({ destek, izin: await fcmIzin(), abonelik: !!fcmKayit() });
   const izin = globalThis.Notification.permission;
   let abonelik = null;
   if (izin === 'granted') {
@@ -128,6 +133,7 @@ async function hazirKayit() {
 /** Kullanıcı tıklamasıyla çağrılır: izin ister, aboneliği kaydeder. -> başarılı mı */
 export async function bildirimAc(roomId) {
   if (bildirimDestegi() !== 'var' || !isValidRoomId(roomId)) return false;
+  if (isNative()) return fcmAc(roomId);
   try {
     // İzin isteği tıklamanın hemen içinde olmalı (Safari): başka await'ten önce.
     const N = globalThis.Notification;
@@ -158,6 +164,7 @@ export async function bildirimAc(roomId) {
 
 /** Bu cihazın aboneliğini kapatır ve sunucudan siler. -> başarılı mı */
 export async function bildirimKapat(roomId) {
+  if (isNative()) return fcmKapat(roomId);
   try {
     const sub = await aboneligiBul();
     if (!sub) return true;

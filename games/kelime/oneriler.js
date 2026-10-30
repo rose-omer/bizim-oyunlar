@@ -1,0 +1,33 @@
+// Kelime Zinciri ipuçları: harf başına yaygın Türkçe kelimeler (küçük harf, Türk alfabesi).
+// 'ğ' ile başlayan kelime yok; zincir 'ğ' istemez (bkz. oyun.js sonHarf).
+
+export const ONERILER = {
+  a: ['araba', 'armut', 'ayva', 'anahtar', 'aslan', 'ayakkabı', 'ağaç', 'arı', 'ateş', 'ayna', 'avize', 'ada', 'akşam', 'ahtapot', 'ananas', 'ayı', 'ayran', 'asker', 'anne', 'abla', 'aşk', 'atlas'],
+  b: ['balık', 'bal', 'bardak', 'bulut', 'böcek', 'biber', 'börek', 'bahçe', 'balkon', 'baba', 'bebek', 'bisiklet', 'bayrak', 'bilet', 'buz', 'bıçak', 'boya', 'burun', 'baklava', 'bamya', 'bilgisayar', 'bina'],
+  c: ['ceket', 'cam', 'cami', 'cüzdan', 'ceviz', 'civciv', 'cadde', 'ceylan', 'cetvel', 'cep', 'ciğer', 'cevap', 'cumartesi', 'cezve', 'cacık', 'ceza', 'cüce', 'ciklet', 'coşku', 'cila', 'cadı'],
+  ç: ['çiçek', 'çay', 'çanta', 'çorba', 'çilek', 'çatal', 'çekiç', 'çocuk', 'çikolata', 'çam', 'çarşı', 'çizme', 'çatı', 'çorap', 'çöl', 'çınar', 'çekirdek', 'çakıl', 'çeşme', 'çiftlik', 'çizgi', 'çömlek'],
+  d: ['deniz', 'dağ', 'defter', 'dolap', 'domates', 'dut', 'davul', 'dalga', 'diş', 'duvar', 'dondurma', 'deve', 'dere', 'demir', 'dünya', 'dilek', 'düğme', 'dans', 'doktor', 'dürüm', 'dost'],
+  e: ['elma', 'ekmek', 'ev', 'eldiven', 'erik', 'ejderha', 'el', 'eşek', 'etek', 'enginar', 'eczane', 'ekran', 'eşya', 'ekin', 'efsane', 'eğlence', 'erkek', 'ezgi', 'ense', 'ebe', 'et'],
+  f: ['fil', 'fare', 'fındık', 'fıstık', 'fasulye', 'fener', 'fırın', 'fırça', 'fincan', 'fidan', 'fotoğraf', 'futbol', 'fırtına', 'film', 'filiz', 'fesleğen', 'fiyonk', 'fayans', 'fabrika', 'fikir', 'fular'],
+  g: ['gül', 'güneş', 'göl', 'gemi', 'gözlük', 'gece', 'gitar', 'gömlek', 'gazete', 'gök', 'gelin', 'güvercin', 'geyik', 'göz', 'gölge', 'gümüş', 'gerdanlık', 'garaj', 'gardırop', 'gofret', 'gurur'],
+  h: ['halı', 'hamur', 'havuç', 'hediye', 'horoz', 'hırka', 'hayvan', 'hastane', 'hamak', 'hurma', 'harita', 'hava', 'hindi', 'helva', 'heykel', 'hamsi', 'hız', 'hilal', 'hikâye', 'huzur', 'hece'],
+  ı: ['ılık', 'ırmak', 'ısı', 'ıslak', 'ışık', 'ızgara', 'ıhlamur', 'ıspanak', 'ıssız', 'ırk', 'ısırgan', 'ıtır', 'ıstakoz', 'ılıca', 'ısrar', 'ışıltı', 'ıska', 'ılgın', 'ırgat', 'ıslık', 'ıtriyat'],
+  i: ['inek', 'incir', 'iğne', 'ip', 'ipek', 'ilaç', 'iskele', 'istasyon', 'irmik', 'ispinoz', 'iz', 'imza', 'insan', 'ilkbahar', 'iskambil', 'izci', 'ibrik', 'ilmek', 'inci', 'iklim', 'ikiz'],
+  j: ['jilet', 'jandarma', 'jöle', 'jüri', 'jeton', 'jimnastik', 'jakuzi', 'jambon', 'jaguar', 'jeneratör', 'jest', 'jet', 'jeoloji', 'jokey', 'joker', 'jartiyer', 'jelatin', 'jaluzi', 'jenerik', 'judo', 'jip'],
+  k: ['kalem', 'kitap', 'kedi', 'köpek', 'kiraz', 'kavun', 'karpuz', 'kapı', 'kaşık', 'kar', 'kale', 'kuş', 'kelebek', 'kayık', 'kumsal', 'kaplumbağa', 'kurabiye', 'kahve', 'koltuk', 'kuzu', 'kek'],
+  l: ['lale', 'limon', 'lamba', 'leylek', 'lahana', 'lokum', 'lokanta', 'liman', 'levrek', 'lavanta', 'lastik', 'leblebi', 'lahmacun', 'lezzet', 'lacivert', 'lise', 'lav', 'leğen', 'lades', 'lira', 'lüfer'],
+  m: ['masa', 'muz', 'mandalina', 'maymun', 'mektup', 'mum', 'mantar', 'makas', 'merdiven', 'müzik', 'mısır', 'mercimek', 'mavi', 'martı', 'mendil', 'mağara', 'mozaik', 'melek', 'menekşe', 'midye', 'mutfak'],
+  n: ['nar', 'nane', 'nohut', 'nehir', 'nergis', 'ninni', 'nine', 'not', 'nal', 'numara', 'nişan', 'nefes', 'nazar', 'nilüfer', 'neşe', 'nokta', 'nem', 'nüfus', 'nakış', 'nevresim', 'nişasta'],
+  o: ['okul', 'orman', 'oyuncak', 'otobüs', 'oda', 'ok', 'ot', 'oya', 'olta', 'omlet', 'oklava', 'orkide', 'otel', 'oyun', 'ozan', 'odun', 'ocak', 'onur', 'oğul', 'otoyol', 'orkestra'],
+  ö: ['ördek', 'örümcek', 'ödev', 'öğretmen', 'öykü', 'ölçü', 'örgü', 'özlem', 'öpücük', 'ödül', 'öğle', 'önlük', 'öksürük', 'örtü', 'örnek', 'öfke', 'övgü', 'özgürlük', 'öküz', 'ölçek', 'ön', 'öğrenci'],
+  p: ['pasta', 'peynir', 'patates', 'portakal', 'pencere', 'perde', 'pamuk', 'papağan', 'pazar', 'para', 'park', 'pırasa', 'pide', 'pilav', 'piyano', 'pınar', 'pul', 'puf', 'palto', 'penguen', 'pijama'],
+  r: ['resim', 'radyo', 'reçel', 'renk', 'rüzgar', 'roman', 'roket', 'ruj', 'rende', 'ressam', 'rüya', 'rehber', 'reyhan', 'rozet', 'rampa', 'ritim', 'robot', 'rıhtım', 'rulo', 'raf', 'rakam'],
+  s: ['su', 'saat', 'sandalye', 'sabun', 'salata', 'simit', 'sincap', 'soğan', 'sokak', 'sepet', 'sarımsak', 'salıncak', 'sevgi', 'sahil', 'sinema', 'soba', 'sucuk', 'susam', 'sürahi', 'saksı', 'semaver'],
+  ş: ['şeker', 'şapka', 'şemsiye', 'şehir', 'şeftali', 'şelale', 'şarkı', 'şiir', 'şimşek', 'şövalye', 'şalgam', 'şal', 'şömine', 'şato', 'şerbet', 'şubat', 'şans', 'şişe', 'şahin', 'şekil', 'şaka'],
+  t: ['tavuk', 'tencere', 'terlik', 'tuz', 'tabak', 'tren', 'top', 'tavşan', 'taş', 'tarla', 'tepe', 'tost', 'telefon', 'tahta', 'turp', 'tilki', 'toprak', 'tatlı', 'tarçın', 'tepsi', 'tohum'],
+  u: ['uçak', 'un', 'uyku', 'umut', 'uzay', 'uçurtma', 'uzman', 'ufuk', 'uğur', 'unvan', 'uskumru', 'uydu', 'uçurum', 'usta', 'ulus', 'urgan', 'uzun', 'ucuz', 'uyum', 'uğurböceği', 'ulak'],
+  ü: ['üzüm', 'ütü', 'ülke', 'üniversite', 'ünlü', 'üçgen', 'ürün', 'üstat', 'üye', 'üzüntü', 'ümit', 'ünlem', 'ücret', 'ürperti', 'ün', 'üvez', 'ülkü', 'ürkek', 'üzengi', 'üst', 'üniforma'],
+  v: ['vazo', 'vapur', 'valiz', 'vişne', 'vatan', 'vadi', 'vagon', 'vida', 'vaşak', 'vali', 'vakit', 'veda', 'vitamin', 'vantilatör', 'video', 'viyola', 'volkan', 'vanilya', 'vücut', 'varlık', 'vinç'],
+  y: ['yaprak', 'yastık', 'yıldız', 'yumurta', 'yoğurt', 'yağmur', 'yatak', 'yol', 'yelek', 'yay', 'yaz', 'yengeç', 'yunus', 'yonca', 'yemek', 'yüzük', 'yelken', 'yorgan', 'yamaç', 'yayla', 'yıldırım'],
+  z: ['zeytin', 'zil', 'zürafa', 'zebra', 'zambak', 'zaman', 'zarf', 'zincir', 'zeybek', 'zümrüt', 'zirve', 'zar', 'zemin', 'zencefil', 'zerdali', 'zıpkın', 'zafer', 'zurna', 'zımba', 'zikzak', 'zevk'],
+};

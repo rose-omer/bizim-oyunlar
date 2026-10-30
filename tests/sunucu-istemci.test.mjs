@@ -29,7 +29,9 @@ test('destekKarari', () => {
   assert.equal(destekKarari({ ios: true, standalone: true }), 'yok', 'eski iOS: ana ekranda da push yok');
   assert.equal(destekKarari({ ...tam, push: false }), 'yok');
   assert.equal(destekKarari({ ...tam, guvenli: false }), 'yok');
-  assert.equal(destekKarari({ ...tam, native: true }), 'yok');
+  assert.equal(destekKarari({ ...tam, native: true }), 'yok', 'uygulamada Web Push yok');
+  assert.equal(destekKarari({ native: true, fcm: true }), 'var', 'uygulamada FCM');
+  assert.equal(destekKarari({ native: true, fcm: true, sunucu: false }), 'yok');
   assert.equal(destekKarari({ ...tam, sunucu: false, ios: true }), 'yok');
 });
 

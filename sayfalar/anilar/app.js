@@ -8,10 +8,11 @@ import { sfx } from '../../js/core/sound.js';
 import { bildir } from '../../js/core/bildirim.js';
 import { partnerGoruyor } from '../../js/core/room.js';
 import { toDay, parseDay } from '../../js/core/gunler.js';
-import { fotoYukle, fotoImg } from '../../js/core/foto.js';
+import { fotoYukle } from '../../js/core/foto.js';
 import * as M from './mantik.js';
 import { ikon } from './ikon.js';
 import { galeri, tamEkranAc } from './galeri.js';
+import { onizlemeImg } from './onizleme.js';
 
 const { room, roomId, me } = await bootPage({ ns: 'anilar', title: 'Anılarımız', tab: 'anilar' });
 const app = document.getElementById('app');
@@ -107,7 +108,7 @@ function tarihKapak(d) {
 function kapak(d, { eager = false } = {}) {
   const url = d.data.fotolar?.[0];
   return h('div', { class: 'ani-kapak', dataset: url ? null : { ton: ton(d.id) } },
-    url ? fotoImg(url, { alt: '', eager }) : tarihKapak(d));
+    url ? onizlemeImg(url, { alt: '', eager }) : tarihKapak(d));
 }
 
 function begenenlerYazi(begeni) {
@@ -152,9 +153,14 @@ function listeGorunumu() {
   const fab = h('button', { type: 'button', class: 'btn primary ani-fab', onclick: yeniAc }, ikon('arti'), 'Anı ekle');
   app.replaceChildren(h('div', { class: 'ani-sayfa' }, bugun, arac, suzgec, ozet, sonuc), fab);
 
+  // Veri değişmediyse (kendi yazmanın sunucu onayı, profil değişimi) albüm/çizelge yeniden kurulmaz.
+  let veriImza = '';
+  const imzaOf = (docs) => docs.map((d) => `${d.id}:${JSON.stringify(d.data)}`).join('|');
+
   function boya() {
     const odak = document.activeElement?.dataset?.k; // yeniden çizimde klavye odağı kaybolmasın
     const hepsi = col.all();
+    veriImza = imzaOf(hepsi);
     const bos = hepsi.length === 0;
     arac.hidden = bos;
     suzgec.hidden = bos;
@@ -219,7 +225,7 @@ function listeGorunumu() {
   }
 
   boya();
-  return { guncelle: boya };
+  return { guncelle: () => { if (imzaOf(col.all()) !== veriImza) boya(); } };
 }
 
 function bugunKartlari(items) {
@@ -271,7 +277,7 @@ function album(liste) {
       type: 'button', class: 'ani-album-kare',
       'aria-label': `${f.baslik}, ${M.gunYazi(f.tarih)} (${f.sira + 1}. fotoğraf)`,
       onclick: () => tamEkranAc(tam, k),
-    }, fotoImg(f.url, { alt: '' })))));
+    }, onizlemeImg(f.url, { alt: '' })))));
 }
 
 // ---------- Ayrıntı ----------
@@ -449,7 +455,7 @@ function formGorunumu(id) {
     fotoSayac.textContent = `${st.fotolar.length} / ${M.MAX_FOTO}`;
     const n = st.fotolar.length;
     const kutular = st.fotolar.map((url, k) => h('li', { class: 'ani-foto-kutu' },
-      fotoImg(url, { alt: `${k + 1}. fotoğraf`, eager: true }),
+      onizlemeImg(url, { alt: `${k + 1}. fotoğraf`, eager: true }),
       k === 0 ? h('span', { class: 'ani-kapak-rozet' }, 'Kapak') : null,
       h('div', { class: 'ani-foto-eylem' },
         h('button', { type: 'button', 'aria-label': `${k + 1}. fotoğrafı öne al`, disabled: k === 0, onclick: () => tasi(k, -1) }, ikon('sol')),

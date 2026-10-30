@@ -1,15 +1,18 @@
 // Edge Function istek işleyicileri. Ortam (env) ve fetch dışarıdan verilir: Deno'da gerçekleri,
 // Node testlerinde sahteleri. index.ts dosyaları yalnız bunları Deno.serve'e bağlar.
+// İki kanal: Web Push (push_sub, VAPID) ve FCM (fcm_sub, FCM_SERVICE_ACCOUNT; yoksa atlanır).
 import {
   istegiDogrula, pushYuku, endpointIzinli, kokIzinli, corsBasliklari, esitMi, publishableAnahtarlar,
   servisAnahtari, restBasliklari, istanbulGunu, gunNo, odaPlani, odayaGore,
 } from './mantik.js';
 import { parseDay } from './gunler.js';
 import { vapidHazirla, pushGonder } from './webpush.js';
+import { fcmHesabi, erisimBelirteci, fcmGonder } from './fcm.js';
 
 const VARSAYILAN_SUBJECT = 'https://rose-omer.github.io/bizim-oyunlar/';
 const GOVDE_MAX = 4096;
 const ACIL_TURLER = new Set(['mesaj', 'dokunus']);
+const ANAHTAR_ONBELLEK_MS = 5 * 60_000;
 
 /** PostgREST RPC çağırıcı (servis anahtarıyla; RLS'yi aşar). Hata: e.code = Postgres kodu. */
 export function rpcIstemcisi(env, fetchFn = fetch) {
@@ -64,36 +67,77 @@ export function vapidAl(env) {
   return vapidOnbellek.v;
 }
 
-/** isler: [{ abone, yuk, urgency? }] → sonuçlar (en çok `esZamanli` istek aynı anda). */
-export async function topluGonder(isler, vapid, { fetchFn = fetch, esZamanli = 6 } = {}) {
+/** isler için fn'i çalıştırır; en çok `esZamanli` iş aynı anda. -> sonuçlar */
+async function havuz(isler, fn, esZamanli = 6) {
   const sonuclar = [];
   let i = 0;
   const isci = async () => {
-    while (i < isler.length) {
-      const is = isler[i++];
-      sonuclar.push(await pushGonder(is.abone, is.yuk, vapid, { fetchFn, urgency: is.urgency || 'normal' }));
-    }
+    while (i < isler.length) sonuclar.push(await fn(isler[i++]));
   };
   await Promise.all(Array.from({ length: Math.min(esZamanli, isler.length) }, isci));
   return sonuclar;
 }
 
-/** push_sonuc RPC argümanları. reddedilen = izinli olmayan adresler (silinir). */
-export function sonucOzeti(sonuclar, reddedilen = []) {
+/** isler: [{ abone, yuk, urgency? }] → sonuçlar (en çok `esZamanli` istek aynı anda). */
+export function topluGonder(isler, vapid, { fetchFn = fetch, esZamanli = 6 } = {}) {
+  return havuz(isler, (is) => pushGonder(is.abone, is.yuk, vapid, { fetchFn, urgency: is.urgency || 'normal' }), esZamanli);
+}
+
+/**
+ * FCM_SERVICE_ACCOUNT → hesap | null. Tanımlı değilse ya da bozuksa null (bozuksa günlüğe yazılır):
+ * FCM atlanır, Web Push sürer.
+ */
+export function fcmAyari(env, etiket) {
+  try {
+    return fcmHesabi(env);
+  } catch (e) {
+    console.error(`[${etiket}] FCM ayarı`, e.message);
+    return null;
+  }
+}
+
+/**
+ * FCM işleri: [{ token, mesaj }] → sonuçlar. Erişim belirteci alınamazsa (ayar sorunu) boş döner:
+ * belirteçlerin hata sayacı artmaz.
+ */
+export async function fcmToplu(isler, hesap, { fetchFn = fetch, esZamanli = 6 } = {}) {
+  if (!hesap || !isler.length) return [];
+  let erisim;
+  try {
+    erisim = await erisimBelirteci(hesap, { fetchFn });
+  } catch (e) {
+    console.error('[fcm]', e.message);
+    return [];
+  }
+  return havuz(isler, (is) => fcmGonder(is.token, is.mesaj, { hesap, erisim, fetchFn }), esZamanli);
+}
+
+/**
+ * push_sonuc / fcm_sonuc RPC argümanları. reddedilen = izinli olmayan adresler (silinir).
+ * anahtar: sonuçtaki kimlik alanı ('endpoint' ya da FCM için 'token'). yetki sorunu olan FCM sonucu yazılmaz.
+ */
+export function sonucOzeti(sonuclar, reddedilen = [], anahtar = 'endpoint') {
+  const yazilacak = sonuclar.filter((s) => !s.yetki);
   return {
-    p_ok: sonuclar.filter((s) => s.ok).map((s) => s.endpoint),
-    p_gone: [...sonuclar.filter((s) => s.gone).map((s) => s.endpoint), ...reddedilen],
-    p_fail: sonuclar.filter((s) => !s.ok && !s.gone).map((s) => s.endpoint),
+    p_ok: yazilacak.filter((s) => s.ok).map((s) => s[anahtar]),
+    p_gone: [...yazilacak.filter((s) => s.gone).map((s) => s[anahtar]), ...reddedilen],
+    p_fail: yazilacak.filter((s) => !s.ok && !s.gone).map((s) => s[anahtar]),
   };
 }
 
-async function sonucYaz(rpc, ozet) {
+async function sonucYaz(rpc, ad, ozet) {
   if (!ozet.p_ok.length && !ozet.p_gone.length && !ozet.p_fail.length) return;
   try {
-    await rpc('push_sonuc', ozet);
+    await rpc(ad, ozet);
   } catch (e) {
-    console.error('[push_sonuc]', e.message);
+    console.error(`[${ad}]`, e.message);
   }
+}
+
+/** İki kanalın özetlerinden yanıt sayıları. */
+function sayilar(...ozetler) {
+  const n = (k) => ozetler.reduce((t, o) => t + o[k].length, 0);
+  return { gonderilen: n('p_ok'), silinen: n('p_gone'), hatali: n('p_fail') };
 }
 
 const jsonYanit = (status, veri, basliklar = {}) => new Response(JSON.stringify(veri), {
@@ -101,8 +145,9 @@ const jsonYanit = (status, veri, basliklar = {}) => new Response(JSON.stringify(
 });
 
 /**
- * POST { room, from, tur, baslik, metin, url } → odadaki diğer cihazlara Web Push.
+ * POST { room, from, tur, baslik, metin, url } → odadaki diğer cihazlara Web Push ve FCM.
  * Başlık `apikey` = publishable anahtar. Köken: GitHub Pages ya da localhost.
+ * FCM kısmı ayar ya da veritabanı sorununda düşer (günlüğe yazılır); Web Push yine gider.
  */
 export function bildirIsleyici({ env, fetchFn = fetch }) {
   return async (req) => {
@@ -136,35 +181,76 @@ export function bildirIsleyici({ env, fetchFn = fetch }) {
       return yanit(500, { hata: 'sunucu ayarı eksik' });
     }
 
+    const hedefArgs = { p_room: deger.room, p_from: deger.from };
     let hedefler;
     try {
-      hedefler = (await rpc('push_hedef', { p_room: deger.room, p_from: deger.from })) || [];
+      hedefler = (await rpc('push_hedef', hedefArgs)) || [];
     } catch (e) {
       if (e.code === '54000') return yanit(429, { hata: 'çok fazla bildirim, biraz bekle' });
       console.error('[bildir] push_hedef', e.message);
       return yanit(502, { hata: 'veritabanına ulaşılamadı' });
+    }
+    const fcm = fcmAyari(env, 'bildir');
+    let fcmHedefler = [];
+    if (fcm) {
+      try {
+        fcmHedefler = (await rpc('fcm_hedef', hedefArgs)) || [];
+      } catch (e) {
+        if (e.code === '54000') return yanit(429, { hata: 'çok fazla bildirim, biraz bekle' });
+        console.error('[bildir] fcm_hedef', e.message);
+      }
     }
 
     const yuk = pushYuku(deger);
     const urgency = ACIL_TURLER.has(deger.tur) ? 'high' : 'normal';
     const reddedilen = hedefler.filter((h) => !endpointIzinli(h.endpoint)).map((h) => h.endpoint);
     const isler = hedefler.filter((h) => endpointIzinli(h.endpoint)).map((abone) => ({ abone, yuk, urgency }));
-    const ozet = sonucOzeti(await topluGonder(isler, vapid, { fetchFn }), reddedilen);
-    await sonucYaz(rpc, ozet);
-    return yanit(200, { ok: true, gonderilen: ozet.p_ok.length, silinen: ozet.p_gone.length, hatali: ozet.p_fail.length });
+    const fcmIsler = fcmHedefler.map((h) => ({ token: h.token, mesaj: deger }));
+    const [webSonuc, fcmSonuc] = await Promise.all([
+      topluGonder(isler, vapid, { fetchFn }),
+      fcmToplu(fcmIsler, fcm, { fetchFn }),
+    ]);
+    const ozet = sonucOzeti(webSonuc, reddedilen);
+    const fcmOzet = sonucOzeti(fcmSonuc, [], 'token');
+    await sonucYaz(rpc, 'push_sonuc', ozet);
+    await sonucYaz(rpc, 'fcm_sonuc', fcmOzet);
+    return yanit(200, { ok: true, ...sayilar(ozet, fcmOzet) });
   };
 }
 
 /**
- * Günlük hatırlatma (pg_cron çağırır). Başlık `x-hatirlat-anahtar` = HATIRLAT_ANAHTAR secret'ı.
- * Gövde: { slot: 'sabah' | 'aksam', bugun?: 'YYYY-MM-DD' (elle deneme) }.
- * Aynı gün aynı vakit bir oda bir kez alır (hatirlat_isaretle).
+ * hatirlat'ın beklediği anahtar: veritabanından (RPC hatirlat_anahtar → vault; 5 dk önbellek),
+ * okunamazsa HATIRLAT_ANAHTAR secret'ı. Önbellek işleyiciye özel (Deno'da yalıtım ömrünce yaşar).
+ */
+export function anahtarKaynagi(env, fetchFn = fetch, saat = () => Date.now()) {
+  let onbellek = null;
+  return async () => {
+    const t = saat();
+    if (onbellek && onbellek.son > t) return onbellek.deger;
+    try {
+      const deger = await rpcIstemcisi(env, fetchFn)('hatirlat_anahtar');
+      if (typeof deger === 'string' && deger) {
+        onbellek = { deger, son: t + ANAHTAR_ONBELLEK_MS };
+        return deger;
+      }
+    } catch (e) {
+      console.error('[hatirlat] anahtar okunamadı', e.message);
+    }
+    return env('HATIRLAT_ANAHTAR') || '';
+  };
+}
+
+/**
+ * Günlük hatırlatma (pg_cron çağırır). Başlık `x-hatirlat-anahtar` = vault'taki 'hatirlat_anahtar'
+ * (anahtarKaynagi). Gövde: { slot: 'sabah' | 'aksam', bugun?: 'YYYY-MM-DD' (elle deneme) }.
+ * Aynı gün aynı vakit bir oda bir kez alır (hatirlat_isaretle). Web Push aboneleri ve FCM belirteçleri.
  */
 export function hatirlatIsleyici({ env, fetchFn = fetch, simdi = () => new Date() }) {
+  const anahtar = anahtarKaynagi(env, fetchFn, () => simdi().getTime());
   return async (req) => {
     if (req.method !== 'POST') return jsonYanit(405, { hata: 'yalnız POST' });
-    const beklenen = env('HATIRLAT_ANAHTAR');
-    if (!beklenen) return jsonYanit(500, { hata: 'HATIRLAT_ANAHTAR yok' });
+    const beklenen = await anahtar();
+    if (!beklenen) return jsonYanit(500, { hata: 'hatırlatma anahtarı yok' });
     if (!esitMi(req.headers.get('x-hatirlat-anahtar'), beklenen)) return jsonYanit(401, { hata: 'geçersiz anahtar' });
 
     let govde = {};
@@ -185,7 +271,18 @@ export function hatirlatIsleyici({ env, fetchFn = fetch, simdi = () => new Date(
     }
 
     try {
-      const odalar = odayaGore(await sayfala(rpc, 'push_abonelikler', {}, (s) => ({ p_after: s.endpoint })));
+      const webAboneler = await sayfala(rpc, 'push_abonelikler', {}, (s) => ({ p_after: s.endpoint }));
+      const fcm = fcmAyari(env, 'hatirlat');
+      let fcmAboneler = [];
+      if (fcm) {
+        try {
+          fcmAboneler = await sayfala(rpc, 'fcm_abonelikler', {}, (s) => ({ p_after: s.token }));
+        } catch (e) {
+          console.error('[hatirlat] fcm_abonelikler', e.message);
+        }
+      }
+      // Satır: Web Push { room, client, endpoint, p256dh, auth } ya da FCM { room, client, token }.
+      const odalar = odayaGore([...webAboneler, ...fcmAboneler]);
       const sonuc = { ok: true, slot, bugun, oda: 0, gonderilen: 0, silinen: 0, hatali: 0 };
       if (!odalar.size) return jsonYanit(200, sonuc);
       const belgeler = odayaGore(await sayfala(rpc, 'hatirlat_belgeler', slot === 'sabah'
@@ -202,16 +299,24 @@ export function hatirlatIsleyici({ env, fetchFn = fetch, simdi = () => new Date(
         ? new Set((await rpc('hatirlat_isaretle', { p_rooms: [...planlar.keys()], p_gun: bugun, p_slot: slot })) || [])
         : new Set();
       const isler = [];
+      const fcmIsler = [];
       for (const [room, plan] of planlar) {
         if (!isaretli.has(room)) continue;
         sonuc.oda++;
         for (const { abone, mesaj } of plan) {
-          if (endpointIzinli(abone.endpoint)) isler.push({ abone, yuk: pushYuku(mesaj) });
+          if (abone.token) fcmIsler.push({ token: abone.token, mesaj });
+          else if (endpointIzinli(abone.endpoint)) isler.push({ abone, yuk: pushYuku(mesaj) });
         }
       }
-      const ozet = sonucOzeti(await topluGonder(isler, vapid, { fetchFn }));
-      await sonucYaz(rpc, ozet);
-      Object.assign(sonuc, { gonderilen: ozet.p_ok.length, silinen: ozet.p_gone.length, hatali: ozet.p_fail.length });
+      const [webSonuc, fcmSonuc] = await Promise.all([
+        topluGonder(isler, vapid, { fetchFn }),
+        fcmToplu(fcmIsler, fcm, { fetchFn }),
+      ]);
+      const ozet = sonucOzeti(webSonuc);
+      const fcmOzet = sonucOzeti(fcmSonuc, [], 'token');
+      await sonucYaz(rpc, 'push_sonuc', ozet);
+      await sonucYaz(rpc, 'fcm_sonuc', fcmOzet);
+      Object.assign(sonuc, sayilar(ozet, fcmOzet));
       console.log('[hatirlat]', JSON.stringify(sonuc));
       return jsonYanit(200, sonuc);
     } catch (e) {

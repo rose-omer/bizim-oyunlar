@@ -1,0 +1,111 @@
+# Site GitHub Pages'e Actions ile yayınlanır. Depo gizli olsa da site herkese açık kalır (GitHub Pro).
+# Pages kaynağı "GitHub Actions" olmalı (build_type=workflow).
+# _site/ = depo kökü; .github, mobil, supabase, tests, dev, node_modules (ve diğer nokta dosyaları) hariç; .nojekyll dahil.
+# APK: android-latest sürümünden _site/indir/BizIkimiz.apk. Gizli depoda Releases girişsiz indirilemez;
+# indirme adresi bu yüzden Pages'tedir: https://rose-omer.github.io/bizim-oyunlar/indir/BizIkimiz.apk
+# Sürüm bilgisi: _site/indir/surum.json { surum, kod, tarih, fcm } (js/core/mobil.js kabukGuncellemeKontrol okur).
+# android.yml onu sürüme ek dosya olarak koyar; yoksa sürüm notundan ("sürüm A.B.N") üretilir.
+# Tetik: main'e push, elle, Android APK iş akışı main'de başarıyla bitince (yeni APK yayına girer).
+name: Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  workflow_run:
+    workflows: [Android APK]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Süren yayın yarıda kesilmez; bekleyen en yeni çalıştırma sonra yayınlar.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  yayin:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: github-pages
+      url: ${{ steps.yayin.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Site dosyaları (_site)
+        run: |
+          set -euo pipefail
+          mkdir _site
+          # "*" nokta dosyalarını almaz (.git, .github, .gitignore); .nojekyll ayrıca kopyalanır.
+          for f in *; do
+            case "$f" in
+              mobil|supabase|tests|dev|node_modules|_site|README.md|SOZLESME.md|package.json|package-lock.json) continue ;;
+            esac
+            cp -a "$f" _site/
+          done
+          cp -a .nojekyll _site/
+          test -f _site/index.html
+          ls -la _site
+
+      - name: APK ve sürüm bilgisi (android-latest)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag=android-latest
+          mkdir -p _site/indir
+          if ! bilgi=$(gh release view "$tag" -R "$GITHUB_REPOSITORY" --json body,publishedAt 2>/dev/null); then
+            echo "::warning::$tag sürümü yok; APK ve surum.json yayına girmedi."
+            exit 0
+          fi
+          if ! gh release download "$tag" -R "$GITHUB_REPOSITORY" -p BizIkimiz.apk -D _site/indir; then
+            echo "::warning::$tag sürümünde BizIkimiz.apk yok; APK ve surum.json yayına girmedi."
+            exit 0
+          fi
+          if gh release download "$tag" -R "$GITHUB_REPOSITORY" -p surum.json -D _site/indir 2>/dev/null; then
+            kaynak="surum.json"
+          else
+            # Eski sürüm: notun ilk satırı "... sürüm A.B.N ..." (android.yml yazar; N = versionCode).
+            govde=$(jq -r '.body // ""' <<<"$bilgi")
+            re='sürüm ([0-9]+\.[0-9]+\.([0-9]+))'
+            if [[ ! $govde =~ $re ]]; then
+              echo "::warning::$tag sürüm notunda 'sürüm A.B.N' yok; surum.json yazılmadı (uygulama güncelleme uyarısı vermez)."
+              exit 0
+            fi
+            fcm=true
+            [[ $govde == *"(FCM) yok"* ]] && fcm=false
+            jq -n --arg surum "${BASH_REMATCH[1]}" --argjson kod "${BASH_REMATCH[2]}" \
+              --arg tarih "$(jq -r '.publishedAt // ""' <<<"$bilgi")" --argjson fcm "$fcm" \
+              '{surum: $surum, kod: $kod, tarih: $tarih, fcm: $fcm}' > _site/indir/surum.json
+            kaynak="sürüm notu"
+          fi
+          if ! jq -e '(.kod | type == "number" and . > 0) and (.surum | type == "string")' _site/indir/surum.json > /dev/null; then
+            echo "::warning::surum.json geçersiz; yayına girmedi (uygulama güncelleme uyarısı vermez)."
+            rm -f _site/indir/surum.json
+          fi
+          echo "surum.json kaynağı: $kaynak"
+          ls -l _site/indir
+          cat _site/indir/surum.json 2>/dev/null || true
+
+      # js/core/pwa.js yayın sürümünü Last-Modified'dan okur: bütün dosyalar aynı zamanı taşımalı.
+      - name: Dosya zamanlarını eşitle
+        run: |
+          set -euo pipefail
+          t=$(date +%s)
+          find _site -exec touch -h -d "@$t" {} +
+
+      - uses: actions/configure-pages@v6
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site
+          include-hidden-files: true
+
+      - id: yayin
+        uses: actions/deploy-pages@v5

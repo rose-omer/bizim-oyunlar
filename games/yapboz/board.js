@@ -1,5 +1,14 @@
 // Yapboz board: canvas rendering, pointer input, local snapping and remote actions.
 // All puzzle rules live in model.js; this file only draws and translates input.
+//
+// Drawing cost (phones):
+// - Every piece is rendered once into atlas pages, plus half-size copies (manual mip levels).
+//   All drawImage calls use imageSmoothingQuality 'low' on the right level. With 'medium'/'high'
+//   Chrome made a mipmapped GPU copy of the whole atlas for every draw: seconds per frame.
+// - While the view is still, groups below the first moving group are cached in a screen-size
+//   layer; a frame is then one layer blit plus the moving groups and the partner's cursor.
+// - The dragged group (with its drop shadow) and partner-held groups (with the rose outline)
+//   are cached as one bitmap each, so no frame runs shadowBlur.
 import { generateEdges, piecePathD, tabMargin, edgeCurve } from './grid.js';
 import { PuzzleModel } from './model.js';
 
@@ -12,11 +21,55 @@ const PINCH_GRACE_MS = 350; // a second finger this soon after a grab turns it i
 const DPR_MAX = 2;
 const ATLAS_MAX = 4096; // atlas canvas side (px)
 const BITMAP_BUDGET = 10e6; // total piece bitmap pixels (~40 MB)
-const LIFT_MAX = 40; // dragged groups up to this size get a live drop shadow
+const MIP_LEVELS = 4; // atlas copies at 1, 1/2, 1/4, 1/8
+const SPRITE_PX = 4e6; // largest cached moving-group bitmap; bigger groups draw piece by piece
+const LIFT_BLUR = 14; // dragged group shadow (CSS px)
+const LIFT_DY = 7;
+const LIFT_PAD = 30; // room for the shadow: >= 1.5 * blur + offset
+const HELD_PAD = 6; // room for the rose outline: > half of its widest stroke
+const ORIGIN = { x: 0, y: 0 };
 
 const r1 = (v) => Math.round(v * 10) / 10 + 0;
 const noop = () => {};
 const now = () => performance.now();
+
+// Mip level for a bitmap with `texel` px per world unit drawn at `k` device px per world unit.
+// Each level halves the bitmap, so the drawn scale stays in [1/2, 1): clean with bilinear filtering.
+export function mipLevel(texel, k, levels) {
+  if (!(texel > 0) || !(k > 0) || !(levels > 1)) return 0;
+  return Math.max(0, Math.min(levels - 1, Math.floor(Math.log2(texel / k))));
+}
+
+// Index of the first moving group in z order (bottom -> top); every group below it is static.
+export function firstLive(order, isLive) {
+  for (let i = 0; i < order.length; i++) if (isLive(order[i])) return i;
+  return order.length;
+}
+
+function makeCanvas(w, h) {
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.ceil(w));
+  c.height = Math.max(1, Math.ceil(h));
+  return c;
+}
+
+function freeCanvas(c) {
+  if (c && typeof c.width === 'number' && c.getContext) {
+    c.width = 0;
+    c.height = 0;
+  }
+}
+
+// Half-size copy. Bilinear sampling at exactly 1/2 averages 2x2 texels (a box-filtered mip level)
+// and needs no GPU mipmaps.
+function halve(src, w, h) {
+  const c = makeCanvas(w / 2, h / 2);
+  const x = c.getContext('2d');
+  x.imageSmoothingEnabled = true;
+  x.imageSmoothingQuality = 'low';
+  x.drawImage(src, 0, 0, w, h, 0, 0, w / 2, h / 2);
+  return c;
+}
 
 function heartPath(ctx, x, y, r) {
   ctx.beginPath();
@@ -80,6 +133,12 @@ export class Board {
     this.completed = false;
     this.raf = 0;
     this.destroyed = false;
+    this.ver = 0; // bumps when static groups may have changed (see _invalidate)
+    this.layer = null; // cached static groups (device px canvas)
+    this.layerKey = '';
+    this.lastView = '';
+    this.sprites = new Map(); // group id -> cached bitmap of a dragged / partner-held group
+    this.ghostLv = null; // photo mip levels for the preview
     this.cursorAt = 0;
     this.cursorTimer = 0;
     this.cursorPending = null;
@@ -138,7 +197,8 @@ export class Board {
       case 'move': {
         if (this.drag && this.drag.g === a.g) return;
         this._glide(a.g, a.x, a.y, MOVE_MS, t);
-        break;
+        this._invalidate(false); // a gliding group is live: the static layer stays valid
+        return;
       }
       case 'drop': {
         const pieces = Array.isArray(a.pieces) && a.pieces.length ? a.pieces : [a.g];
@@ -183,7 +243,7 @@ export class Board {
 
   setPeerCursor(c) {
     this.peerCursor = c && Number.isFinite(c.x) && Number.isFinite(c.y) ? { x: c.x, y: c.y, name: c.name || '' } : null;
-    this._invalidate();
+    this._invalidate(false);
   }
 
   clearPeerHolds() {
@@ -267,15 +327,22 @@ export class Board {
     clearTimeout(this.cursorTimer);
     if (this.ro) this.ro.disconnect();
     for (const [target, type, fn, opt] of this.listeners) target.removeEventListener(type, fn, opt);
-    for (const c of this.atlases) { c.width = 0; c.height = 0; }
-    this.atlases = [];
+    for (const pages of this.levels) pages.forEach(freeCanvas);
+    this.levels = [];
+    for (const sp of this.sprites.values()) freeCanvas(sp.canvas);
+    this.sprites.clear();
+    freeCanvas(this.layer);
+    this.layer = null;
+    if (this.ghostLv) this.ghostLv.slice(1).forEach(freeCanvas); // [0] is the photo itself
+    this.ghostLv = null;
     this.pointers.clear();
     this.drag = null;
   }
 
   // ---------- piece bitmaps ----------
 
-  // Every piece is rendered once into a shared atlas (uniform cells, few textures, fast drawImage).
+  // Every piece is rendered once into shared atlas pages (uniform cells, few textures, fast
+  // drawImage), then each page is halved MIP_LEVELS - 1 times.
   _buildAtlas() {
     const { pw, ph, tm } = this;
     const n = this.model.total;
@@ -283,25 +350,38 @@ export class Board {
     const bs = Math.min(2, Math.sqrt(BITMAP_BUDGET / (n * fw * fh)), (ATLAS_MAX - 4) / Math.max(fw, fh));
     const cw = Math.ceil(fw * bs) + 2, ch = Math.ceil(fh * bs) + 2; // 1 px gutter each side
     const perRow = Math.floor(ATLAS_MAX / cw), per = perRow * Math.floor(ATLAS_MAX / ch);
+    const m = Math.min(pw, ph) * bs;
     this.bs = bs;
     this.srcW = fw * bs;
     this.srcH = fh * bs;
     this.cells = [];
-    this.atlases = [];
-    let actx = null;
-    for (let i = 0; i < n; i++) {
-      const k = i % per;
-      if (k === 0) {
-        const left = Math.min(per, n - i);
-        const c = document.createElement('canvas');
-        c.width = Math.min(left, perRow) * cw;
-        c.height = Math.ceil(left / perRow) * ch;
-        this.atlases.push(c);
-        actx = c.getContext('2d');
+    const pages = [];
+    for (let first = 0; first < n; first += per) {
+      const count = Math.min(per, n - first);
+      const w = Math.min(count, perRow) * cw, h = Math.ceil(count / perRow) * ch;
+      const clean = makeCanvas(w, h);
+      const cctx = clean.getContext('2d');
+      for (let k = 0; k < count; k++) {
+        const cell = { a: pages.length, sx: (k % perRow) * cw + 1, sy: Math.floor(k / perRow) * ch + 1 };
+        this.cells.push(cell);
+        this._renderPiece(cctx, first + k, cell.sx, cell.sy);
       }
-      const cell = { a: this.atlases.length - 1, sx: (k % perRow) * cw + 1, sy: Math.floor(k / perRow) * ch + 1 };
-      this.cells.push(cell);
-      this._renderPiece(actx, i, cell.sx, cell.sy);
+      // Baked soft drop shadow: one blur for the whole page instead of one per piece.
+      const page = makeCanvas(w, h);
+      const x = page.getContext('2d');
+      x.shadowColor = 'rgba(0,0,0,0.38)';
+      x.shadowBlur = 0.05 * m;
+      x.shadowOffsetX = 0.01 * m;
+      x.shadowOffsetY = 0.025 * m;
+      x.drawImage(clean, 0, 0);
+      x.shadowColor = 'transparent';
+      x.drawImage(clean, 0, 0);
+      freeCanvas(clean);
+      pages.push(page);
+    }
+    this.levels = [pages];
+    for (let lv = 1; lv < MIP_LEVELS; lv++) {
+      this.levels.push(this.levels[lv - 1].map((c) => halve(c, c.width, c.height)));
     }
   }
 
@@ -312,14 +392,6 @@ export class Board {
     const m = Math.min(pw, ph);
     ctx.save();
     ctx.setTransform(bs, 0, 0, bs, ox + tm * bs, oy + tm * bs); // piece-local coords
-    // Baked soft drop shadow (shadow values are bitmap pixels, not transformed).
-    ctx.shadowColor = 'rgba(0,0,0,0.38)';
-    ctx.shadowBlur = 0.05 * m * bs;
-    ctx.shadowOffsetX = 0.01 * m * bs;
-    ctx.shadowOffsetY = 0.025 * m * bs;
-    ctx.fillStyle = '#777';
-    ctx.fill(path);
-    ctx.shadowColor = 'transparent';
     // Photo region clipped to the outline (source rect clamped to the image).
     ctx.save();
     ctx.clip(path);
@@ -364,7 +436,10 @@ export class Board {
 
   // ---------- rendering ----------
 
-  _invalidate() {
+  // full = false: only live things changed (dragged or gliding group, cursor); the static layer
+  // stays valid. Anything else may have changed static groups and must bump the version.
+  _invalidate(full = true) {
+    if (full) this.ver++;
     if (!this.raf && !this.destroyed) this.raf = requestAnimationFrame(this._frame);
   }
 
@@ -380,11 +455,11 @@ export class Board {
     }
     let animating = false;
     for (const [id, a] of this.anim) {
-      if (!this.model.group(id) || t - a.t0 >= a.dur) this.anim.delete(id);
+      if (!this.model.group(id) || t - a.t0 >= a.dur) this.anim.delete(id); // ended: static again
       else animating = true;
     }
     this._draw(t);
-    if (animating) this._invalidate();
+    if (animating) this._invalidate(false);
   }
 
   // Displayed offset of a group (glides toward the model offset after remote moves).
@@ -400,81 +475,154 @@ export class Board {
       && !(this.drag && this.drag.g === g.id);
   }
 
+  // Live = may move this frame: dragged here, held by the partner, or gliding.
+  _live(id) {
+    return (this.drag !== null && this.drag.g === id) || this.peerHeld.has(id) || this.anim.has(id);
+  }
+
   _draw(t) {
     const { ctx, canvas, dpr, cssW, cssH } = this;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height); // the table itself is styled by the page
     if (!cssW || !cssH) return;
     const { s, tx, ty } = this.view;
-    ctx.setTransform(dpr * s, 0, 0, dpr * s, dpr * tx, dpr * ty);
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'medium';
-    const vis = { x0: -tx / s, y0: -ty / s, x1: (cssW - tx) / s, y1: (cssH - ty) / s };
-    this._drawFrame(s);
+    const order = this.model.order;
+    const k = firstLive(order, (id) => this._live(id));
+    const vk = `${s},${tx},${ty},${canvas.width},${canvas.height}`;
+    const still = vk === this.lastView; // while panning or zooming the layer would be rebuilt every frame
+    this.lastView = vk;
+    if (still && k > 0) {
+      const key = `${vk},${k},${this.ver}`;
+      if (this.layerKey !== key) {
+        this._paintLayer(k, t);
+        this.layerKey = key;
+      }
+      ctx.drawImage(this.layer, 0, 0);
+    } else {
+      this._drawStatic(ctx, k, t);
+    }
+    // Live groups in z order; the local drag stays on top of everything.
+    const vis = this._world(ctx);
     const dragId = this.drag ? this.drag.g : null;
-    for (const id of this.model.order) {
+    for (let i = k; i < order.length; i++) {
+      const id = order[i];
       if (id === dragId) continue;
       const g = this.model.group(id);
       if (this._hidden(g)) continue;
       const pos = this._pos(g, t);
-      this._drawPieces(g, pos, vis);
-      if (this.peerHeld.has(id)) this._drawHeld(g, pos);
+      if (!this.peerHeld.has(id)) this._drawPieces(ctx, g, pos, vis);
+      else if (!this._blit(this._sprite(g, 'held'), pos)) {
+        this._drawPieces(ctx, g, pos, vis);
+        this._drawHeld(ctx, g, pos, dpr * s, dpr * tx, dpr * ty);
+      }
     }
     const dg = dragId === null ? null : this.model.group(dragId);
-    if (dg) {
-      if (dg.pieces.length <= LIFT_MAX) { // lifted look: shadow pass, then clean pass on top
-        ctx.save();
-        ctx.shadowColor = 'rgba(0,0,0,0.3)';
-        ctx.shadowBlur = 14 * dpr;
-        ctx.shadowOffsetY = 7 * dpr;
-        this._drawPieces(dg, dg, vis);
-        ctx.restore();
+    if (dg && !this._blit(this._sprite(dg, 'lift'), dg)) this._drawPieces(ctx, dg, dg, vis);
+    for (const [id, sp] of this.sprites) { // drop bitmaps of groups that stopped moving
+      if (id !== dragId && !this.peerHeld.has(id)) {
+        freeCanvas(sp.canvas);
+        this.sprites.delete(id);
       }
-      this._drawPieces(dg, dg, vis);
     }
     if (this.peerCursor) this._drawCursor();
   }
 
-  _drawFrame(s) {
-    const { ctx, imgW, imgH } = this;
-    ctx.fillStyle = 'rgba(255,255,255,0.12)';
-    ctx.fillRect(0, 0, imgW, imgH);
-    if (this.ghost) {
-      ctx.globalAlpha = 0.18;
-      ctx.drawImage(this.image, 0, 0, imgW, imgH);
-      ctx.globalAlpha = 1;
-    }
-    ctx.lineWidth = 2 / s;
-    ctx.strokeStyle = 'rgba(0,0,0,0.22)';
-    ctx.strokeRect(0, 0, imgW, imgH);
-    ctx.lineWidth = 1 / s;
-    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
-    ctx.strokeRect(1.5 / s, 1.5 / s, imgW - 3 / s, imgH - 3 / s);
+  // World transform on a device-px context; returns the visible world rectangle.
+  _world(c) {
+    const { dpr, cssW, cssH } = this;
+    const { s, tx, ty } = this.view;
+    c.setTransform(dpr * s, 0, 0, dpr * s, dpr * tx, dpr * ty);
+    c.imageSmoothingEnabled = true;
+    c.imageSmoothingQuality = 'low'; // see the header: never 'medium' / 'high'
+    return { x0: -tx / s, y0: -ty / s, x1: (cssW - tx) / s, y1: (cssH - ty) / s };
   }
 
-  _drawPieces(g, pos, vis) {
-    const { ctx, pw, ph, tm, cols, srcW, srcH, cells, atlases } = this;
+  // Frame and the groups below z index k (none of them is live).
+  _drawStatic(c, k, t) {
+    const vis = this._world(c);
+    this._drawFrame(c);
+    const order = this.model.order;
+    for (let i = 0; i < k; i++) {
+      const g = this.model.group(order[i]);
+      if (!this._hidden(g)) this._drawPieces(c, g, this._pos(g, t), vis);
+    }
+  }
+
+  _paintLayer(k, t) {
+    const { width, height } = this.canvas;
+    if (!this.layer) this.layer = makeCanvas(width, height);
+    const L = this.layer;
+    if (L.width !== width) L.width = width;
+    if (L.height !== height) L.height = height;
+    const c = L.getContext('2d');
+    c.setTransform(1, 0, 0, 1, 0, 0);
+    c.clearRect(0, 0, width, height);
+    this._drawStatic(c, k, t);
+  }
+
+  _drawFrame(c) {
+    const { imgW, imgH } = this;
+    const s = this.view.s;
+    c.fillStyle = 'rgba(255,255,255,0.12)';
+    c.fillRect(0, 0, imgW, imgH);
+    if (this.ghost) {
+      const { img, f } = this._ghostSrc(s * this.dpr);
+      c.globalAlpha = 0.18;
+      c.drawImage(img, 0, 0, imgW * f, imgH * f, 0, 0, imgW, imgH);
+      c.globalAlpha = 1;
+    }
+    c.lineWidth = 2 / s;
+    c.strokeStyle = 'rgba(0,0,0,0.22)';
+    c.strokeRect(0, 0, imgW, imgH);
+    c.lineWidth = 1 / s;
+    c.strokeStyle = 'rgba(255,255,255,0.5)';
+    c.strokeRect(1.5 / s, 1.5 / s, imgW - 3 / s, imgH - 3 / s);
+  }
+
+  // Photo mip levels for the preview (built on first use).
+  _ghostSrc(k) {
+    if (!this.ghostLv) {
+      this.ghostLv = [this.image];
+      let w = this.imgW, h = this.imgH;
+      for (let lv = 1; lv < MIP_LEVELS; lv++) {
+        this.ghostLv.push(halve(this.ghostLv[lv - 1], w, h));
+        w /= 2;
+        h /= 2;
+      }
+    }
+    const lv = mipLevel(1, k, this.ghostLv.length);
+    return { img: this.ghostLv[lv], f: 1 / (1 << lv) };
+  }
+
+  // Pieces of a group at offset pos, drawn from the atlas level that fits k (device px per world
+  // unit; default: the current view). vis = visible world rectangle for culling, or null.
+  _drawPieces(c, g, pos, vis, k = this.view.s * this.dpr) {
+    const { pw, ph, tm, cols, cells } = this;
+    const lv = mipLevel(this.bs, k, this.levels.length);
+    const pages = this.levels[lv], f = 1 / (1 << lv);
+    const sw = this.srcW * f, sh = this.srcH * f;
     const fw = pw + 2 * tm, fh = ph + 2 * tm;
     for (const p of g.pieces) {
-      const x = pos.x + (p % cols) * pw - tm, y = pos.y + Math.floor(p / cols) * ph - tm;
-      if (x > vis.x1 || y > vis.y1 || x + fw < vis.x0 || y + fh < vis.y0) continue; // cull
-      const c = cells[p];
-      ctx.drawImage(atlases[c.a], c.sx, c.sy, srcW, srcH, x, y, fw, fh);
+      const col = p % cols;
+      const x = pos.x + col * pw - tm, y = pos.y + ((p - col) / cols) * ph - tm;
+      if (vis && (x > vis.x1 || y > vis.y1 || x + fw < vis.x0 || y + fh < vis.y0)) continue; // cull
+      const cell = cells[p];
+      c.drawImage(pages[cell.a], cell.sx * f, cell.sy * f, sw, sh, x, y, fw, fh);
     }
   }
 
   // Rose outline along the outer boundary of a group the partner is holding.
-  _drawHeld(g, pos) {
-    const { ctx, dpr, cols, pw, ph, model } = this;
-    const { s, tx, ty } = this.view;
+  // Device px = (ox, oy) + k * world.
+  _drawHeld(c, g, pos, k, ox, oy) {
+    const { dpr, cols, pw, ph, model } = this;
     const rows = model.rows;
-    ctx.save();
-    ctx.strokeStyle = PEER;
-    ctx.lineJoin = 'round';
-    ctx.lineCap = 'round';
+    c.save();
+    c.strokeStyle = PEER;
+    c.lineJoin = 'round';
+    c.lineCap = 'round';
     for (const [w, alpha] of [[7, 0.3], [2.5, 1]]) {
-      ctx.globalAlpha = alpha;
-      ctx.lineWidth = w / s;
+      c.globalAlpha = alpha;
+      c.lineWidth = (w * dpr) / k; // w CSS px
       for (const p of g.pieces) {
         const col = p % cols, row = Math.floor(p / cols);
         const nb = [row > 0 ? p - cols : -1, col < cols - 1 ? p + 1 : -1, row < rows - 1 ? p + cols : -1, col > 0 ? p - 1 : -1];
@@ -482,15 +630,78 @@ export class Board {
         for (let side = 0; side < 4; side++) {
           if (nb[side] >= 0 && model.owner[nb[side]] === g.id) continue; // inner seam
           if (!placed) {
-            const px = pos.x + col * pw, py = pos.y + row * ph;
-            ctx.setTransform(dpr * s, 0, 0, dpr * s, dpr * (tx + s * px), dpr * (ty + s * py));
+            c.setTransform(k, 0, 0, k, ox + k * (pos.x + col * pw), oy + k * (pos.y + row * ph));
             placed = true;
           }
-          ctx.stroke(this._sidePath(p, side));
+          c.stroke(this._sidePath(p, side));
         }
       }
     }
-    ctx.restore();
+    c.restore();
+  }
+
+  // One bitmap for a moving group at the current scale: 'lift' = dragged here, with a drop shadow;
+  // 'held' = held by the partner, with the rose outline. Rebuilt when the members (a new pieces
+  // array after every merge or state load) or the scale change. null: too big, draw piece by piece.
+  _sprite(g, mode) {
+    const k = this.view.s * this.dpr;
+    const old = this.sprites.get(g.id);
+    if (old && old.pieces === g.pieces && old.k === k && old.mode === mode) return old.canvas ? old : null;
+    if (old) freeCanvas(old.canvas);
+    const { cols, pw, ph, tm, dpr } = this;
+    let c0 = Infinity, r0 = Infinity, c1 = -Infinity, r1 = -Infinity;
+    for (const p of g.pieces) {
+      const col = p % cols, row = (p - col) / cols;
+      if (col < c0) c0 = col;
+      if (col > c1) c1 = col;
+      if (row < r0) r0 = row;
+      if (row > r1) r1 = row;
+    }
+    const pad = Math.ceil((mode === 'lift' ? LIFT_PAD : HELD_PAD) * dpr);
+    const bx0 = c0 * pw - tm, by0 = r0 * ph - tm;
+    const w = Math.ceil(((c1 - c0 + 1) * pw + 2 * tm) * k) + 2 * pad;
+    const h = Math.ceil(((r1 - r0 + 1) * ph + 2 * tm) * k) + 2 * pad;
+    const sp = { pieces: g.pieces, k, mode, bx0, by0, pad, canvas: null };
+    this.sprites.set(g.id, sp);
+    if (w * h > SPRITE_PX || w > ATLAS_MAX || h > ATLAS_MAX) return null;
+    const ox = pad - bx0 * k, oy = pad - by0 * k;
+    const paint = (c) => {
+      const x = c.getContext('2d');
+      x.setTransform(k, 0, 0, k, ox, oy);
+      x.imageSmoothingEnabled = true;
+      x.imageSmoothingQuality = 'low';
+      this._drawPieces(x, g, ORIGIN, null, k);
+      if (mode === 'held') this._drawHeld(x, g, ORIGIN, k, ox, oy);
+    };
+    sp.canvas = makeCanvas(w, h);
+    if (mode === 'lift') { // shadow pass, then the clean group on top
+      const tmp = makeCanvas(w, h);
+      paint(tmp);
+      const x = sp.canvas.getContext('2d');
+      x.shadowColor = 'rgba(0,0,0,0.3)';
+      x.shadowBlur = LIFT_BLUR * dpr;
+      x.shadowOffsetY = LIFT_DY * dpr;
+      x.drawImage(tmp, 0, 0);
+      x.shadowColor = 'transparent';
+      x.drawImage(tmp, 0, 0);
+      freeCanvas(tmp);
+    } else {
+      paint(sp.canvas);
+    }
+    return sp;
+  }
+
+  // Draw a sprite with its group offset at pos (whole device px: stays sharp). false: no sprite.
+  _blit(sp, pos) {
+    if (!sp) return false;
+    const { ctx, dpr } = this;
+    const { s, tx, ty } = this.view;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(sp.canvas,
+      Math.round(dpr * (tx + s * (pos.x + sp.bx0))) - sp.pad,
+      Math.round(dpr * (ty + s * (pos.y + sp.by0))) - sp.pad);
+    this._world(ctx);
+    return true;
   }
 
   _drawCursor() {
@@ -603,7 +814,7 @@ export class Board {
       const w = this._toWorld(pt);
       this.model.move(d.g, w.x - d.dx, w.y - d.dy);
       d.pending = true;
-      this._invalidate();
+      this._invalidate(false); // only the dragged group moved
     } else if (this.pinch) {
       this._updatePinch();
     } else if (this.pan && this.pan.id === e.pointerId) {

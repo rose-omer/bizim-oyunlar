@@ -161,3 +161,15 @@ test('aniYamasi: yalnız form alanları, boşlar null, beğeni yok, ekleyen eksi
   assert.deepEqual(y.etiketler, ['tatil']);
   assert.equal('begeni' in y, false);
 });
+
+test('onizlemeBoyu: kısa kenar ya da uzun kenar sınırına oranla küçültür; küçük fotoğraf aynen kalır', async () => {
+  const { onizlemeBoyu } = await import('../sayfalar/anilar/mantik.js');
+  assert.deepEqual(onizlemeBoyu(2000, 1500, { kisa: 480 }), { en: 640, boy: 480, kucult: true });
+  assert.deepEqual(onizlemeBoyu(1500, 2000, { kisa: 480 }), { en: 480, boy: 640, kucult: true });
+  assert.deepEqual(onizlemeBoyu(2000, 1500, { uzun: 960 }), { en: 960, boy: 720, kucult: true });
+  assert.deepEqual(onizlemeBoyu(2000, 500, { kisa: 480, uzun: 1200 }), { en: 1200, boy: 300, kucult: true });
+  // Hedefe yakın (≤ %20 büyük) fotoğraf yeniden kodlanmaz.
+  assert.deepEqual(onizlemeBoyu(560, 420, { kisa: 480 }), { en: 560, boy: 420, kucult: false });
+  assert.deepEqual(onizlemeBoyu(300, 200, { kisa: 480 }), { en: 300, boy: 200, kucult: false });
+  assert.deepEqual(onizlemeBoyu(0, 0, { kisa: 480 }), { en: 0, boy: 0, kucult: false });
+});

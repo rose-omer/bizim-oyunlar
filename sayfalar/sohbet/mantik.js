@@ -31,10 +31,12 @@ export function gunEtiketi(deger, simdi = new Date()) {
   const fark = Math.round((gun(simdi) - gun(d)) / 864e5);
   if (fark === 0) return 'Bugün';
   if (fark === 1) return 'Dün';
-  const secenek = { day: 'numeric', month: 'long' };
-  if (d.getFullYear() !== simdi.getFullYear()) secenek.year = 'numeric';
-  return new Intl.DateTimeFormat('tr-TR', secenek).format(d);
+  // Intl.DateTimeFormat yerine sabit adlar: ilk kurulumu telefonda açılışı onlarca ms uzatıyor.
+  const s = `${d.getDate()} ${AYLAR[d.getMonth()]}`;
+  return d.getFullYear() !== simdi.getFullYear() ? `${s} ${d.getFullYear()}` : s;
 }
+
+const AYLAR = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
 
 /** '09:05' */
 export function saatEtiketi(deger) {
@@ -79,6 +81,26 @@ export function satirlar(docs, { benId, grupMs = GRUP_MS, simdi = new Date() } =
   return out;
 }
 
+/**
+ * Çizim penceresi: satirlar'ın hangi indeksinden itibaren DOM'a basılacağı (telefonda açılışta yüzlerce
+ * balonun yerleşimi hesaplanmasın). anahtar verilir ve bulunursa pencere o satırdan başlar (yeni mesaj
+ * gelince üstteki balonlar kaybolmaz); yoksa son n mesaj. Bir mesajın gün ayırıcısı onunla birlikte gelir.
+ */
+export function pencereBasi(satirlar, n, anahtar = null) {
+  const list = satirlar || [];
+  let i = anahtar != null ? list.findIndex((r) => r.anahtar === anahtar) : -1;
+  if (i < 0) {
+    let kalan = n;
+    i = 0;
+    for (let k = list.length - 1; k >= 0; k--) {
+      if (list[k].tur !== 'mesaj') continue;
+      if (--kalan === 0) { i = k; break; }
+    }
+    if (kalan > 0) return 0;
+  }
+  return i > 0 && list[i - 1].tur === 'gun' && list[i].tur === 'mesaj' ? i - 1 : i;
+}
+
 const URL_RE = /https?:\/\/[^\s<>"'`]+/gi;
 const SON_NOKTALAMA = /[.,;:!?…'"»”’\]]$/;
 
@@ -121,9 +143,11 @@ export function baglantilar(metin) {
   return out;
 }
 
+let bolucu = null;
 function harfler(s) {
   if (typeof Intl.Segmenter === 'function') {
-    return [...new Intl.Segmenter('tr', { granularity: 'grapheme' }).segment(s)].map((x) => x.segment);
+    bolucu ||= new Intl.Segmenter('tr', { granularity: 'grapheme' });
+    return [...bolucu.segment(s)].map((x) => x.segment);
   }
   return Array.from(s);
 }

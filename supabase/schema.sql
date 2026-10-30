@@ -605,26 +605,7 @@ as $$
   limit least(greatest(coalesce(p_limit, 500), 1), 1000);
 $$;
 
--- Edge Function 'hatirlat': aboneliği olan odaların belgeleri. 'gs' yalnız p_gs_gun gününün cevapları.
--- Sıra (room, kind, id) = birincil anahtar. p_after = önceki sayfanın son satırı: array[room, kind, id].
-create or replace function public.hatirlat_belgeler(
-  p_kinds text[], p_gs_gun integer default null, p_after text[] default null, p_limit integer default 500)
-returns table (room text, kind text, id text, data jsonb)
-language sql
-stable
-security definer
-set search_path = ''
-as $$
-  select d.room, d.kind, d.id, d.data
-  from public.room_doc as d
-  where d.kind = any (p_kinds)
-    and not d.deleted
-    and d.room in (select s.room from public.push_sub as s)
-    and (d.kind <> 'gs' or (p_gs_gun is not null and d.id like (p_gs_gun::text || '-%')))
-    and (p_after is null or (d.room, d.kind, d.id) > (p_after[1], p_after[2], p_after[3]))
-  order by d.room, d.kind, d.id
-  limit least(greatest(coalesce(p_limit, 500), 1), 1000);
-$$;
+-- hatirlat_belgeler 7. bölümde: FCM belirteci olan odaları da kapsar (fcm_sub orada tanımlı).
 
 -- Edge Function 'hatirlat': odaları bugün için toplu işaretler. -> ilk kez işaretlenen odalar (gönderilecekler).
 -- Dizi döner (satır değil): PostgREST satır sınırına takılmaz.
@@ -665,12 +646,10 @@ grant execute on function public.push_sil(text) to anon, authenticated;
 revoke execute on function public.push_hedef(text, text) from public, anon, authenticated;
 revoke execute on function public.push_sonuc(text[], text[], text[]) from public, anon, authenticated;
 revoke execute on function public.push_abonelikler(text, integer) from public, anon, authenticated;
-revoke execute on function public.hatirlat_belgeler(text[], integer, text[], integer) from public, anon, authenticated;
 revoke execute on function public.hatirlat_isaretle(text[], date, text) from public, anon, authenticated;
 grant execute on function public.push_hedef(text, text) to service_role;
 grant execute on function public.push_sonuc(text[], text[], text[]) to service_role;
 grant execute on function public.push_abonelikler(text, integer) to service_role;
-grant execute on function public.hatirlat_belgeler(text[], integer, text[], integer) to service_role;
 grant execute on function public.hatirlat_isaretle(text[], date, text) to service_role;
 
 notify pgrst, 'reload schema';
@@ -682,12 +661,37 @@ notify pgrst, 'reload schema';
 -- pg_cron saati UTC'dir. Türkiye yıl boyu UTC+3: 09:00 → 06:00 UTC, 20:00 → 17:00 UTC.
 -- Bu işler Supabase'i her gün iki kez çalıştırır (hareketsizlikten durmaya karşı da yardımcı olur).
 --
--- Bir kez, elle (değeri depoya YAZMA): SQL Editor'de
---   select vault.create_secret('<uzun rastgele anahtar>', 'hatirlat_anahtar');
--- Aynı değer Edge Function secret'ı olarak: npx supabase secrets set HATIRLAT_ANAHTAR=<aynı değer>
+-- Hatırlatma anahtarı (cron → Edge Function) vault'ta 'hatirlat_anahtar' adıyla durur; aşağıdaki blok yoksa
+-- rastgele üretir, varsa dokunmaz. Edge Function onu RPC hatirlat_anahtar ile okur (5 dk önbellek);
+-- HATIRLAT_ANAHTAR secret'ı yalnız yedektir. Değer hiçbir yere elle yazılmaz. Yenilemek için SQL Editor'de:
+--   select vault.update_secret((select id from vault.secrets where name = 'hatirlat_anahtar'),
+--     encode(extensions.gen_random_bytes(32), 'hex'));
 -- İsteğe bağlı: select vault.create_secret('https://<ref>.supabase.co', 'project_url');
 create extension if not exists pg_cron with schema pg_catalog;
 create extension if not exists pg_net with schema extensions;
+create extension if not exists pgcrypto with schema extensions;
+
+do $$
+begin
+  if not exists (select 1 from vault.secrets where name = 'hatirlat_anahtar') then
+    perform vault.create_secret(encode(extensions.gen_random_bytes(32), 'hex'), 'hatirlat_anahtar');
+  end if;
+end
+$$;
+
+-- Edge Function 'hatirlat' beklediği anahtarı buradan okur. Yalnız service_role çağırır.
+create or replace function public.hatirlat_anahtar()
+returns text
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select s.decrypted_secret from vault.decrypted_secrets as s where s.name = 'hatirlat_anahtar' limit 1;
+$$;
+
+revoke execute on function public.hatirlat_anahtar() from public, anon, authenticated;
+grant execute on function public.hatirlat_anahtar() to service_role;
 
 -- Edge Function'ı çağırır. Yalnız postgres (cron işi) çalıştırır; anon çağıramaz.
 create or replace function public.hatirlat_cagir(p_slot text)
@@ -722,3 +726,218 @@ revoke execute on function public.hatirlat_cagir(text) from public, anon, authen
 -- Adlı işler: aynı adla yeniden zamanlamak işi günceller, çoğaltmaz (dosya tekrar çalıştırılabilir).
 select cron.schedule('biz-hatirlat-sabah', '0 6 * * *', $cron$select public.hatirlat_cagir('sabah')$cron$);
 select cron.schedule('biz-hatirlat-aksam', '0 17 * * *', $cron$select public.hatirlat_cagir('aksam')$cron$);
+
+-- ---------------------------------------------------------------------------
+-- 7. Anlık bildirim (FCM, Android uygulaması): fcm_sub tablosu + RPC (js/core/mobil.js, functions/bildir, functions/hatirlat)
+-- ---------------------------------------------------------------------------
+-- Android uygulamasının WebView'ı Web Push desteklemez; uygulama Firebase Cloud Messaging belirteci (token) kaydeder.
+-- Edge Function'lar FCM HTTP v1 ile gönderir (secret FCM_SERVICE_ACCOUNT). Bir cihaz (client) odada tek belirteç tutar.
+create table if not exists public.fcm_sub (
+  token text primary key,
+  room text not null,
+  client text not null,
+  created_at timestamptz not null default now(),
+  last_ok_at timestamptz,
+  fail_count integer not null default 0
+);
+
+create index if not exists fcm_sub_room_idx on public.fcm_sub (room);
+
+alter table public.fcm_sub enable row level security;
+revoke all on table public.fcm_sub from anon, authenticated;
+
+-- Belirteci kaydet ya da güncelle. Belirteç: [A-Za-z0-9_:-], 20–4096 karakter.
+-- Sınır push_kaydet ile ortak sayaç (push_kayit_rate): oda başına saatte 20, genel saatte 300 kayıt.
+create or replace function public.fcm_kaydet(p_room text, p_client text, p_token text)
+returns boolean
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_saat timestamptz := pg_catalog.date_trunc('hour', pg_catalog.now());
+  v_n integer;
+  v_all integer;
+begin
+  if p_room is null or p_room !~ '^[a-z2-9]{10}$' then
+    raise exception 'fcm_kaydet: gecersiz oda' using errcode = '22023';
+  end if;
+  if p_client is null or p_client !~ '^[A-Za-z0-9_-]{1,64}$' then
+    raise exception 'fcm_kaydet: gecersiz istemci' using errcode = '22023';
+  end if;
+  -- Postgres düzenli ifadesinde tekrar sınırı en çok 255: uzunluk ayrıca denetlenir.
+  if p_token is null or pg_catalog.length(p_token) not between 20 and 4096 or p_token !~ '^[A-Za-z0-9_:-]+$' then
+    raise exception 'fcm_kaydet: gecersiz belirtec' using errcode = '22023';
+  end if;
+
+  insert into public.push_kayit_rate as r (room, bucket, n) values (p_room, v_saat, 1)
+    on conflict (room, bucket) do update set n = r.n + 1
+    returning r.n into v_n;
+  insert into public.push_kayit_rate as r (room, bucket, n) values ('*', v_saat, 1)
+    on conflict (room, bucket) do update set n = r.n + 1
+    returning r.n into v_all;
+  if v_n > 20 or v_all > 300 then
+    raise exception 'fcm_kaydet: cok fazla kayit' using errcode = '54000';
+  end if;
+  if v_all = 1 then
+    delete from public.push_kayit_rate as r where r.bucket < v_saat - interval '1 day';
+  end if;
+
+  insert into public.fcm_sub as f (token, room, client, created_at)
+  values (p_token, p_room, p_client, pg_catalog.clock_timestamp())
+  on conflict (token) do update
+    set room = excluded.room,
+        client = excluded.client,
+        last_ok_at = pg_catalog.clock_timestamp(),
+        fail_count = 0;
+
+  -- Aynı cihazın eski belirteci: FCM yenisini verdiyse eskisi artık çalışmaz.
+  delete from public.fcm_sub as f
+  where f.room = p_room and f.client = p_client and f.token <> p_token;
+
+  -- Oda başına en çok 10 belirteç: fazlası en uzun süredir sessiz olanlardan silinir.
+  delete from public.fcm_sub as f
+  where f.token in (
+    select x.token from public.fcm_sub as x
+    where x.room = p_room
+    order by x.token = p_token desc, coalesce(x.last_ok_at, x.created_at) desc, x.created_at desc
+    offset 10);
+  return true;
+end;
+$$;
+
+create or replace function public.fcm_sil(p_token text)
+returns boolean
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if p_token is null or pg_catalog.length(p_token) not between 20 and 4096 or p_token !~ '^[A-Za-z0-9_:-]+$' then
+    raise exception 'fcm_sil: gecersiz belirtec' using errcode = '22023';
+  end if;
+  delete from public.fcm_sub as f where f.token = p_token;
+  return found;
+end;
+$$;
+
+-- Edge Function 'bildir': hız sınırını sayar, odadaki diğer cihazların FCM belirteçlerini döner.
+-- Sayaç push_rate tablosunda ayrı anahtarlarla ('fcm:<oda>', 'fcm:*'); sınırlar push_hedef ile aynı:
+-- oda başına dakikada 20, toplam dakikada 600. Belirteci olmayan oda sayılmaz (boş döner).
+create or replace function public.fcm_hedef(p_room text, p_from text)
+returns table (token text)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+#variable_conflict use_column
+declare
+  v_dk timestamptz := pg_catalog.date_trunc('minute', pg_catalog.now());
+  v_n integer;
+  v_all integer;
+begin
+  if p_room is null or p_room !~ '^[a-z2-9]{10}$' then
+    raise exception 'fcm_hedef: gecersiz oda' using errcode = '22023';
+  end if;
+  if p_from is not null and p_from !~ '^[A-Za-z0-9_-]{1,64}$' then
+    raise exception 'fcm_hedef: gecersiz gonderen' using errcode = '22023';
+  end if;
+  if not exists (select 1 from public.fcm_sub as f where f.room = p_room) then
+    return;
+  end if;
+
+  insert into public.push_rate as r (room, bucket, n) values ('fcm:' || p_room, v_dk, 1)
+    on conflict (room, bucket) do update set n = r.n + 1
+    returning r.n into v_n;
+  if v_n > 20 then
+    raise exception 'fcm_hedef: cok fazla bildirim' using errcode = '54000';
+  end if;
+  insert into public.push_rate as r (room, bucket, n) values ('fcm:*', v_dk, 1)
+    on conflict (room, bucket) do update set n = r.n + 1
+    returning r.n into v_all;
+  if v_all > 600 then
+    raise exception 'fcm_hedef: cok fazla bildirim' using errcode = '54000';
+  end if;
+  if v_all = 1 then
+    delete from public.push_rate as r where r.bucket < v_dk - interval '1 hour';
+  end if;
+
+  return query
+  select f.token
+  from public.fcm_sub as f
+  where f.room = p_room and (p_from is null or f.client <> p_from);
+end;
+$$;
+
+-- Gönderim sonucu: başarılılar tazelenir, geçersiz belirteçler (UNREGISTERED vb.) silinir, 20 kez üst üste düşen silinir.
+create or replace function public.fcm_sonuc(p_ok text[], p_gone text[], p_fail text[])
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  update public.fcm_sub as f set last_ok_at = pg_catalog.now(), fail_count = 0
+  where f.token = any (coalesce(p_ok, '{}'::text[]));
+  delete from public.fcm_sub as f
+  where f.token = any (coalesce(p_gone, '{}'::text[]));
+  update public.fcm_sub as f set fail_count = f.fail_count + 1
+  where f.token = any (coalesce(p_fail, '{}'::text[]));
+  delete from public.fcm_sub as f
+  where f.token = any (coalesce(p_fail, '{}'::text[])) and f.fail_count >= 20;
+end;
+$$;
+
+-- Edge Function 'hatirlat': belirteçler, token sırasıyla sayfalı. p_after = önceki sayfanın son belirteci.
+create or replace function public.fcm_abonelikler(p_after text default null, p_limit integer default 500)
+returns table (room text, client text, token text)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select f.room, f.client, f.token
+  from public.fcm_sub as f
+  where p_after is null or f.token > p_after
+  order by f.token
+  limit least(greatest(coalesce(p_limit, 500), 1), 1000);
+$$;
+
+-- Edge Function 'hatirlat': Web Push aboneliği ya da FCM belirteci olan odaların belgeleri.
+-- 'gs' yalnız p_gs_gun gününün cevapları. Sıra (room, kind, id) = birincil anahtar.
+-- p_after = önceki sayfanın son satırı: array[room, kind, id].
+create or replace function public.hatirlat_belgeler(
+  p_kinds text[], p_gs_gun integer default null, p_after text[] default null, p_limit integer default 500)
+returns table (room text, kind text, id text, data jsonb)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select d.room, d.kind, d.id, d.data
+  from public.room_doc as d
+  where d.kind = any (p_kinds)
+    and not d.deleted
+    and d.room in (select s.room from public.push_sub as s union select f.room from public.fcm_sub as f)
+    and (d.kind <> 'gs' or (p_gs_gun is not null and d.id like (p_gs_gun::text || '-%')))
+    and (p_after is null or (d.room, d.kind, d.id) > (p_after[1], p_after[2], p_after[3]))
+  order by d.room, d.kind, d.id
+  limit least(greatest(coalesce(p_limit, 500), 1), 1000);
+$$;
+
+revoke execute on function public.fcm_kaydet(text, text, text) from public;
+revoke execute on function public.fcm_sil(text) from public;
+grant execute on function public.fcm_kaydet(text, text, text) to anon, authenticated;
+grant execute on function public.fcm_sil(text) to anon, authenticated;
+
+-- Aşağıdakiler yalnız Edge Function'lar içindir (service_role).
+revoke execute on function public.fcm_hedef(text, text) from public, anon, authenticated;
+revoke execute on function public.fcm_sonuc(text[], text[], text[]) from public, anon, authenticated;
+revoke execute on function public.fcm_abonelikler(text, integer) from public, anon, authenticated;
+revoke execute on function public.hatirlat_belgeler(text[], integer, text[], integer) from public, anon, authenticated;
+grant execute on function public.fcm_hedef(text, text) to service_role;
+grant execute on function public.fcm_sonuc(text[], text[], text[]) to service_role;
+grant execute on function public.fcm_abonelikler(text, integer) to service_role;
+grant execute on function public.hatirlat_belgeler(text[], integer, text[], integer) to service_role;
+
+notify pgrst, 'reload schema';

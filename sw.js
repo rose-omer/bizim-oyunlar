@@ -38,6 +38,7 @@ self.addEventListener('fetch', (e) => {
 
   if (url.origin === self.location.origin) {
     if (!url.href.startsWith(KOK) || req.headers.has('range')) return; // site dışı yol ya da video parçası
+    if (url.href.startsWith(KOK + 'indir/')) return; // APK ve sürüm bilgisi: önbelleğe alınmaz, hep ağdan
     if (req.mode === 'navigate') {
       e.respondWith(sayfaGetir(req));
     } else if (VARLIK_HEDEF.has(req.destination) || VARLIK_RE.test(url.pathname)) {

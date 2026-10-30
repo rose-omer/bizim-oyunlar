@@ -611,6 +611,18 @@ textarea.input { min-height: 96px; resize: vertical; }
   font-size: calc(var(--av) * 0.24);
   line-height: 1;
 }
+/* Fotoğraflı avatar düğmedir (ui.js avatarEl): dokununca / basılı tutunca büyür. Uzun basma menüsü çıkmaz. */
+.avatar[role='button'] {
+  cursor: zoom-in;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: manipulation;
+  transition: background-color 0.3s ease, color 0.3s ease, transform 0.18s var(--ease);
+}
+.avatar[role='button'] > img { -webkit-touch-callout: none; pointer-events: none; }
+.avatar[role='button']:active { transform: scale(0.94); }
+.avatar[role='button']:focus-visible { outline-offset: 3px; }
 .pair {
   --av: 56px;
   display: grid;
@@ -1469,8 +1481,280 @@ a.card-row:active { background: var(--surface-2); }
   100% { opacity: 0; transform: translate(var(--drift, 0px), -78vh) rotate(calc(var(--r, 0deg) * -1)) scale(1.1); }
 }
 
+/* ---------- Fotoğrafı büyüt (ui.js fotoBuyut) ---------- */
+html:has(dialog.foto-buyut[open]), html:has(dialog.kirp[open]) { overflow: hidden; }
+dialog.foto-buyut {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: calc(24px + var(--safe-top)) calc(24px + var(--safe-right)) calc(24px + var(--safe-bottom)) calc(24px + var(--safe-left));
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  overflow: hidden;
+  cursor: zoom-out;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+dialog.foto-buyut[open] { display: grid; place-items: center; }
+dialog.foto-buyut::backdrop {
+  background: color-mix(in srgb, var(--bg) 84%, transparent);
+  -webkit-backdrop-filter: blur(18px) saturate(1.15);
+  backdrop-filter: blur(18px) saturate(1.15);
+  animation: fade-in 0.2s ease both;
+}
+.foto-buyut-kutu {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  max-width: 100%;
+  margin: 0;
+  animation: buyut-ac 0.26s var(--ease) both;
+}
+.foto-buyut-foto {
+  width: min(78vw, 56vh, 400px);
+  max-width: none;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--surface-2);
+  box-shadow: 0 0 0 4px var(--surface), var(--shadow-lg);
+  -webkit-touch-callout: none;
+  pointer-events: none;
+}
+.foto-buyut-ad {
+  max-width: 100%;
+  font-family: var(--font-display);
+  font-variation-settings: 'SOFT' 100;
+  font-size: 1.75rem;
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.015em;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.foto-buyut-kapat {
+  position: absolute;
+  top: calc(10px + var(--safe-top));
+  right: calc(10px + var(--safe-right));
+  background: color-mix(in srgb, var(--surface) 72%, transparent);
+  box-shadow: var(--shadow-sm);
+}
+dialog.foto-buyut.kapaniyor .foto-buyut-kutu,
+dialog.foto-buyut.kapaniyor .foto-buyut-kapat { animation: fade-out 0.14s ease forwards; }
+dialog.foto-buyut.kapaniyor::backdrop { animation: fade-out 0.14s ease forwards; }
+@keyframes buyut-ac { from { opacity: 0; transform: scale(0.92); } }
+
+/* ---------- Fotoğraf kırpma (js/core/kirp.js) ----------
+   Fotoğraf her temada koyu, nötr bir zeminde değerlendirilir; çerçeve dışı karartılır. */
+.kirp {
+  --kirp-zemin: #140B17;
+  --kirp-yazi: #F7E9EF;
+  --kirp-soluk: #C9B3C1;
+  --kirp-yuzey: rgb(247 233 239 / 0.10);
+  --kirp-yuzey-2: rgb(247 233 239 / 0.24);
+  --kirp-perde: rgb(16 7 18 / 0.68);
+  --kirp-cizgi: rgb(255 255 255 / 0.92);
+  --kirp-izgara: rgb(255 255 255 / 0.42);
+  --kirp-golge: rgb(0 0 0 / 0.45);
+  --accent: var(--rk-accent-dk);
+  --accent-hover: var(--rk-hover-dk);
+  --accent-ink: var(--rk-ink-dk);
+  --focus: var(--rk-hover-dk);
+  color-scheme: dark;
+}
+dialog.kirp {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: var(--kirp-zemin);
+  color: var(--kirp-yazi);
+  overflow: hidden;
+  touch-action: manipulation;
+}
+dialog.kirp[open] { display: flex; justify-content: center; animation: fade-in 0.2s ease both; }
+dialog.kirp::backdrop { background: var(--kirp-zemin); }
+.kirp-ic {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 560px;
+  height: 100%;
+  padding: var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left);
+}
+.kirp-ust {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-height: 56px;
+  padding: 4px 6px;
+}
+.kirp-baslik {
+  font-size: 1.125rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.kirp-metin-btn {
+  justify-self: start;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--kirp-yazi);
+  font-weight: 750;
+  transition: background-color 0.15s ease, opacity 0.15s ease;
+}
+.kirp-metin-btn.sag { justify-self: end; color: var(--kirp-soluk); }
+.kirp-metin-btn:disabled { opacity: 0.38; cursor: default; }
+@media (hover: hover) { .kirp-metin-btn:hover:not(:disabled), .kirp-ikon:hover:not(:disabled) { background: var(--kirp-yuzey); } }
+
+.kirp-sahne {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  touch-action: none;
+  cursor: grab;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+.kirp-sahne:active { cursor: grabbing; }
+.kirp-sahne:focus-visible { outline-offset: -4px; }
+.kirp-gorsel {
+  position: absolute;
+  left: 0;
+  top: 0;
+  max-width: none;
+  transform-origin: 0 0;
+  will-change: transform;
+  opacity: 0;
+  transition: opacity 0.24s ease;
+  pointer-events: none;
+}
+.kirp[data-hazir] .kirp-gorsel { opacity: 1; }
+.kirp.kirp-yumusak .kirp-gorsel { transition: transform 0.24s var(--ease), opacity 0.24s ease; }
+.kirp-cerceve {
+  position: absolute;
+  overflow: hidden;
+  border-radius: 6px;
+  box-shadow: 0 0 0 1.5px var(--kirp-cizgi), 0 0 0 200vmax var(--kirp-perde);
+  pointer-events: none;
+}
+.kirp-cerceve.daire { border-radius: 50%; }
+.kirp:not([data-hazir]) .kirp-cerceve { visibility: hidden; }
+/* Üçte bir ızgarası yalnız ayarlarken görünür */
+.kirp-izgara { position: absolute; inset: 0; opacity: 0; transition: opacity 0.2s ease; }
+.kirp-izgara::before, .kirp-izgara::after { content: ''; position: absolute; }
+.kirp-izgara::before { top: 0; bottom: 0; left: 33.333%; right: 33.333%; border-inline: 1px solid var(--kirp-izgara); }
+.kirp-izgara::after { left: 0; right: 0; top: 33.333%; bottom: 33.333%; border-block: 1px solid var(--kirp-izgara); }
+.kirp[data-ayar] .kirp-izgara { opacity: 1; }
+.kirp-bekle {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--kirp-soluk);
+  font-weight: 650;
+}
+.kirp[data-hazir] .kirp-bekle { display: none; }
+.kirp-bekle-kalp { width: 40px; height: 40px; color: var(--accent); }
+.kirp-bekle-kalp svg { width: 100%; height: 100%; animation: soft-pulse 1.6s ease-in-out infinite; }
+.kirp-bekle-kalp path { fill: currentColor; }
+
+.kirp-ipucu {
+  padding: 12px 20px 2px;
+  color: var(--kirp-soluk);
+  font-size: 0.875rem;
+  line-height: 1.4;
+  text-align: center;
+}
+.kirp-araclar { display: flex; align-items: center; gap: 4px; padding: 6px 10px; }
+.kirp-ikon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--kirp-yazi);
+  transition: background-color 0.15s ease, opacity 0.15s ease, transform 0.12s var(--ease);
+}
+.kirp-ikon:active:not(:disabled) { transform: scale(0.92); }
+.kirp-ikon:disabled { opacity: 0.35; cursor: default; }
+.kirp-svg { display: grid; place-items: center; }
+.kirp-svg svg { width: 22px; height: 22px; }
+.kirp-ayrac { flex: none; width: 1px; height: 24px; margin: 0 6px; background: var(--kirp-yuzey-2); }
+.kirp-olcek {
+  --dolu: 0%;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 44px;
+  margin: 0 4px;
+  background: transparent;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+}
+.kirp-olcek:disabled { opacity: 0.4; cursor: default; }
+.kirp-olcek::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(to right, var(--accent) var(--dolu), var(--kirp-yuzey-2) var(--dolu));
+}
+.kirp-olcek::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 24px;
+  height: 24px;
+  margin-top: -10px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--kirp-yazi);
+  box-shadow: 0 2px 8px var(--kirp-golge);
+}
+.kirp-olcek::-moz-range-track { height: 4px; border-radius: var(--radius-pill); background: var(--kirp-yuzey-2); }
+.kirp-olcek::-moz-range-progress { height: 4px; border-radius: var(--radius-pill); background: var(--accent); }
+.kirp-olcek::-moz-range-thumb {
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--kirp-yazi);
+  box-shadow: 0 2px 8px var(--kirp-golge);
+}
+.kirp-olcek:focus-visible { outline: none; }
+.kirp-olcek:focus-visible::-webkit-slider-thumb { outline: 3px solid var(--focus); outline-offset: 2px; }
+.kirp-olcek:focus-visible::-moz-range-thumb { outline: 3px solid var(--focus); outline-offset: 2px; }
+.kirp-kullan { flex: none; margin: 6px 16px 14px; }
+
 /* ---------- Hareket azaltma ---------- */
 @media (prefers-reduced-motion: reduce) {
+  .avatar[role='button']:active, .kirp-ikon:active:not(:disabled) { transform: none; }
+  .foto-buyut-kutu { animation: none; }
+  .kirp.kirp-yumusak .kirp-gorsel { transition: none; }
+  .kirp-bekle-kalp svg { animation: none; }
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
@@ -1552,3 +1836,13 @@ body.has-tabbar .toasts { bottom: calc(var(--tabbar-h) + 12px); }
 /* ---------- Kilit perdesi (js/core/erken.js ekler, kilit.js kaldırır) ---------- */
 html.kilit-bekle body { visibility: hidden; }
 html.kilit-bekle .kilit { visibility: visible; }
+
+/* ---------- Telefon performansı ---------- */
+/* Çift dokunma yakınlaştırması beklemesi olmasın. */
+button, a, label, [role="button"] { touch-action: manipulation; }
+/* Dokunmatik cihazda sabit şeritlerin arkasını her karede bulanıklaştırmak zayıf GPU'yu yorar: opak zemin. */
+@media (pointer: coarse) {
+  #shell, #tabbar { -webkit-backdrop-filter: none; backdrop-filter: none; }
+  #shell { background: var(--bg); }
+  #tabbar { background: var(--surface); }
+}

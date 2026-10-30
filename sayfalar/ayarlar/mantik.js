@@ -99,6 +99,98 @@ export function mesafeMetni(km) {
   return `Aranızda yaklaşık ${sayi} km var`;
 }
 
+// ---------- Konum izni: yol gösterme ----------
+export const GUVENLI_ADRES = 'rose-omer.github.io';
+export const KONUM_SECENEK = { enableHighAccuracy: false, timeout: 15000, maximumAge: 600000 };
+
+/** GeolocationPositionError → 'izin' (1) | 'kapali' (2, POSITION_UNAVAILABLE) | 'zaman' (3) | 'diger'. */
+export function konumHataTuru(e) {
+  return { 1: 'izin', 2: 'kapali', 3: 'zaman' }[e?.code] || 'diger';
+}
+
+/** Hangi adımlar? 'uygulama' (Android uygulaması) | 'android' (Chrome) | 'ios' | 'masaustu'. */
+export function konumPlatformu({ native = false, ua = '', dokunmatik = 0 } = {}) {
+  if (native) return 'uygulama';
+  if (/iPhone|iPad|iPod/i.test(ua) || (/Macintosh/i.test(ua) && dokunmatik > 1)) return 'ios';
+  if (/Android/i.test(ua)) return 'android';
+  return 'masaustu';
+}
+
+const IZIN_ADIMLARI = {
+  uygulama: [
+    'Telefonun Ayarlar uygulamasını aç.',
+    'Uygulamalar → Biz İkimiz → İzinler → Konum.',
+    '“Uygulamayı kullanırken izin ver”i seç.',
+  ],
+  android: [
+    'Adres çubuğunun solundaki kilit (ya da ayar) simgesine dokun.',
+    'İzinler → Konum’u aç.',
+  ],
+  ios: [
+    'Ayarlar → Gizlilik ve Güvenlik → Konum Servisleri.',
+    'Safari Web Siteleri → “Uygulama Kullanılırken”.',
+  ],
+  masaustu: [
+    'Adres çubuğundaki kilit (site bilgisi) simgesine tıkla.',
+    'Konum iznini “İzin ver” yap.',
+  ],
+};
+const IZIN_NOTU = {
+  android: 'Ana ekrandan açtıysan: Chrome → Ayarlar → Site ayarları → Konum.',
+  ios: 'Ana ekrandan açtığın uygulamada da aynı ayar geçerli.',
+};
+const SERVIS_ADIMLARI = {
+  uygulama: ['Ekranın üstünden aşağı kaydır, “Konum”u aç.'],
+  android: ['Ekranın üstünden aşağı kaydır, “Konum”u aç.'],
+  ios: ['Ayarlar → Gizlilik ve Güvenlik → Konum Servisleri’ni aç.'],
+  masaustu: ['Bilgisayarın konum servisini aç (Windows: Ayarlar → Gizlilik ve güvenlik → Konum).'],
+};
+
+/**
+ * Konum alınamayınca gösterilecek yol: { tur, baslik, metin, adimlar: [], not? }.
+ * guvenli = false (http:// adres) her şeyden önce gelir: tarayıcı orada konum vermez.
+ */
+export function konumRehberi(tur, { platform = 'masaustu', guvenli = true } = {}) {
+  const p = IZIN_ADIMLARI[platform] ? platform : 'masaustu';
+  if (!guvenli) {
+    return {
+      tur: 'guvensiz',
+      baslik: 'Konum bu adreste çalışmaz',
+      metin: `Konum yalnız güvenli adreste çalışır: ${GUVENLI_ADRES}`,
+      adimlar: [],
+      not: 'Biz İkimiz’i oradan açınca konumunu paylaşabilirsin.',
+    };
+  }
+  if (tur === 'izin') {
+    return {
+      tur,
+      baslik: 'Konum izni kapalı',
+      metin: p === 'uygulama' ? 'Biz İkimiz’in konum izni yok. Şöyle açabilirsin:' : 'Tarayıcı bu siteye konum izni vermedi. Şöyle açabilirsin:',
+      adimlar: IZIN_ADIMLARI[p],
+      not: IZIN_NOTU[p] || null,
+    };
+  }
+  if (tur === 'kapali') {
+    return {
+      tur,
+      baslik: 'Konum servisleri kapalı',
+      metin: 'Cihaz konumu bulamadı. Konum servisini açıp tekrar dene:',
+      adimlar: SERVIS_ADIMLARI[p],
+      not: null,
+    };
+  }
+  if (tur === 'zaman') {
+    return {
+      tur,
+      baslik: 'Konum zamanında gelmedi',
+      metin: 'Sinyal zayıf olabilir. Wi-Fi’yi açıp biraz sonra tekrar dener misin?',
+      adimlar: [],
+      not: null,
+    };
+  }
+  return { tur: 'diger', baslik: 'Konum alınamadı', metin: 'Biraz sonra tekrar dener misin?', adimlar: [], not: null };
+}
+
 // ---------- Bildirim ----------
 /** bildirimDestegi() + bildirimDurumu() → gösterilecek durum. */
 export function bildirimGorunum(destek, durum) {

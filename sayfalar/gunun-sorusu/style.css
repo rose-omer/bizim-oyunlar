@@ -259,6 +259,9 @@
   border-radius: var(--radius-lg);
   background: var(--surface);
   box-shadow: var(--shadow-sm);
+  /* Ekran dışındaki arşiv kartlarının yerleşimi/boyaması ertelenir (telefonda açılış ve "Daha eski"). */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 210px;
 }
 .gs-gecmis-ust { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; color: var(--muted); font-size: 0.875rem; font-weight: 700; }
 .gs-gecmis-soru {

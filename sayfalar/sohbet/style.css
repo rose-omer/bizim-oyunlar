@@ -3,7 +3,8 @@
 /* ---------- Sayfa iskeleti ----------
    Gövde görünür alana (visualViewport) oturur: klavye açılınca giriş alanı klavyenin üstünde kalır.
    --sh-vh / --sh-vtop app.js'te ölçülür; --sh-tab-h alt sekme çubuğunun gerçek yüksekliği. */
-html:has(body.sohbet-sayfa) { height: 100%; overflow: hidden; overscroll-behavior: none; }
+/* :has() yerine sınıf: her yeni balon eklenişinde kökün stili yeniden denetlenmesin. */
+html.sohbet-kok { height: 100%; overflow: hidden; overscroll-behavior: none; }
 body.sohbet-sayfa {
   position: fixed;
   top: 0;
@@ -475,9 +476,8 @@ body.sohbet-sayfa .toasts { bottom: calc(var(--sh-tab-h, var(--tabbar-h, 68px)) 
   flex: none;
   padding: 8px 0;
   border-top: 1px solid color-mix(in srgb, var(--line) 75%, transparent);
+  /* Altında kayan içerik yok (liste ayrı kutuda): bulanıklık katmanı boşuna GPU belleği ve birleştirme yükü. */
   background: color-mix(in srgb, var(--bg) 86%, transparent);
-  -webkit-backdrop-filter: blur(14px) saturate(1.2);
-  backdrop-filter: blur(14px) saturate(1.2);
 }
 .sh-alt > .sh-sutun { padding: 0 max(8px, calc(var(--gutter) - 8px)); }
 .sh-giris { display: flex; align-items: flex-end; gap: 4px; }

@@ -2,13 +2,18 @@ import { test, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   isNative, titret, titresimAdimlari, hatirlaticiId, bildirimListesi, yerelHatirlaticilar,
-  renkHex, cubukStili, mobilBaslat,
+  renkHex, cubukStili, mobilBaslat, paylas,
 } from '../js/core/mobil.js';
 
 const SIMDI = Date.parse('2026-10-30T12:00:00.000Z');
 const ileri = (dk) => new Date(SIMDI + dk * 60000).toISOString();
 
-afterEach(() => { delete globalThis.Capacitor; });
+const NAV_ASIL = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+afterEach(() => {
+  delete globalThis.Capacitor;
+  if (NAV_ASIL) Object.defineProperty(globalThis, 'navigator', NAV_ASIL);
+  else delete globalThis.navigator;
+});
 
 /** Sahte Capacitor köprüsü: çağrıları sırayla kaydeder. */
 function sahteKopru({ izin = 'granted', izinSonra = 'granted', bekleyen = [] } = {}) {
@@ -213,4 +218,72 @@ test('cubukStili: koyu zemine açık yazı, açık zemine koyu yazı', () => {
 
 test('mobilBaslat: tarayıcıda ve Node\'da hiçbir şey yapmaz', () => {
   assert.doesNotThrow(() => mobilBaslat());
+});
+
+/** navigator'ı geçici değiştirir; afterEach asıl değeri geri koyar. */
+function sahteNavigator(deger) {
+  Object.defineProperty(globalThis, 'navigator', { value: deger, configurable: true });
+}
+
+const METIN = "Biz İkimiz'de odamıza gel.";
+const URL_ = 'https://rose-omer.github.io/bizim-oyunlar/?oda=abc';
+
+test('paylas: tarayıcıda navigator.share; yoksa "yok"', async () => {
+  sahteNavigator({});
+  assert.equal(await paylas(METIN, URL_), 'yok');
+
+  const verilen = [];
+  sahteNavigator({ share: async (o) => { verilen.push(o); } });
+  assert.equal(await paylas(METIN, URL_), 'shared');
+  assert.deepEqual(verilen, [{ title: 'Biz İkimiz', text: METIN, url: URL_ }]);
+});
+
+test('paylas: tarayıcıda vazgeçme "cancelled", başka hata "failed"', async (t) => {
+  t.mock.method(console, 'warn', () => {});
+  sahteNavigator({ share: async () => { throw new DOMException('iptal', 'AbortError'); } });
+  assert.equal(await paylas(METIN, URL_), 'cancelled');
+  sahteNavigator({ share: async () => { throw new DOMException('izin yok', 'NotAllowedError'); } });
+  assert.equal(await paylas(METIN, URL_), 'failed');
+});
+
+test('paylas: uygulamada Share eklentisi (Android WebView\'da navigator.share yok)', async () => {
+  sahteNavigator({ share: async () => { throw new Error('çağrılmamalı'); } });
+  const verilen = [];
+  globalThis.Capacitor = { isNativePlatform: () => true, Plugins: { Share: { share: async (o) => { verilen.push(o); return { activityType: 'com.whatsapp' }; } } } };
+  assert.equal(await paylas(METIN, URL_), 'shared');
+  assert.deepEqual(verilen, [{ title: 'Biz İkimiz', text: METIN, url: URL_, dialogTitle: 'Paylaş' }]);
+});
+
+test('paylas: uygulamada menüyü kapatma "cancelled", eklenti hatası "failed"', async (t) => {
+  const uyari = t.mock.method(console, 'warn', () => {});
+  sahteNavigator({});
+  globalThis.Capacitor = { isNativePlatform: () => true, Plugins: { Share: { share: async () => { throw new Error('Share canceled'); } } } };
+  assert.equal(await paylas(METIN, URL_), 'cancelled');
+  globalThis.Capacitor.Plugins.Share.share = async () => { throw new Error("Can't share while sharing is in progress"); };
+  assert.equal(await paylas(METIN, URL_), 'failed');
+  assert.equal(uyari.mock.callCount(), 1);
+  // Eski APK'da eklenti yok: tarayıcı yoluna düşer.
+  globalThis.Capacitor = { isNativePlatform: () => true, Plugins: {} };
+  assert.equal(await paylas(METIN, URL_), 'yok');
+});
+
+test('disariAc: uygulamada Browser eklentisi, yoksa paylaşım; tarayıcıda aynı sekme', async () => {
+  const { disariAc } = await import('../js/core/mobil.js');
+  const eski = globalThis.Capacitor;
+  try {
+    let acilan = null;
+    globalThis.Capacitor = { isNativePlatform: () => true, Plugins: { Browser: { open: async ({ url }) => { acilan = url; } } } };
+    assert.equal(await disariAc('https://ornek.test/a.apk'), 'browser');
+    assert.equal(acilan, 'https://ornek.test/a.apk');
+    let paylasilan = null;
+    globalThis.Capacitor = { isNativePlatform: () => true, Plugins: { Share: { share: async (o) => { paylasilan = o.url; return {}; } } } };
+    assert.equal(await disariAc('https://ornek.test/b.apk'), 'paylas');
+    assert.equal(paylasilan, 'https://ornek.test/b.apk');
+    globalThis.Capacitor = undefined;
+    let gidilen = null;
+    assert.equal(await disariAc('https://ornek.test/c.apk', { git: (u) => { gidilen = u; } }), 'sayfa');
+    assert.equal(gidilen, 'https://ornek.test/c.apk');
+  } finally {
+    globalThis.Capacitor = eski;
+  }
 });

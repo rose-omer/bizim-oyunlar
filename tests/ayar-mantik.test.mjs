@@ -106,7 +106,7 @@ test('apkGoster ve kurulumGorunum', () => {
   assert.equal(apkGoster(android, true), false);
   assert.equal(apkGoster(iphone, false), false);
   assert.equal(apkGoster('', false), false);
-  assert.match(APK_URL, /^https:\/\/github\.com\/rose-omer\/bizim-oyunlar\/releases\/latest\/download\/BizIkimiz\.apk$/);
+  assert.equal(APK_URL, 'https://rose-omer.github.io/bizim-oyunlar/indir/BizIkimiz.apk');
   assert.equal(kurulumGorunum('kurulabilir', false), 'kurulabilir');
   assert.equal(kurulumGorunum('ios-elle', false), 'ios-elle');
   assert.equal(kurulumGorunum('kurulu', false), null);

@@ -233,7 +233,7 @@ export function cihazMesaji(olaylar, clientId) {
 
 /**
  * Bir odanın gönderim planı.
- * belgeler: [{ kind, id, data }] (bu odanın), aboneler: [{ client, endpoint, p256dh, auth }].
+ * belgeler: [{ kind, id, data }] (bu odanın), aboneler: [{ client, ... }] (Web Push aboneliği ya da FCM belirteci).
  * -> [{ abone, mesaj }]
  */
 export function odaPlani({ slot, bugun, belgeler = [], aboneler = [] }) {

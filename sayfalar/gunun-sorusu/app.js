@@ -27,6 +27,8 @@ const benAdi = () => profil?.ben()?.ad || me.name || '';
 const tarihFmt = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'long', weekday: 'long' });
 const kisaGun = new Intl.DateTimeFormat('tr-TR', { weekday: 'short' });
 const uzunGun = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'long', weekday: 'long' });
+const arsivGun = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'long' });
+const arsivGunYil = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' });
 const yerelTarih = (day) => {
   const [y, m, d] = day.split('-').map(Number);
   return new Date(y, m - 1, d);
@@ -220,7 +222,7 @@ function cizArsiv(harita, pAd) {
   listeEl.replaceChildren(...gosterilen.map((g) => {
     const tarih = yerelTarih(g.tarih);
     const ne = formatDay(tarih);
-    const tam = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'long', year: tarih.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined }).format(tarih);
+    const tam = (tarih.getFullYear() !== new Date().getFullYear() ? arsivGunYil : arsivGun).format(tarih);
     const goreli = ne === 'dün' || ne.endsWith('önce');
     return h('li', { class: 'gs-gecmis' },
       h('div', { class: 'gs-gecmis-ust' },

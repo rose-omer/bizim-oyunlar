@@ -15,20 +15,27 @@ import { normalizeImage } from '../../games/yapboz/image.js';
 import * as M from './mantik.js';
 import { ikon, gunSatiri, mesajSatiri, yuklemeSatiri } from './ekran.js';
 import { jestleriBagla, CIFT_MS } from './jest.js';
+import { onizlemeBagla } from '../anilar/onizleme.js';
 
 const EMOJILER = ['❤️', '😘', '🥰', '😍', '😂', '🤭', '😊', '🥺', '😢', '😴', '🤗', '🙈', '🔥', '✨', '🌹', '💌'];
 const ONERILER = ['Günaydın sevgilim ☀️', 'Seni özledim 🥺', 'Bu akşam ne yapıyoruz?'];
 const ESKI_ESIK = 500; // tepeye bu kadar yaklaşınca eski mesajlar yüklenir
+const PENCERE = 30; // açılışta DOM'a basılan son mesaj sayısı; yukarı kaydırdıkça PENCERE kadar artar
+const BALON_FOTO = Object.freeze({ uzun: 960 }); // balon en çok ~312 CSS px × 3
 const kok = document.documentElement;
 const kaba = typeof matchMedia === 'function' ? matchMedia('(pointer: coarse)') : { matches: false };
 const azHareket = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : { matches: false };
 
 // ---------- Görünür alan (klavye açılınca giriş alanı görünür kalsın) ----------
+// Kök değişkeni her yazılışta tüm sayfanın stili yeniden hesaplanır: yalnız değer değişince yaz.
+function kokDegisken(ad, deger) {
+  if (kok.style.getPropertyValue(ad) !== deger) kok.style.setProperty(ad, deger);
+}
 function gorunurAlan() {
   const vv = window.visualViewport;
   if (vv && vv.scale > 1.01) return; // kıstırarak yakınlaştırma: dokunma
-  kok.style.setProperty('--sh-vh', `${Math.round(vv ? vv.height : window.innerHeight)}px`);
-  kok.style.setProperty('--sh-vtop', `${Math.round(vv ? vv.offsetTop : 0)}px`);
+  kokDegisken('--sh-vh', `${Math.round(vv ? vv.height : window.innerHeight)}px`);
+  kokDegisken('--sh-vtop', `${Math.round(vv ? vv.offsetTop : 0)}px`);
 }
 gorunurAlan();
 window.visualViewport?.addEventListener('resize', gorunurAlan);
@@ -41,7 +48,7 @@ const benId = me.clientId;
 // Alt sekme çubuğunun yüksekliği (#app alt boşluğu).
 const tabbar = document.getElementById('tabbar');
 if (tabbar && typeof ResizeObserver === 'function') {
-  new ResizeObserver(() => kok.style.setProperty('--sh-tab-h', `${tabbar.offsetHeight}px`)).observe(tabbar);
+  new ResizeObserver(() => kokDegisken('--sh-tab-h', `${tabbar.offsetHeight}px`)).observe(tabbar);
 }
 
 // ---------- İskelet ----------
@@ -106,12 +113,13 @@ col.on('error', hataGoster);
 // ---------- Fotoğraf kaynakları ----------
 // Yalnız bizim kova / yerel depo (isAllowedPhotoUrl). Kendi yüklediğim fotoğrafın önizlemesi hemen kullanılır.
 const fotoHazir = new Map(); // url -> blob: önizleme
+// Balonda küçük önizleme (2000 px fotoğraf telefonda tam boy çözülmesin); tam ekranda özgün fotoğraf.
 function fotoKaynak(img, url) {
   const kirik = () => img.replaceWith(h('span', { class: 'sh-foto-kirik' }, 'Fotoğraf açılamadı'));
   if (fotoHazir.has(url)) { img.src = fotoHazir.get(url); return; }
   if (!isAllowedPhotoUrl(url)) { kirik(); return; }
   img.addEventListener('error', kirik, { once: true });
-  fotoSrc(url).then((s) => { if (s) img.src = s; else kirik(); });
+  onizlemeBagla(img, url, { secenek: BALON_FOTO, kok: kaydirma, hata: kirik });
 }
 
 // ---------- Çizim ----------
@@ -124,6 +132,10 @@ let altaYapisik = true;
 let yeniSayisi = 0;
 let yuklemeler = [];
 let secili = null;
+let pencereN = PENCERE; // pencerede tutulan mesaj sayısı
+let pencereAnahtar = null; // pencerenin ilk satırı (yeni mesaj gelince üst kaymasın)
+let gizliVar = false; // bellekte olup DOM'a basılmamış eski satır var mı
+let genisletiliyor = false;
 
 const ctxTaban = { benId, ad, bul: (id) => col.get(id), foto: fotoKaynak };
 
@@ -146,7 +158,12 @@ function alta() {
 
 function ciz() {
   const docs = col.all();
-  const satirlar = M.satirlar(docs, { benId, simdi: new Date() });
+  const tumSatirlar = M.satirlar(docs, { benId, simdi: new Date() });
+  const bas = M.pencereBasi(tumSatirlar, pencereN, pencereAnahtar);
+  const satirlar = tumSatirlar.slice(bas);
+  gizliVar = bas > 0;
+  pencereAnahtar = satirlar[0]?.anahtar ?? null;
+  pencereN = Math.max(PENCERE, satirlar.filter((r) => r.tur === 'mesaj').length);
   const durum = M.gorulduBilgisi(docs, okCol.all(), benId);
   const pAd = partnerAd();
   const odakId = document.activeElement?.closest?.('.sh-satir')?.dataset?.id || null;
@@ -177,7 +194,7 @@ function ciz() {
         if (secili === r.anahtar) e.el.classList.add('secili');
         if (!gorulen.has(r.anahtar)) {
           gorulen.add(r.anahtar);
-          if (!ilkCizim && !eskiYukleniyor) {
+          if (!ilkCizim && !eskiYukleniyor && !genisletiliyor) {
             e.el.classList.add('giris');
             if (!r.benim) yeniOnun.push(r.doc);
           }
@@ -223,7 +240,7 @@ function ciz() {
 
 let ustDurum = 'ilk';
 function ustGuncelle(adet = col.all().length) {
-  const durum = eskiYukleniyor ? 'yukleniyor' : adet > 0 && !col.hasOlder() ? 'bas' : 'bos';
+  const durum = eskiYukleniyor ? 'yukleniyor' : adet > 0 && !col.hasOlder() && !gizliVar ? 'bas' : 'bos';
   if (durum === ustDurum) return; // canlı bölge her çizimde yeniden okunmasın
   ustDurum = durum;
   if (durum === 'yukleniyor') {
@@ -244,12 +261,26 @@ function asagiGuncelle() {
   asagi.setAttribute('aria-label', yeniSayisi > 0 ? `${asagiYazi.textContent}, en alta in` : 'En alta in');
 }
 
+/** Pencereyi yukarı doğru açar (bellekteki eski mesajlar); okunan yer kaymaz. anahtar: o satıra dek aç. */
+function pencereyiAc(anahtar = null) {
+  const alttan = kaydirma.scrollHeight - kaydirma.scrollTop;
+  if (anahtar) pencereAnahtar = anahtar;
+  else { pencereAnahtar = null; pencereN += PENCERE; }
+  genisletiliyor = true;
+  try { ciz(); } finally { genisletiliyor = false; }
+  kaydirma.scrollTop = kaydirma.scrollHeight - alttan;
+  altaYapisik = M.altaYakinMi(kaydirma);
+}
+
 async function eskileriYukle() {
+  if (gizliVar) { pencereyiAc(); return; }
   if (eskiYukleniyor || !col.hasOlder()) return;
   eskiYukleniyor = true;
   const alttan = kaydirma.scrollHeight - kaydirma.scrollTop;
   ustGuncelle();
   kaydirma.scrollTop = kaydirma.scrollHeight - alttan;
+  pencereAnahtar = null; // gelen eski mesajlar pencereye girsin
+  pencereN += 50;
   try {
     await col.loadOlder(50);
   } catch (e) {
@@ -262,7 +293,7 @@ async function eskileriYukle() {
 }
 
 async function doldur() {
-  for (let i = 0; i < 6 && col.hasOlder() && kaydirma.scrollHeight <= kaydirma.clientHeight + ESKI_ESIK; i++) {
+  for (let i = 0; i < 6 && (gizliVar || col.hasOlder()) && kaydirma.scrollHeight <= kaydirma.clientHeight + ESKI_ESIK; i++) {
     await eskileriYukle();
   }
 }
@@ -679,9 +710,17 @@ let sonCift = 0;
 liste.addEventListener('click', (e) => {
   const alinti = e.target.closest('.sh-alinti[data-hedef]');
   if (alinti) {
-    const hedef = liste.querySelector(`.sh-satir[data-id="${CSS.escape(alinti.dataset.hedef)}"]`);
+    const sec = `.sh-satir[data-id="${CSS.escape(alinti.dataset.hedef)}"]`;
+    let acildi = false;
+    if (!liste.querySelector(sec) && gizliVar && col.get(alinti.dataset.hedef)) {
+      pencereyiAc(alinti.dataset.hedef);
+      acildi = true;
+    }
+    const hedef = liste.querySelector(sec);
     if (hedef) {
-      hedef.scrollIntoView({ block: 'center', behavior: azHareket.matches ? 'auto' : 'smooth' });
+      // Pencere yeni açıldıysa doğrudan atla: yumuşak kaydırma sürerken boy gözcüsü en alta geri çekmesin.
+      hedef.scrollIntoView({ block: 'center', behavior: acildi || azHareket.matches ? 'auto' : 'smooth' });
+      if (acildi) altaYapisik = false;
       hedef.classList.remove('parla');
       void hedef.offsetWidth;
       hedef.classList.add('parla');
@@ -696,7 +735,12 @@ liste.addEventListener('click', (e) => {
     const img = foto.querySelector('img');
     if (!img?.src) return;
     const t = Date.now();
-    setTimeout(() => { if (sonCift < t) fotoAc(img.src, img.alt); }, CIFT_MS);
+    const url = img.dataset.foto;
+    setTimeout(() => {
+      if (sonCift >= t) return;
+      if (!url || fotoHazir.has(url)) { fotoAc(img.src, img.alt); return; }
+      fotoSrc(url).then((src) => fotoAc(src || img.src, img.alt));
+    }, CIFT_MS);
   }
 });
 liste.addEventListener('keydown', (e) => {
@@ -730,5 +774,8 @@ profil?.on('change', ciz);
 
 ta.value = readStore('local', taslakAnahtar) || '';
 girisDegisti();
+// Önce iskelet (üst şerit, giriş alanı) boyansın; balonlar sonraki görevde (tek uzun görev olmasın).
+// Arka sekmede kare gelmez: beklemeden çiz.
+await new Promise((r) => (document.hidden ? setTimeout(r, 0) : requestAnimationFrame(() => setTimeout(r, 0))));
 ciz();
 doldur();

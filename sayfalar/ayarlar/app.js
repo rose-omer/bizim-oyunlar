@@ -5,7 +5,7 @@ import { openCollection, listDocs } from '../../js/core/veri.js';
 import { setName, inviteUrl, lobbyUrl, pageUrl, writeStore } from '../../js/core/identity.js';
 import { h, icon, toast, confirmDialog, shareInvite, copyInvite, initial, formatDay, readTema, parseTema } from '../../js/core/ui.js';
 import { uploadPhoto, loadPhoto, isAllowedPhotoUrl } from '../../js/core/storage.js';
-import { normalizeImage } from '../../games/yapboz/image.js';
+import { fotoKirp } from '../../js/core/kirp.js';
 import { isMuted, setMuted, sfx } from '../../js/core/sound.js';
 import { bildirimDestegi, bildirimDurumu, bildirimAc, bildirimKapat } from '../../js/core/bildirim.js';
 import { kilitAyarla, kilitVarMi, pinHatasi, pinDogruMu, cihazdanUnut } from '../../js/core/kilit.js';
@@ -16,6 +16,7 @@ import { bulusmaDogrula } from '../gunler/mantik.js';
 import {
   SURUM, K_TEMA, TEMA_RENKLERI, TEMA_MODLARI, KISI_RENKLERI,
   bulusmaAyir, bulusmaMetni, konumVerisi, mesafeKm, mesafeMetni,
+  KONUM_SECENEK, konumHataTuru, konumPlatformu, konumRehberi,
   bildirimGorunum, YEDEK_TURLERI, yedekVerisi, yedekSayisi, yedekDosyaAdi,
 } from './mantik.js';
 
@@ -38,6 +39,7 @@ const SVG = {
   indir: '<path d="M12 4v10.5M7.5 10 12 14.5 16.5 10"/><path d="M5 19.5h14"/>',
   cikis: '<path d="M14 4.5h3.5A1.5 1.5 0 0 1 19 6v12a1.5 1.5 0 0 1-1.5 1.5H14"/><path d="M10 8 6 12l4 4M6 12h9.5"/>',
   bilgi: '<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5M12 8h.01"/>',
+  telefon: '<rect x="6.5" y="3" width="11" height="18" rx="2.8"/><path d="M10.5 17.6h3"/>',
 };
 const svg = (ad, cls = 'ayar-svg') => h('span', { class: cls, 'aria-hidden': 'true', html: `<svg viewBox="0 0 24 24" ${STROKE}>${SVG[ad]}</svg>` });
 
@@ -180,12 +182,10 @@ function dosyaSecici(onDosya) {
   return input;
 }
 
-async function fotoYukle(file, mesgulEl) {
+async function fotoYukle(blob, mesgulEl) {
   mesgulEl.setAttribute('aria-busy', 'true');
   mesgulEl.classList.add('yukleniyor');
   try {
-    const { blob, image } = await normalizeImage(file);
-    try { image?.close?.(); } catch { /* tuval */ }
     return await uploadPhoto(blob, roomId);
   } finally {
     mesgulEl.removeAttribute('aria-busy');
@@ -193,17 +193,33 @@ async function fotoYukle(file, mesgulEl) {
   }
 }
 
-// ---------- Profilim ----------
-const avatarImg = h('img', { class: 'ayar-avatar-foto', alt: '', hidden: true, decoding: 'async' });
-const avatarHarf = h('span', { class: 'ayar-avatar-harf', 'aria-hidden': 'true' });
-const avatarSec = dosyaSecici(async (f) => {
+/** Seçilen dosya → kırpma penceresi → yükle → kaydet. Vazgeçilirse hiçbir şey değişmez. */
+async function fotoAyarla(dosya, { kirp, mesgulEl, kaydet, basari }) {
+  let blob;
   try {
-    const url = await fotoYukle(f, avatarBtn);
-    if (await yaz(profil.setBen({ foto: url }))) toast('Profil fotoğrafın güncellendi');
+    blob = await fotoKirp(dosya, kirp);
+  } catch (e) {
+    toast(e?.message || 'Bu fotoğraf açılamadı. Başka bir fotoğraf dener misin?');
+    return;
+  }
+  if (!blob) return;
+  try {
+    const url = await fotoYukle(blob, mesgulEl);
+    if (await yaz(kaydet(url))) toast(basari);
   } catch (e) {
     toast(e?.message || 'Fotoğraf yüklenemedi. Tekrar dener misin?');
   }
-});
+}
+
+// ---------- Profilim ----------
+const avatarImg = h('img', { class: 'ayar-avatar-foto', alt: '', hidden: true, decoding: 'async' });
+const avatarHarf = h('span', { class: 'ayar-avatar-harf', 'aria-hidden': 'true' });
+const avatarSec = dosyaSecici((f) => fotoAyarla(f, {
+  kirp: { oran: 1, cikti: 512, daire: true, baslik: 'Profil fotoğrafı' },
+  mesgulEl: avatarBtn,
+  kaydet: (url) => profil.setBen({ foto: url }),
+  basari: 'Profil fotoğrafın güncellendi',
+}));
 const avatarBtn = h('button', {
   type: 'button', class: 'ayar-avatar', 'aria-label': 'Profil fotoğrafını değiştir', onclick: () => avatarSec.click(),
 }, avatarImg, avatarHarf, h('span', { class: 'ayar-avatar-rozet' }, svg('kamera')));
@@ -291,14 +307,12 @@ const kapakImg = h('img', { class: 'ayar-kapak-foto', alt: 'Kapak fotoğrafını
 const kapakBos = h('div', { class: 'ayar-kapak-bos' }, svg('foto'), h('span', {}, 'Henüz kapak yok. Birlikte bir fotoğrafınızı seçelim mi?'));
 const kapakKutu = h('div', { class: 'ayar-kapak', id: 'ayar-kapak' }, kapakImg, kapakBos);
 kapakImg.addEventListener('foto', () => { kapakBos.hidden = !kapakImg.hidden; });
-const kapakSec = dosyaSecici(async (f) => {
-  try {
-    const url = await fotoYukle(f, kapakKutu);
-    if (await yaz(profil.setCift({ kapak: url }))) toast('Kapak fotoğrafı güncellendi');
-  } catch (e) {
-    toast(e?.message || 'Fotoğraf yüklenemedi. Tekrar dener misin?');
-  }
-});
+const kapakSec = dosyaSecici((f) => fotoAyarla(f, {
+  kirp: { oran: 16 / 9, cikti: 1280, daire: false, baslik: 'Kapak fotoğrafı' },
+  mesgulEl: kapakKutu,
+  kaydet: (url) => profil.setCift({ kapak: url }),
+  basari: 'Kapak fotoğrafı güncellendi',
+}));
 const kapakKaldirBtn = h('button', {
   type: 'button', class: 'btn small ghost',
   onclick: async () => { if (await yaz(profil.setCift({ kapak: undefined }))) toast('Kapak kaldırıldı'); },
@@ -435,7 +449,9 @@ async function bildirimCiz() {
       'Sevgilin yazınca, dokununca ya da anı ekleyince bu cihaza haber veririz.', sw));
   } else if (g === 'engelli') {
     bildirimKutu.replaceChildren(
-      bilgi('Bildirimler bu tarayıcıda engellenmiş. Adres çubuğundaki site ayarlarından (ya da tarayıcı ayarlarından) bu siteye bildirim izni ver, sonra buraya dön.'),
+      bilgi(isNative()
+        ? 'Bildirim izni kapalı. Telefon Ayarlar → Uygulamalar → Biz İkimiz → Bildirimler\'den aç.'
+        : 'Bildirimler bu tarayıcıda engellenmiş. Adres çubuğundaki site ayarlarından (ya da tarayıcı ayarlarından) bu siteye bildirim izni ver, sonra buraya dön.'),
       h('div', { class: 'ayar-eylemler' }, h('button', { type: 'button', class: 'btn small', onclick: () => bildirimCiz() }, 'Tekrar kontrol et')));
   } else if (g === 'ana-ekran-gerek') {
     bildirimKutu.replaceChildren(
@@ -597,34 +613,91 @@ const saatMetni = (iso) => {
   if (Number.isNaN(d.getTime())) return '';
   return `${formatDay(d)} ${d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}`;
 };
-function konumHataMetni(e) {
-  if (e?.code === 1) return 'Konum izni verilmedi. Tarayıcı ayarlarından izin verebilirsin.';
-  if (e?.code === 2) return 'Konum bulunamadı. Biraz sonra tekrar dener misin?';
-  if (e?.code === 3) return 'Konum zamanında alınamadı. Tekrar dener misin?';
-  return e?.message || 'Konum alınamadı.';
+
+// Konum alınamayınca kartta yol gösteren kutu (izin, servis kapalı, zaman aşımı, http adres).
+const guvenliMi = () => globalThis.isSecureContext !== false;
+const rehber = (tur) => konumRehberi(tur, {
+  platform: konumPlatformu({ native: isNative(), ua: navigator.userAgent, dokunmatik: navigator.maxTouchPoints || 0 }),
+  guvenli: guvenliMi(),
+});
+let konumSorun = guvenliMi() ? null : rehber('izin'); // http:// adreste not hep görünür
+
+let izinDurumu; // PermissionStatus | null (undefined: henüz sorulmadı)
+async function konumIzni() {
+  if (izinDurumu === undefined) {
+    try {
+      izinDurumu = (await navigator.permissions?.query({ name: 'geolocation' })) || null;
+    } catch {
+      izinDurumu = null;
+    }
+    // Kullanıcı ayarlardan izni açıp dönünce yol gösteren kutu kendiliğinden kalkar.
+    izinDurumu?.addEventListener?.('change', izinDegisti);
+  }
+  return izinDurumu?.state || null;
+}
+function izinDegisti() {
+  const st = izinDurumu?.state;
+  if (st && st !== 'denied' && konumSorun?.tur === 'izin') {
+    konumSorun = null;
+    mesafeCiz();
+  }
+}
+
+function sorunGoster(r) {
+  konumSorun = { ...r, denendi: true }; // denendi: düğme "Tekrar dene" olur
+  mesafeCiz();
+  duyur(`${r.baslik}. ${r.metin}`);
+  document.getElementById('ayar-konum-sorun-h')?.focus();
+}
+function sorunuTemizle() {
+  if (konumSorun && konumSorun.tur !== 'guvensiz') konumSorun = null;
 }
 
 async function konumAl() {
+  if (!guvenliMi()) {
+    sorunGoster(rehber('izin'));
+    return;
+  }
   if (!navigator.geolocation) {
     toast('Bu cihaz konum vermiyor.');
     return;
   }
   konumMesgul = true;
   mesafeCiz();
+  let sorun = null;
   try {
-    const pos = await new Promise((res, rej) => navigator.geolocation.getCurrentPosition(res, rej,
-      { enableHighAccuracy: false, timeout: 15000, maximumAge: 60_000 }));
-    const v = konumVerisi(pos.coords, new Date());
-    if (!v) throw new Error('Konum okunamadı.');
-    await konum.put(v, myId);
-    rizaAcik = false;
-    toast('Konumun güncellendi');
+    if ((await konumIzni()) === 'denied') {
+      sorun = rehber('izin');
+    } else {
+      const pos = await new Promise((res, rej) => navigator.geolocation.getCurrentPosition(res, rej, KONUM_SECENEK));
+      const v = konumVerisi(pos.coords, new Date());
+      if (!v) throw new Error('Konum okunamadı.');
+      await konum.put(v, myId);
+      rizaAcik = false;
+      konumSorun = null;
+      toast('Konumun güncellendi');
+    }
   } catch (e) {
-    toast(konumHataMetni(e));
+    const tur = konumHataTuru(e);
+    if (tur === 'diger') toast(e?.message || 'Konum alınamadı. Biraz sonra tekrar dener misin?');
+    else sorun = rehber(tur);
   } finally {
     konumMesgul = false;
     mesafeCiz();
   }
+  if (sorun) sorunGoster(sorun);
+}
+
+function sorunKutusu() {
+  const r = konumSorun;
+  if (!r) return null;
+  return h('div', { class: 'ayar-konum-sorun', dataset: { tur: r.tur } },
+    svg(r.tur === 'guvensiz' ? 'kilit' : 'konum', 'ayar-konum-sorun-ikon'),
+    h('div', { class: 'ayar-konum-sorun-metin' },
+      h('h3', { class: 'ayar-konum-sorun-baslik', id: 'ayar-konum-sorun-h', tabindex: '-1' }, r.baslik),
+      h('p', {}, r.metin),
+      r.adimlar.length ? h('ol', { class: 'ayar-adimlar' }, r.adimlar.map((a) => h('li', {}, a))) : null,
+      r.not ? h('p', { class: 'ayar-yardim' }, r.not) : null));
 }
 
 function mesafeCiz() {
@@ -635,9 +708,11 @@ function mesafeCiz() {
   const pAd = profil.partner()?.ad || 'Sevgilin';
   mesafeKutu.dataset.durum = benim ? 'acik' : rizaAcik ? 'riza' : 'kapali';
 
+  const almaEtiketi = (bos) => (konumMesgul ? 'Konum alınıyor…' : konumSorun?.denendi && konumSorun.tur !== 'guvensiz' ? 'Tekrar dene' : bos);
+
   if (benim) {
     const km = onun ? mesafeKm(benim, onun) : null;
-    mesafeKutu.replaceChildren(
+    mesafeKutu.replaceChildren(...[
       h('div', { class: 'ayar-mesafe' },
         svg('konum', 'ayar-mesafe-ikon'),
         h('div', { class: 'ayar-satir-metin' },
@@ -645,41 +720,55 @@ function mesafeCiz() {
           h('p', { class: 'ayar-satir-aciklama' },
             `Senin konumun: ${saatMetni(benim.at)}`, onun ? ` · ${pAd}: ${saatMetni(onun.at)}` : ''))),
       h('p', { class: 'ayar-yardim' }, 'Yalnız yaklaşık konum (≈1 km) paylaşılır. Sürekli takip yok; konum yalnız “Güncelle”ye dokununca alınır.'),
+      sorunKutusu(),
       h('div', { class: 'ayar-eylemler' },
         h('button', { type: 'button', class: 'btn small', disabled: konumMesgul, 'aria-busy': konumMesgul ? 'true' : null, onclick: konumAl },
-          konumMesgul ? 'Konum alınıyor…' : 'Güncelle'),
+          almaEtiketi('Güncelle')),
         h('button', {
           type: 'button', class: 'btn small danger',
           onclick: async () => {
             if (await yaz(konum.remove(myId))) toast('Konumun silindi. Mesafe kapalı.');
+            sorunuTemizle();
             mesafeCiz();
           },
-        }, 'Kapat ve sil')));
+        }, 'Kapat ve sil')),
+    ].filter(Boolean));
     return;
   }
 
   if (rizaAcik) {
-    mesafeKutu.replaceChildren(
+    mesafeKutu.replaceChildren(...[
       h('h3', { class: 'ayar-riza-baslik', id: 'ayar-riza-h', tabindex: '-1' }, 'Konumunu paylaşmadan önce'),
       h('ul', { class: 'ayar-riza' },
         h('li', {}, 'Konumun yaklaşık olarak (≈1 km) yalnız sevgilinle paylaşılır.'),
         h('li', {}, 'Sürekli takip yok: konum yalnız sen “Güncelle”ye dokununca alınır.'),
         h('li', {}, 'İstediğin an “Kapat ve sil” ile tamamen silinir.')),
+      sorunKutusu(),
       h('div', { class: 'ayar-eylemler' },
         h('button', { type: 'button', class: 'btn small primary', disabled: konumMesgul, 'aria-busy': konumMesgul ? 'true' : null, onclick: konumAl },
-          konumMesgul ? 'Konum alınıyor…' : 'Kabul ediyorum, paylaş'),
-        h('button', { type: 'button', class: 'btn small ghost', onclick: () => { rizaAcik = false; mesafeCiz(); document.getElementById('ayar-mesafe-sw')?.focus(); } }, 'Vazgeç')));
+          almaEtiketi('Kabul ediyorum, paylaş')),
+        h('button', {
+          type: 'button', class: 'btn small ghost',
+          onclick: () => { rizaAcik = false; sorunuTemizle(); mesafeCiz(); document.getElementById('ayar-mesafe-sw')?.focus(); },
+        }, 'Vazgeç')),
+    ].filter(Boolean));
     return;
   }
 
-  const sw = anahtar('ayar-mesafe-sw', false, () => {
+  const sw = anahtar('ayar-mesafe-sw', false, async () => {
+    // İzin önceden reddedildiyse yol gösteren kutu rıza ekranıyla birlikte gelir.
+    if (guvenliMi() && (await konumIzni()) === 'denied') konumSorun = rehber('izin');
     rizaAcik = true;
     mesafeCiz();
     document.getElementById('ayar-riza-h')?.focus();
+    if (konumSorun) duyur(`${konumSorun.baslik}. ${konumSorun.metin}`);
   });
-  mesafeKutu.replaceChildren(anahtarSatiri('Aramızdaki mesafe',
-    onun ? `${pAd} konumunu paylaşıyor. Sen de açarsan aranızdaki mesafeyi görürsünüz.`
-      : 'Kapalı. Açarsan yaklaşık konumun yalnız sevgilinle paylaşılır.', sw));
+  mesafeKutu.replaceChildren(...[
+    anahtarSatiri('Aramızdaki mesafe',
+      onun ? `${pAd} konumunu paylaşıyor. Sen de açarsan aranızdaki mesafeyi görürsünüz.`
+        : 'Kapalı. Açarsan yaklaşık konumun yalnız sevgilinle paylaşılır.', sw),
+    sorunKutusu(),
+  ].filter(Boolean));
 }
 
 // ---------- Verilerimiz ----------
@@ -760,7 +849,7 @@ app.replaceChildren(h('div', { class: 'ayar' },
   bolum('oda', 'Oda', odaKart),
   bolum('hakkinda', 'Hakkında', kart(
     h('p', { class: 'ayar-hakkinda-ad' }, 'Biz İkimiz', h('span', { class: 'chip' }, `Sürüm ${SURUM}`)),
-    h('p', { class: 'ayar-satir-aciklama' }, 'İkiniz için ücretsiz, hesapsız bir köşe. Verileriniz oda kodunuzla korunur: davet linkini bilen herkes odanıza girebilir, o yüzden linki yalnız sevgilinle paylaş.')))));
+    h('p', { class: 'ayar-satir-aciklama' }, 'İkiniz için ücretsiz, hesapsız bir köşe. Verileriniz oda kodunuzla korunur: davet linkini bilen herkes odanıza girebilir, o yüzden linki yalnız sevgilinle paylaş. Odayı kilitlerseniz yalnız onayladığınız cihazlar girer.')))));
 
 const hepsiniYenile = () => { profilYenile(); bizYenile(); mesafeCiz(); };
 profil.on('change', hepsiniYenile);
@@ -769,7 +858,11 @@ hepsiniYenile();
 temaYenile();
 kilitCiz();
 bildirimCiz();
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') bildirimCiz(); });
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return;
+  bildirimCiz();
+  izinDegisti(); // izin değişim olayı gelmeyen tarayıcılar için
+});
 setInterval(() => { if (document.visibilityState === 'visible') bulusmaYenile(); }, 60_000);
 
 // #ayar-kilit gibi bir bağlantıyla gelindiyse o bölüme kaydır.

@@ -227,3 +227,16 @@ export function formParametreleri(search, bugun) {
 export function begeniSayisi(begeni) {
   return begeni && typeof begeni === 'object' ? Object.values(begeni).filter(Boolean).length : 0;
 }
+
+/**
+ * Önizleme boyu (onizleme.js). kisa: kısa kenar sınırı, uzun: uzun kenar sınırı (px).
+ * Fotoğraf hedeften en çok %20 büyükse yeniden kodlanmaz (kucult: false). -> { en, boy, kucult }
+ */
+export function onizlemeBoyu(en, boy, { kisa = Infinity, uzun = Infinity } = {}) {
+  const w = Math.max(0, Math.round(Number(en) || 0));
+  const h = Math.max(0, Math.round(Number(boy) || 0));
+  if (!w || !h) return { en: w, boy: h, kucult: false };
+  const k = Math.min(1, kisa / Math.min(w, h), uzun / Math.max(w, h));
+  if (k >= 1 / 1.2) return { en: w, boy: h, kucult: false };
+  return { en: Math.max(1, Math.round(w * k)), boy: Math.max(1, Math.round(h * k)), kucult: true };
+}

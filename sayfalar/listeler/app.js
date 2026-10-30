@@ -32,6 +32,7 @@ let duzenLi = null;
 // Giriş animasyonu yalnız yeni gelen öğelere (canlı yeniden çizimde titreme olmasın).
 let gorulen = new Set();
 let ilkCizim = true;
+const elemanlar = new Map(); // öğe id -> { el, imza }
 
 // ---------- Yardımcılar ----------
 const partnerAdi = () => profil.partner()?.ad || 'Sevgilin';
@@ -154,14 +155,48 @@ function ciz() {
 
   // Yeniden çizimde odağı koru (canlı güncelleme klavyeyi bölmesin).
   const odak = document.activeElement?.dataset?.odak || null;
-  liste.replaceChildren(...gorunen.map(ogeEl));
-  if (!ilkCizim) for (const li of liste.children) if (!gorulen.has(li.dataset.id)) li.classList.add('yeni');
+  // Anahtarlı yeniden kullanım: yalnız değişen öğe yeniden kurulur (100+ öğede her dokunuşta tüm liste çizilmesin).
+  const istenen = gorunen.map((d) => {
+    if (durum.duzen === d.id && duzenLi) return duzenLi;
+    const imza = ogeImza(d);
+    let e = elemanlar.get(d.id);
+    if (!e || e.imza !== imza) {
+      e = { el: ogeEl(d), imza };
+      elemanlar.set(d.id, e);
+      if (!ilkCizim && !gorulen.has(d.id)) {
+        e.el.classList.add('yeni');
+        e.el.addEventListener('animationend', () => e.el.classList.remove('yeni'), { once: true });
+      }
+    }
+    return e.el;
+  });
+  const kalan = new Set(gorunen.map((d) => d.id));
+  for (const id of [...elemanlar.keys()]) if (!kalan.has(id)) elemanlar.delete(id);
+  esitle(liste, istenen);
   gorulen = new Set(hepsi.map((d) => d.id));
   ilkCizim = false;
-  if (odak) liste.querySelector(`[data-odak="${CSS.escape(odak)}"]`)?.focus({ preventScroll: true });
+  if (odak && !liste.contains(document.activeElement)) {
+    liste.querySelector(`[data-odak="${CSS.escape(odak)}"]`)?.focus({ preventScroll: true });
+  }
 
   bos.hidden = gorunen.length > 0;
   if (!gorunen.length) bos.replaceChildren(...bosIcerik(l, onunki, hepsi.length));
+}
+
+/** Öğe görünümünü belirleyen her şey: belge sürümü, menü açık mı, kişi adları. */
+function ogeImza(d) {
+  return [d.updated_at, d.pending ? 1 : 0, durum.menu === d.id ? 1 : 0, adOf(L.ekleyen(d)), adOf(d.data.yapan)].join('|');
+}
+
+/** ebeveyn'in çocuklarını istenen sıraya getirir; yerinde olan öğeye dokunmaz. */
+function esitle(ebeveyn, istenen) {
+  const kume = new Set(istenen);
+  for (const c of [...ebeveyn.children]) if (!kume.has(c)) c.remove();
+  let cur = ebeveyn.firstChild;
+  for (const el of istenen) {
+    if (el === cur) { cur = cur.nextSibling; continue; }
+    ebeveyn.insertBefore(el, cur);
+  }
 }
 
 function bosIcerik(l, onunki, toplam) {
@@ -176,7 +211,6 @@ function bosIcerik(l, onunki, toplam) {
 }
 
 function ogeEl(d) {
-  if (durum.duzen === d.id && duzenLi) return duzenLi;
   const data = L.sahibeGoster(d, myId); // sahibine giden veride gizli "alacak" işareti yok
   const yapildi = !!data.yapildi;
   const gizli = L.gizliIsaret(d, myId);

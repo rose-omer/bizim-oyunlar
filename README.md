@@ -17,7 +17,7 @@ Adres: https://rose-omer.github.io/bizim-oyunlar/
 ## Telefona kurma
 - **iPhone:** Safari → Paylaş → **Ana Ekrana Ekle**. Bildirim yalnız böyle kurulunca çalışır (iOS 16.4+).
 - **Android:** Chrome → menü → **Uygulamayı yükle**. Ya da APK:
-  https://github.com/rose-omer/bizim-oyunlar/releases/download/android-latest/BizIkimiz.apk
+  https://rose-omer.github.io/bizim-oyunlar/indir/BizIkimiz.apk
   (APK'da partnerden anlık bildirim yok; cihaz hatırlatıcıları var. Anlık bildirim için Chrome kurulumu.)
 
 ## Yerel çalıştırma
@@ -45,10 +45,27 @@ npm test
   `C:/Users/koseo/.bizim-ikimiz/` klasöründe (yedekle). "service_role" / "secret" anahtarını siteye koyma.
 
 ## Yayın
-- **GitHub Pages:** her `git push` siteyi 1 dk içinde günceller. `.nojekyll` silinmemeli.
+- Depo gizli; site herkese açık (GitHub Pro). Pages kaynağı: **GitHub Actions** (`build_type=workflow`).
+- **GitHub Pages:** `.github/workflows/pages.yml` yayınlar: her `git push` (main), elle (`gh workflow run pages.yml`)
+  ve Android APK işi başarıyla bitince. Yayın 1–2 dk sürer. `mobil/`, `supabase/`, `tests/`, `dev/` yayına girmez.
+  `.nojekyll` silinmemeli (branch yayınına geri dönüşte gerekir).
 - **Android APK:** `.github/workflows/android.yml`. `mobil/**` değişince ya da elle (`gh workflow run android.yml`) derlenir;
-  `android-latest` sürümüne yüklenir. İmza: `ANDROID_KEYSTORE_B64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`,
+  `android-latest` sürümüne yüklenir (`BizIkimiz.apk`, `surum.json`). Gizli depoda Releases girişsiz indirilemez;
+  `pages.yml` ikisini siteye koyar: `indir/BizIkimiz.apk` (indirme adresi), `indir/surum.json` (uygulamanın sürüm denetimi).
+  İmza: `ANDROID_KEYSTORE_B64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`,
   `ANDROID_KEY_PASSWORD` secret'ları; anahtar `C:/Users/koseo/.bizim-ikimiz/android-keystore.p12` (kaybolursa güncelleme kurulmaz).
+
+## Android anlık bildirim (FCM)
+APK'nın WebView'ı Web Push desteklemez; APK partner bildirimini Firebase Cloud Messaging ile alır. Web/PWA Web Push ile kalır.
+1. Firebase konsolu → proje → Android uygulaması ekle, paket adı `com.rose.bizikimiz` → `google-services.json` indir.
+2. Proje ayarları → Hizmet hesapları → **Yeni özel anahtar oluştur** → JSON (gizli; depoya koyma).
+3. GitHub secret `GOOGLE_SERVICES_JSON_B64` = `google-services.json` dosyasının base64 hâli. Yoksa APK FCM'siz derlenir (uyarıyla).
+4. Supabase secret `FCM_SERVICE_ACCOUNT` = hizmet hesabı JSON'unun tam metni:
+   `npx supabase secrets set --env-file <dosya> --project-ref blgtlflryxknyalutugw` (dosyada `FCM_SERVICE_ACCOUNT='<tek satır JSON>'`).
+   Yoksa Edge Function'lar FCM'yi atlar, Web Push sürer.
+5. `supabase/schema.sql` (7. bölüm: `fcm_sub`, `fcm_kaydet`, `fcm_sil`, ...) → SQL Editor → Run. Sonra `bildir` ve `hatirlat` yeniden dağıtılır.
+6. Telefonda yeni APK (sürüm 1.2.x) → Ayarlar → **Anlık bildirimler** açık → izin ver.
+- Uygulama açıkken gelen bildirim sistemde gösterilmez; sayfaya `bizim:bildirim` olayı gelir. Bildirime dokununca ilgili sayfa açılır.
 
 ## Uyanık tutma
 - Ücretsiz Supabase 7 gün hareketsiz kalırsa durur.

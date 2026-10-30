@@ -1,9 +1,10 @@
 // Ortak arayüz: üst şerit, alt sekmeler, tema, dokunuş, bildirim, kutlama, partner bekleme, onay, davet.
 // Sözleşme §9, §19–§20. Ek dışa aktarımlar (h, icon, pairEl, muteButton, copyInvite, …) ana sayfa içindir;
 // oyunlar da kullanabilir ama sözleşmenin parçası değildir.
-import { me, currentRoom, inviteUrl, lobbyUrl, gameUrl, readGameParams, pageUrl } from './identity.js';
+import { me, currentRoom, inviteUrl, lobbyUrl, gameUrl, readGameParams, pageUrl, SITE_ROOT } from './identity.js';
 import { gameById, SAYFALAR, SEKMELER, sayfaById } from './games.js';
 import { sfx, isMuted, setMuted } from './sound.js';
+import { paylas } from './mobil.js';
 
 // ---------- Küçük yardımcılar ----------
 
@@ -48,6 +49,7 @@ export const ICONS = {
   close: `<svg viewBox="0 0 24 24" ${STROKE} aria-hidden="true" focusable="false"><path d="M6.5 6.5l11 11m0-11-11 11"/></svg>`,
   chevron: `<svg viewBox="0 0 24 24" ${STROKE} aria-hidden="true" focusable="false"><path d="m9.5 5.5 6.5 6.5-6.5 6.5"/></svg>`,
   pin: `<svg viewBox="0 0 24 24" ${STROKE} aria-hidden="true" focusable="false"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/></svg>`,
+  lock: `<svg viewBox="0 0 24 24" ${STROKE} aria-hidden="true" focusable="false"><rect x="5" y="10.5" width="14" height="9.5" rx="2.5"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/><path d="M12 14.4v2"/></svg>`,
 };
 
 // Alt sekme simgeleri: tek çizgi ailesi (1.75). Etkin sekmede .f parçaları dolar.
@@ -205,7 +207,11 @@ export function fotoSrc(url) {
   return photoCache.get(url);
 }
 
-/** Tek avatar: baş harf, varsa fotoğraf, isteğe bağlı köşe rozeti. cls: 'me' | 'partner' | 'partner away' | 'empty'. */
+/**
+ * Tek avatar: baş harf, varsa fotoğraf, isteğe bağlı köşe rozeti. cls: 'me' | 'partner' | 'partner away' | 'empty'.
+ * Fotoğraf yüklenince (ve ad varsa) avatar düğme olur: dokununca ya da basılı tutunca fotoğraf büyür.
+ * Fotoğrafsız (baş harfli) avatar etkileşimsiz ve ekran okuyucudan gizli kalır.
+ */
 export function avatarEl(name, cls, foto, badge) {
   const av = h('span', { class: `avatar ${cls}`, 'aria-hidden': 'true' }, name ? initial(name) : '?');
   if (foto) {
@@ -213,13 +219,150 @@ export function avatarEl(name, cls, foto, badge) {
     av.append(img);
     fotoSrc(foto).then((src) => {
       if (!src) return;
-      img.addEventListener('load', () => { img.hidden = false; av.classList.add('has-photo'); }, { once: true });
+      img.addEventListener('load', () => {
+        img.hidden = false;
+        av.classList.add('has-photo');
+        if (name) buyutulebilir(av, src, name);
+      }, { once: true });
       img.addEventListener('error', () => img.remove(), { once: true });
       img.src = src;
     });
   }
   if (badge) av.append(h('span', { class: 'avatar-badge' }, badge));
   return av;
+}
+
+// ---------- Fotoğrafı büyüt ----------
+export const UZUN_BASMA_MS = 450;
+
+/** Avatar düğmesinin erişilebilir adı: "Gül'ün fotoğrafını büyüt". */
+export function buyutEtiketi(name) {
+  const g = genitive(name);
+  return g ? `${g} fotoğrafını büyüt` : 'Fotoğrafı büyüt';
+}
+
+/**
+ * Açık kaplamayı tarayıcının / telefonun "geri" hareketine bağlar: geçmişe bir adım ekler, geri gelince
+ * kapat() çağrılır. -> birak(): kaplama başka yoldan kapanınca çağır (eklenen adımı geri alır).
+ */
+export function geriyleKapat(kapat) {
+  if (typeof history === 'undefined' || typeof addEventListener !== 'function') return () => {};
+  const anahtar = `bizimKaplama${++dialogSeq}`;
+  let aktif = true;
+  const onPop = () => {
+    if (!aktif) return;
+    aktif = false;
+    removeEventListener('popstate', onPop);
+    kapat();
+  };
+  try {
+    history.pushState({ ...(history.state || {}), [anahtar]: true }, '');
+  } catch {
+    return () => {};
+  }
+  addEventListener('popstate', onPop);
+  return () => {
+    if (!aktif) return;
+    aktif = false;
+    removeEventListener('popstate', onPop);
+    if (history.state?.[anahtar]) history.back();
+  };
+}
+
+let buyutKapat = null;
+
+/** Tam ekran fotoğraf: büyük yuvarlak fotoğraf ve altında ad. Dokununca, Esc ya da geri ile kapanır. -> kapat() */
+export function fotoBuyut({ src, ad = '' } = {}) {
+  if (typeof document === 'undefined' || !src) return () => {};
+  buyutKapat?.();
+  const onceOdak = document.activeElement;
+  const kapatBtn = h('button', { type: 'button', class: 'icon-btn foto-buyut-kapat', 'aria-label': 'Kapat' }, icon('close'));
+  const dlg = h('dialog', { class: 'foto-buyut', 'aria-label': ad ? `${genitive(ad)} fotoğrafı` : 'Fotoğraf' },
+    h('figure', { class: 'foto-buyut-kutu' },
+      h('img', { class: 'foto-buyut-foto', src, alt: ad ? `${genitive(ad)} profil fotoğrafı` : '', draggable: 'false' }),
+      ad ? h('figcaption', { class: 'foto-buyut-ad' }, ad) : null),
+    kapatBtn);
+
+  let kapaniyor = false;
+  const kapat = () => {
+    if (kapaniyor || !dlg.open) return;
+    kapaniyor = true;
+    if (reducedMotion()) {
+      dlg.close();
+      return;
+    }
+    dlg.classList.add('kapaniyor');
+    setTimeout(() => { if (dlg.open) dlg.close(); }, 140);
+  };
+  // Basılı tutup açınca parmak kalkar: o dokunuş kapatmasın. Yalnız içeride başlayan dokunuş kapatır.
+  let icerde = false;
+  dlg.addEventListener('pointerdown', () => { icerde = true; });
+  dlg.addEventListener('click', (e) => {
+    if (!icerde && e.detail !== 0) return; // detail 0: klavyeyle "Kapat"
+    icerde = false;
+    kapat();
+  });
+  dlg.addEventListener('cancel', (e) => { e.preventDefault(); kapat(); });
+  dlg.addEventListener('contextmenu', (e) => e.preventDefault());
+  const birak = geriyleKapat(kapat);
+  dlg.addEventListener('close', () => {
+    birak();
+    dlg.remove();
+    if (buyutKapat === kapat) buyutKapat = null;
+    if (onceOdak?.isConnected && typeof onceOdak.focus === 'function') onceOdak.focus({ preventScroll: true });
+  });
+  document.body.append(dlg);
+  dlg.showModal();
+  kapatBtn.focus({ preventScroll: true });
+  buyutKapat = kapat;
+  return kapat;
+}
+
+/** Fotoğraflı avatarı düğme yapar: dokunma, basılı tutma (≈450 ms), Enter / Boşluk fotoğrafı büyütür. */
+function buyutulebilir(av, src, name) {
+  av.removeAttribute('aria-hidden');
+  av.setAttribute('role', 'button');
+  av.tabIndex = 0;
+  av.setAttribute('aria-label', buyutEtiketi(name));
+  const ac = () => fotoBuyut({ src, ad: name });
+  let zaman = 0;
+  let bas = null;
+  let uzunAcildi = false;
+  const iptal = () => {
+    clearTimeout(zaman);
+    zaman = 0;
+    bas = null;
+  };
+  av.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    uzunAcildi = false;
+    bas = { x: e.clientX, y: e.clientY };
+    clearTimeout(zaman);
+    zaman = setTimeout(() => {
+      zaman = 0;
+      bas = null;
+      uzunAcildi = true;
+      ac();
+    }, UZUN_BASMA_MS);
+  });
+  av.addEventListener('pointermove', (e) => {
+    if (bas && Math.hypot(e.clientX - bas.x, e.clientY - bas.y) > 10) iptal();
+  });
+  for (const t of ['pointerup', 'pointercancel', 'pointerleave']) av.addEventListener(t, iptal);
+  av.addEventListener('click', (e) => {
+    if (uzunAcildi) {
+      uzunAcildi = false;
+      e.preventDefault();
+      return;
+    }
+    ac();
+  });
+  av.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); ac(); }
+    else if (e.key === ' ') e.preventDefault(); // sayfa kaymasın; açma keyup'ta
+  });
+  av.addEventListener('keyup', (e) => { if (e.key === ' ') { e.preventDefault(); ac(); } });
+  av.addEventListener('contextmenu', (e) => e.preventDefault()); // uzun basma menüsü yalnız avatarda engellenir
 }
 
 /**
@@ -504,6 +647,12 @@ export function startAppServices() {
     applyTheme({ ...readTemaRaw(), ...d });
   });
   window.addEventListener('storage', (e) => { if (e.key === TEMA_KEY) applyTheme(); });
+  // Uygulama açıkken gelen anlık bildirim (FCM, mobil.js yayar): toast + isteğe bağlı "Aç".
+  window.addEventListener('bizim:bildirim', (e) => {
+    const d = e.detail || {};
+    toast([d.baslik, d.metin].filter(Boolean).join(' · '),
+      d.url ? { action: { label: 'Aç', onClick: () => { location.href = new URL(d.url, SITE_ROOT).href; } } } : {});
+  });
   import('./kilit.js').then((m) => m.kilitKontrol()).catch((e) => console.warn('[kilit]', e));
   import('./pwa.js').then((m) => {
     m.registerPwa();
@@ -513,7 +662,7 @@ export function startAppServices() {
   }).catch((e) => console.warn('[pwa]', e));
   import('./mobil.js').then((m) => m.mobilBaslat({
     yeniApk: (url) => toast('Uygulamanın yeni sürümü var.', {
-      action: { label: 'İndir', onClick: () => { location.href = url; } }, ms: 20000,
+      action: { label: 'İndir', onClick: () => m.disariAc(url) }, ms: 20000,
     }),
   })).catch((e) => console.warn('[mobil]', e));
   tazeleBildirim();
@@ -590,8 +739,13 @@ export function removeTabBar() {
 /** Üst şeridin gerçek yüksekliğini :root --shell-h'ye yazar ve izler. -> durdur() */
 export function trackShellHeight(header = document.getElementById('shell')) {
   if (!header) return () => {};
+  let son = '';
   const setH = () => {
-    document.documentElement.style.setProperty('--shell-h', `${header.getBoundingClientRect().height}px`);
+    // Yalnız değişince yaz: kök stile her yazım tüm sayfanın stilini yeniden hesaplatır.
+    const deger = `${header.getBoundingClientRect().height}px`;
+    if (deger === son) return;
+    son = deger;
+    document.documentElement.style.setProperty('--shell-h', deger);
   };
   setH();
   if (typeof ResizeObserver === 'function') {
@@ -776,15 +930,9 @@ export async function shareInvite(roomId) {
     toast('Önce odanızı kurun.');
     return 'none';
   }
-  if (typeof navigator.share === 'function') {
-    try {
-      await navigator.share({ title: 'Biz İkimiz', text: "Biz İkimiz'de odamıza gel; günlerimizi sayalım, birlikte oynayalım.", url: inviteUrl(id) });
-      return 'shared';
-    } catch (e) {
-      if (e?.name === 'AbortError') return 'cancelled';
-      // paylaşım yapılamadı: kopyalamaya düş
-    }
-  }
+  // Android uygulamasında paylaşım sayfası (WhatsApp vb.), tarayıcıda navigator.share; olmazsa kopyala.
+  const durum = await paylas("Biz İkimiz'de odamıza gel; günlerimizi sayalım, birlikte oynayalım.", inviteUrl(id));
+  if (durum === 'shared' || durum === 'cancelled') return durum;
   return copyInvite(id);
 }
 

@@ -179,3 +179,27 @@ test('altaYakinMi', () => {
   assert.equal(altaYakinMi({ scrollHeight: 2000, scrollTop: 1000, clientHeight: 600 }), false);
   assert.equal(altaYakinMi({ scrollHeight: 500, scrollTop: 0, clientHeight: 600 }), true);
 });
+
+test('pencereBasi: son n mesaj satırı; gün ayırıcısı mesajıyla birlikte; azsa 0', async () => {
+  const { pencereBasi } = await import('../sayfalar/sohbet/mantik.js');
+  const g = (a) => ({ tur: 'gun', anahtar: a });
+  const m = (a) => ({ tur: 'mesaj', anahtar: a });
+  const satirlar = [g('g1'), m('a'), m('b'), g('g2'), m('c'), m('d'), m('e')];
+  assert.equal(pencereBasi(satirlar, 10), 0);
+  assert.equal(pencereBasi(satirlar, 3), 3); // g2, c, d, e
+  assert.equal(pencereBasi(satirlar, 2), 5); // d, e
+  assert.equal(pencereBasi(satirlar, 4), 2); // b ... (b'nin günü g1 dışarıda kalır)
+  assert.equal(pencereBasi([], 5), 0);
+  // Başa bağlı pencere: anahtar verilirse o satırdan başlar (yeni mesaj gelince üst kaymaz).
+  assert.equal(pencereBasi(satirlar, 2, 'c'), 3);
+  assert.equal(pencereBasi(satirlar, 2, 'yok'), 5);
+});
+
+test('gunEtiketi aynı biçimleyiciyi yeniden kullanır (sonuç değişmez)', async () => {
+  const { gunEtiketi } = await import('../sayfalar/sohbet/mantik.js');
+  const simdi = new Date(2026, 9, 31, 12);
+  for (let i = 0; i < 3; i++) {
+    assert.equal(gunEtiketi(new Date(2026, 9, 12, 9).toISOString(), simdi), '12 Ekim');
+    assert.equal(gunEtiketi(new Date(2025, 11, 31, 9).toISOString(), simdi), '31 Aralık 2025');
+  }
+});

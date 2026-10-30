@@ -1,6 +1,6 @@
 {
   "name": "biz-ikimiz-mobil",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "private": true,
   "description": "Biz İkimiz Android kabuğu (Capacitor). Uygulama canlı siteyi açar; APK GitHub Actions'ta derlenir.",
   "engines": {
@@ -15,9 +15,12 @@
   "dependencies": {
     "@capacitor/android": "8.6.0",
     "@capacitor/app": "8.1.2",
+    "@capacitor/browser": "8.0.5",
     "@capacitor/core": "8.6.0",
     "@capacitor/haptics": "8.0.2",
     "@capacitor/local-notifications": "8.3.1",
+    "@capacitor/push-notifications": "8.1.3",
+    "@capacitor/share": "8.0.3",
     "@capacitor/splash-screen": "8.0.2",
     "@capacitor/status-bar": "8.0.4"
   },

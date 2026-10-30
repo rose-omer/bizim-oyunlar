@@ -328,7 +328,13 @@ export function bulusmaDogrula(tarih, saat, simdi = new Date()) {
 
 // ---- Metin biçimleri (tr-TR) ----
 
-const fmt = (opts) => new Intl.DateTimeFormat('tr-TR', opts);
+// Intl biçimleyici kurmak pahalı (takvim her çizimde 42 hücre etiketi üretir): seçenek başına bir kez kurulur.
+const fmtOnbellek = new Map();
+const fmt = (opts) => {
+  const k = JSON.stringify(opts);
+  if (!fmtOnbellek.has(k)) fmtOnbellek.set(k, new Intl.DateTimeFormat('tr-TR', opts));
+  return fmtOnbellek.get(k);
+};
 const dateOf = (day) => { const p = parseDay(day); return p ? new Date(p.y, p.m - 1, p.d) : null; };
 
 /** "14 Şubat Pazar"; başka yıldaysa "14 Şubat 2027 Pazar". */

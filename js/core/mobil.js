@@ -2,8 +2,9 @@
 // Android uygulaması canlı siteyi açar (mobil/capacitor.config.json server.url). Capacitor köprüsü
 // sayfaya window.Capacitor olarak gelir; eklentiler window.Capacitor.Plugins.<Ad> altındadır.
 // npm import ve build yok. Saf yardımcılar (hatirlaticiId, bildirimListesi, titresimAdimlari,
-// renkHex, cubukStili, apkSurumu, kabukKarari) Node'da test edilir: tests/mobil-*.test.mjs.
+// renkHex, cubukStili, apkSurumu, kabukKarari, widgetVerisi) Node'da test edilir: tests/mobil-*.test.mjs, tests/widget-*.test.mjs.
 import { APK_URL } from '../../sayfalar/daha/mantik.js';
+import { parseDay } from './gunler.js';
 
 const EN_COK_HATIRLATICI = 64; // Android alarm sınırının çok altında kalır.
 const EN_BUYUK_ID = 0x7fffffff; // Java int
@@ -163,6 +164,48 @@ export async function yerelHatirlaticilar(olaylar) {
   const is = sira.then(() => planla(olaylar));
   sira = is.catch(() => 0);
   return is;
+}
+
+// ---------- Ana ekran widget'ı (Android) ----------
+// Yerel eklenti BizWidget (mobil/android-ek/java/.../widget/BizWidgetPlugin.java) veriyi cihaza yazar,
+// widget gün sayısını kendisi hesaplar (gece yarısı ve uygulama her öne geldiğinde tazelenir).
+
+const WIDGET_AD_MAX = 24; // hub.js cleanName ile aynı sınır
+
+/**
+ * widgetGuncelle girdisi → eklentiye giden kayıt (saf).
+ * -> { v: 1, baslangic: 'YYYY-MM-DD' | null, bulusma: epoch ms | null, adlar: 'Ömer & Gül' | '' }
+ * Buluşma an olarak gider: widget yerel günü cihazın saat diliminde bulur.
+ */
+export function widgetVerisi({ baslangic = null, bulusma = null, adlar = [] } = {}) {
+  const gun = typeof baslangic === 'string' && parseDay(baslangic) ? baslangic : null;
+  const an = typeof bulusma === 'string' || typeof bulusma === 'number' ? new Date(bulusma).getTime() : NaN;
+  const liste = (Array.isArray(adlar) ? adlar : [adlar])
+    .map((a) => Array.from(yazi(a).replace(/\s+/g, ' ')).slice(0, WIDGET_AD_MAX).join(''))
+    .filter(Boolean)
+    .slice(0, 2);
+  return { v: 1, baslangic: gun, bulusma: Number.isFinite(an) ? an : null, adlar: liste.join(' & ') };
+}
+
+let sonWidget = null; // son yazılan kayıt (aynısını tekrar yazma)
+
+/**
+ * Widget verisini yazar ve widget'ı hemen yeniler (yalnız uygulamada; web'de ve widget'sız eski APK'da iş yapmaz).
+ * girdi: { baslangic: 'YYYY-MM-DD', bulusma: ISO, adlar: [ben, partner] }. -> yazıldı mı. Hata fırlatmaz.
+ */
+export async function widgetGuncelle(girdi) {
+  if (typeof eklenti('BizWidget')?.guncelle !== 'function') return false;
+  const veri = JSON.stringify(widgetVerisi(girdi));
+  if (veri === sonWidget) return false;
+  sonWidget = veri;
+  try {
+    await cagir('BizWidget', 'guncelle', { veri });
+    return true;
+  } catch (e) {
+    if (sonWidget === veri) sonWidget = null; // sonraki çağrı yeniden denesin
+    console.warn('[mobil] widget', e);
+    return false;
+  }
 }
 
 // ---------- Uygulama açılışı: geri tuşu, durum çubuğu, açılış ekranı ----------

@@ -466,8 +466,19 @@ function closeData() {
   state.data = emptyData();
 }
 
-function onData() {
+function onData(key) {
+  if (key === 'profil') widgetBesle();
   paintAll();
+}
+
+// Android ana ekran widget'ı: çift verisi gelince ve değişince (mobil.js; web'de iş yapmaz, aynı veriyi yazmaz).
+function widgetBesle() {
+  const cift = state.data.profil?.cift?.();
+  if (!cift) return;
+  const adlar = [cleanName(me().name), partnerInfo().name];
+  import('./core/mobil.js')
+    .then((m) => m.widgetGuncelle?.({ baslangic: cift.baslangic, bulusma: cift.bulusma, adlar }))
+    .catch(() => {});
 }
 
 // Ağ hataları yalnız kendi yazmamızdan hemen sonra gösterilir (arka plan tazelemesi sessiz).

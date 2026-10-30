@@ -74,6 +74,7 @@ test('package.json: yerel eklenti listesi (yeni eklenti = yeni izin; bilerek ekl
   assert.deepEqual(eklentiler, [
     '@capacitor/app',
     '@capacitor/browser', // izin yok; APK'yı dış tarayıcıda (Chrome özel sekmesi) indirmek için
+    '@capacitor/filesystem', // izin yok (uygulama önbelleği); takvim dosyasını (.ics) paylaşmak için
     '@capacitor/haptics', // VIBRATE
     '@capacitor/local-notifications', // POST_NOTIFICATIONS, RECEIVE_BOOT_COMPLETED, WAKE_LOCK
     '@capacitor/push-notifications', // FCM (firebase-messaging: INTERNET, WAKE_LOCK, c2dm RECEIVE)

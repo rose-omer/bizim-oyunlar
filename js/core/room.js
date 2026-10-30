@@ -488,6 +488,12 @@ export function openSupabaseRoom({ roomId, ns, me, host = null, getClient = getS
     if (left) return;
     const k = kanalSec(s, roomId);
     if (k && 'oda:' + k === topic && (joined || base.status() === 'connecting')) return;
+    if (joined && ch && k) {
+      // Kanal yenilendi (bir cihaz çıkarıldı): eski kanaldakiler de durumunu tazelesin.
+      try {
+        Promise.resolve(ch.send({ type: 'broadcast', event: 'm', payload: { ns: '*', from, m: { t: 'uyelik' } } })).catch(() => {});
+      } catch { /* kanal kapanıyor */ }
+    }
     gen++; // eski kanalın geri çağrıları yok sayılır
     clearTimeout(retryTimer);
     retryTimer = null;

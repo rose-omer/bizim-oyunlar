@@ -1,68 +1,9 @@
-// supabase/schema.sql 4–6. bölümler, PGlite ile (gerçek Postgres, bellekte).
-// PGlite proje bağımlılığı değil: yoksa test atlanır. Yol: PGLITE_YOLU ya da geliştirme makinesindeki kurulum.
+// supabase/schema.sql 1–6. bölümler, PGlite ile (gerçek Postgres, bellekte). Kurulum: sunucu-pglite.mjs.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, existsSync } from 'node:fs';
-import { pathToFileURL } from 'node:url';
+import { kur, ATLA, ODA, ODA2, ab } from './sunucu-pglite.mjs';
 
-const PGLITE = process.env.PGLITE_YOLU
-  || 'C:/Users/koseo/AppData/Local/Temp/pw/node_modules/@electric-sql/pglite/dist/index.js';
-const SQL = readFileSync(new URL('../supabase/schema.sql', import.meta.url), 'utf8');
-
-const bolum = (bas, son) => {
-  const i = SQL.indexOf(bas);
-  const j = son ? SQL.indexOf(son) : SQL.length;
-  assert.ok(i >= 0 && j > i, `bölüm bulunamadı: ${bas}`);
-  return SQL.slice(i, j).replace(/^notify pgrst.*$/gm, '');
-};
-const B45 = bolum('-- 4. Çift verisi', '-- 6. Zamanlanmış');
-const B6 = bolum('-- 6. Zamanlanmış').replace(/^create extension .*$/gm, '');
-
-const ODA = 'abcdefgh23';
-const ODA2 = 'zzzzzzzz22';
-const ab = (n, host = 'fcm.googleapis.com/fcm/send') => ({
-  endpoint: `https://${host}/uc-${n}`,
-  expirationTime: null,
-  keys: { p256dh: 'B' + 'x'.repeat(86), auth: 'y'.repeat(22) },
-});
-
-async function kur() {
-  const { PGlite } = await import(pathToFileURL(PGLITE).href);
-  const db = new PGlite();
-  // Supabase gibi: roller ve public şemada varsayılan yetkiler (anon'a da execute/tablo yetkisi verir).
-  await db.exec(`
-    create role anon; create role authenticated; create role service_role;
-    alter default privileges in schema public grant all on tables to anon, authenticated, service_role;
-    alter default privileges in schema public grant execute on functions to anon, authenticated, service_role;
-    create schema cron;
-    create table cron.job (jobid serial primary key, jobname text unique, schedule text, command text);
-    create function cron.schedule(p_ad text, p_zaman text, p_komut text) returns bigint language sql as $$
-      insert into cron.job (jobname, schedule, command) values (p_ad, p_zaman, p_komut)
-      on conflict (jobname) do update set schedule = excluded.schedule, command = excluded.command
-      returning jobid $$;
-    create schema net;
-    create table net.istek (id serial primary key, url text, body jsonb, headers jsonb, zaman int);
-    create function net.http_post(url text, body jsonb default '{}', params jsonb default '{}',
-      headers jsonb default '{}', timeout_milliseconds int default 5000) returns bigint language sql as $$
-      insert into net.istek (url, body, headers, zaman) values (url, body, headers, timeout_milliseconds) returning id $$;
-    create schema vault;
-    create table vault.decrypted_secrets (name text primary key, decrypted_secret text);
-  `);
-  await db.exec(B45);
-  await db.exec(B45); // tekrar çalıştırmak güvenli olmalı
-  await db.exec(B6);
-  await db.exec(B6);
-  const q = async (s, p) => (await db.query(s, p)).rows;
-  const hata = async (s, p) => {
-    try { await db.query(s, p); } catch (e) { return e; }
-    assert.fail(`hata bekleniyordu: ${s}`);
-  };
-  return { db, q, hata };
-}
-
-const pgliteVar = existsSync(PGLITE);
-
-test('push_kaydet: kayıt, güncelleme, aynı cihazın eski aboneliği, oda başına 10', { skip: !pgliteVar && 'PGlite yok' }, async () => {
+test('push_kaydet: kayıt, güncelleme, aynı cihazın eski aboneliği, oda başına 10', ATLA, async () => {
   const { q } = await kur();
   const kaydet = (oda, client, sub, ua = null) =>
     q('select public.push_kaydet($1, $2, $3::jsonb, $4) as ok', [oda, client, JSON.stringify(sub), ua]);
@@ -94,7 +35,7 @@ test('push_kaydet: kayıt, güncelleme, aynı cihazın eski aboneliği, oda baş
   assert.equal((await q('select count(*)::int as n from public.push_sub where room = $1', [ODA2]))[0].n, 1);
 });
 
-test('push_kaydet / push_sil doğrulama', { skip: !pgliteVar && 'PGlite yok' }, async () => {
+test('push_kaydet / push_sil doğrulama', ATLA, async () => {
   const { q, hata } = await kur();
   const dene = (oda, client, sub) =>
     hata('select public.push_kaydet($1, $2, $3::jsonb)', [oda, client, sub == null ? null : JSON.stringify(sub)]);
@@ -129,7 +70,7 @@ test('push_kaydet / push_sil doğrulama', { skip: !pgliteVar && 'PGlite yok' }, 
   assert.equal((await hata('select public.push_sil($1)', [null])).code, '22023');
 });
 
-test('push_hedef: gönderen hariç, hız sınırı; push_sonuc', { skip: !pgliteVar && 'PGlite yok' }, async () => {
+test('push_hedef: gönderen hariç, hız sınırı; push_sonuc', ATLA, async () => {
   const { db, q, hata } = await kur();
   const kaydet = (oda, client, n) => q('select public.push_kaydet($1, $2, $3::jsonb)', [oda, client, JSON.stringify(ab(n))]);
   await kaydet(ODA, 'omer', 1);
@@ -172,7 +113,7 @@ test('push_hedef: gönderen hariç, hız sınırı; push_sonuc', { skip: !pglite
   assert.equal((await q('select count(*)::int as n from public.push_sub'))[0].n, 1);
 });
 
-test('hatirlat_belgeler ve hatirlat_isaretle', { skip: !pgliteVar && 'PGlite yok' }, async () => {
+test('hatirlat_belgeler ve hatirlat_isaretle', ATLA, async () => {
   const { q, hata } = await kur();
   await q('select public.push_kaydet($1, $2, $3::jsonb)', [ODA, 'omer', JSON.stringify(ab(1))]);
   const put = (oda, kind, id, data, del = false) =>
@@ -214,7 +155,7 @@ test('hatirlat_belgeler ve hatirlat_isaretle', { skip: !pgliteVar && 'PGlite yok
   }
 });
 
-test('push_abonelikler: endpoint sırasıyla sayfalı', { skip: !pgliteVar && 'PGlite yok' }, async () => {
+test('push_abonelikler: endpoint sırasıyla sayfalı', ATLA, async () => {
   const { q } = await kur();
   for (let i = 0; i < 5; i++) await q('select public.push_kaydet($1, $2, $3::jsonb)', [i < 3 ? ODA : ODA2, `c${i}`, JSON.stringify(ab(i))]);
   assert.equal((await q('select * from public.push_abonelikler()')).length, 5);
@@ -225,7 +166,7 @@ test('push_abonelikler: endpoint sırasıyla sayfalı', { skip: !pgliteVar && 'P
   assert.equal(s3.length, 1);
 });
 
-test('doc_put / doc_patch: saatlik sınırlar, günlük bayt bütçesi, reddedilen yazma sayılmaz', { skip: !pgliteVar && 'PGlite yok' }, async () => {
+test('doc_put / doc_patch: saatlik sınırlar, günlük bayt bütçesi, reddedilen yazma sayılmaz', ATLA, async () => {
   const { db, q, hata } = await kur();
   const put = (oda, id, data) => q('select * from public.doc_put($1, $2, $3, $4::jsonb, null)', [oda, 'liste', id, JSON.stringify(data)]);
   const patch = (oda, id, data) => q('select * from public.doc_patch($1, $2, $3, $4::jsonb, null)', [oda, 'liste', id, JSON.stringify(data)]);
@@ -269,7 +210,7 @@ test('doc_put / doc_patch: saatlik sınırlar, günlük bayt bütçesi, reddedil
   assert.equal((await hata('select * from public.doc_put($1, $2, $3, $4::jsonb, null)', [ODA, 'liste', 'g', '{}'])).code, '54000');
 });
 
-test('room_rate / room_byte temizliği: saatin ilk genel yazması 2 günden eski kayıtları siler', { skip: !pgliteVar && 'PGlite yok' }, async () => {
+test('room_rate / room_byte temizliği: saatin ilk genel yazması 2 günden eski kayıtları siler', ATLA, async () => {
   const { db, q } = await kur();
   await db.exec(`
     insert into public.room_rate values ('eskioda222', now() - interval '3 days', 5), ('yenioda222', now() - interval '1 day', 5);
@@ -284,7 +225,7 @@ test('room_rate / room_byte temizliği: saatin ilk genel yazması 2 günden eski
   assert.equal((await q(`select count(*)::int as n from public.room_rate where room = 'eskioda222'`))[0].n, 1);
 });
 
-test('push_kaydet: oda başına saatte 20, genel saatte 300 kayıt', { skip: !pgliteVar && 'PGlite yok' }, async () => {
+test('push_kaydet: oda başına saatte 20, genel saatte 300 kayıt', ATLA, async () => {
   const { db, q, hata } = await kur();
   const kaydet = (oda, n) => q('select public.push_kaydet($1, $2, $3::jsonb)', [oda, `c${n}`, JSON.stringify(ab(n))]);
   for (let i = 0; i < 20; i++) await kaydet(ODA, i);
@@ -301,7 +242,7 @@ test('push_kaydet: oda başına saatte 20, genel saatte 300 kayıt', { skip: !pg
   assert.equal((await q(`select count(*)::int as n from public.push_kayit_rate where room = 'eskioda222'`))[0].n, 0);
 });
 
-test('yetkiler: anon yalnız push_kaydet/push_sil; tablolar kapalı; sunucu RPC yalnız service_role', { skip: !pgliteVar && 'PGlite yok' }, async () => {
+test('yetkiler: anon yalnız istemci RPC\'leri; tablolar ve yardımcılar kapalı; sunucu RPC yalnız service_role', ATLA, async () => {
   const { db, q, hata } = await kur();
   await db.exec('set role anon');
   await q('select public.push_kaydet($1, $2, $3::jsonb)', [ODA, 'omer', JSON.stringify(ab(1))]);
@@ -324,6 +265,18 @@ test('yetkiler: anon yalnız push_kaydet/push_sil; tablolar kapalı; sunucu RPC 
     `select * from public.hatirlat_belgeler(array['gun'])`,
     `select public.hatirlat_isaretle(array['${ODA}'], '2026-10-30', 'sabah')`,
     `select public.hatirlat_cagir('sabah')`,
+    // 7. bölüm: üyelik tabloları ve yardımcılar
+    'select * from public.oda',
+    'select * from public.oda_cihaz',
+    'select * from public.oda_davet',
+    'select * from public.oda_katil_rate',
+    `select public.oda_yetki('x', '${ODA}', null, null)`,
+    `select public.oda_yetki_kimlikli('x', '${ODA}', null, null)`,
+    `select public.oda_rastgele('0123456789abcdef', 8)`,
+    `select public.oda_ozet('x')`,
+    `select public.oda_cevap('onayli', '${ODA}', 'k', now(), false)`,
+    `select public.oda_bicim('x', '${ODA}', 'a', null)`,
+    `select public.push_sayilir('${ODA}', 'omer')`,
   ]) {
     const e = await hata(s);
     assert.equal(e.code, '42501', `${s}: ${e.message}`);
@@ -334,7 +287,15 @@ test('yetkiler: anon yalnız push_kaydet/push_sil; tablolar kapalı; sunucu RPC 
   await db.exec('reset role');
 });
 
-test('6. bölüm: adlı cron işleri çoğalmaz; komut Edge Function\'ı vault anahtarıyla çağırır', { skip: !pgliteVar && 'PGlite yok' }, async () => {
+test('3. bölüm: photos kovası (5 MB, yalnız resim) ve anon yükleme politikası; tekrar çalıştırınca çoğalmaz', ATLA, async () => {
+  const { q } = await kur();
+  const b = await q('select id, public, file_size_limit::int as boyut, allowed_mime_types as tur from storage.buckets');
+  assert.deepEqual(b, [{ id: 'photos', public: true, boyut: 5242880, tur: ['image/jpeg', 'image/webp', 'image/png'] }]);
+  const p = await q(`select policyname, cmd from pg_catalog.pg_policies where schemaname = 'storage'`);
+  assert.deepEqual(p.map((x) => [x.policyname, x.cmd]), [['photos_insert_anon', 'INSERT']]);
+});
+
+test('6. bölüm: adlı cron işleri çoğalmaz; komut Edge Function\'ı vault anahtarıyla çağırır', ATLA, async () => {
   const { db, q, hata } = await kur();
   const isler = await q('select jobname, schedule, command from cron.job order by jobname');
   assert.deepEqual(isler.map((j) => [j.jobname, j.schedule]), [['biz-hatirlat-aksam', '0 17 * * *'], ['biz-hatirlat-sabah', '0 6 * * *']]);

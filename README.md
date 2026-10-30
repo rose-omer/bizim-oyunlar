@@ -31,7 +31,11 @@ node --test
 - "service_role" / "secret" anahtarını ASLA siteye koyma.
 
 ## 2. Yayın (ücretsiz, sürekli açık)
-Önerilen: **Cloudflare Pages** (ücretsiz, HTTPS, sınırsız trafik).
+Şu an: **GitHub Pages** → https://rose-omer.github.io/bizim-oyunlar/
+- Depo: https://github.com/rose-omer/bizim-oyunlar (main dalı, kök klasör).
+- Her `git push` siteyi 1 dk içinde günceller. `.nojekyll` dosyası silinmemeli (`games/_soru` için gerekli).
+
+Alternatif: **Cloudflare Pages** (ücretsiz, HTTPS, sınırsız trafik; gizli depo olabilir).
 1. Bu klasörü bir GitHub deposuna gönder (gizli depo olabilir).
 2. Cloudflare → Workers & Pages → Create → Pages → depoyu bağla.
 3. Build command: boş. Output directory: `/`.
@@ -43,9 +47,10 @@ Site statik; klasörü olduğu gibi yüklemek yeter. Alt klasörde de çalışı
 ## 3. Supabase'i uyanık tutma (önemli)
 - Ücretsiz Supabase projesi **7 gün** hareketsiz kalırsa durur. Oyunlar o zaman online çalışmaz.
 - Çözüm: 3 günde bir `ping` isteği.
-- **Yol A — GitHub Actions** (`.github/workflows/keepalive.yml` hazır):
-  Depo → Settings → Secrets and variables → Actions → `SUPABASE_URL` ve `SUPABASE_ANON_KEY` ekle.
-  Not: Herkese açık depoda 60 gün commit olmazsa GitHub zamanlanmış işleri kapatır.
+- **Yol A — GitHub Actions** (`.github/workflows/keepalive.yml`):
+  Secret gerekmez; URL ve anahtar `js/config.js` içinden okunur.
+  GitHub 60 gün commit almayan depoda zamanlanmış işi kapatır; iş bu yüzden 45 günde bir boş commit atar.
+  Dosyayı göndermek için token'da `workflow` yetkisi gerekir: `gh auth refresh -h github.com -s workflow`.
 - **Yol B — cron-job.org** (ücretsiz, yedek olarak önerilir):
   - URL: `https://xxxx.supabase.co/rest/v1/rpc/ping`
   - Method: POST, Body: `{}`

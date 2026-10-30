@@ -277,6 +277,8 @@ test('üyelik: konu gizli kanaldan; kanal değişince eskisini bırakıp yenisin
 
     u.yay({ durum: 'onayli', kanal: K2 });
     await flush();
+    // Kanaldan ayrılmadan önce eski kanaldakilere haber: durumlarını tazelesinler.
+    assert.deepEqual(client.all[0].sent.at(-1), { type: 'broadcast', event: 'm', payload: { ns: '*', from: ME, m: { t: 'uyelik' } } });
     assert.equal(client.all[0].removed, true);
     assert.equal(client.all[1].topic, 'realtime:oda:' + K2);
     client.all[0].cb('SUBSCRIBED'); // eski kanalın geç geri çağrısı yok sayılır

@@ -41,9 +41,10 @@ export async function logGame(roomId, gameId, result) {
       return;
     }
     const client = await getSupabase();
-    const { error } = await client.rpc('log_game', { p_room: roomId, p_game: gameId, p_result: result ?? null, ...kimlik(roomId) });
+    const k = kimlik(roomId);
+    const { error } = await client.rpc('log_game', { p_room: roomId, p_game: gameId, p_result: result ?? null, ...k });
     if (error) {
-      if (yetkiHatasiMi(error)) yetkiKaybedildi(roomId);
+      if (yetkiHatasiMi(error)) yetkiKaybedildi(roomId, { kimlikli: !!k.p_cihaz });
       console.warn('[db] logGame:', error.message || error);
     }
   } catch (e) {
@@ -57,9 +58,10 @@ export async function roomStats(roomId) {
   if (isLocalMode()) return aggregateLog(readLog(roomId));
   try {
     const client = await getSupabase();
-    const { data, error } = await client.rpc('room_stats', { p_room: roomId, ...kimlik(roomId) });
+    const k = kimlik(roomId);
+    const { data, error } = await client.rpc('room_stats', { p_room: roomId, ...k });
     if (error) {
-      if (yetkiHatasiMi(error)) yetkiKaybedildi(roomId);
+      if (yetkiHatasiMi(error)) yetkiKaybedildi(roomId, { kimlikli: !!k.p_cihaz });
       throw error;
     }
     return (data || []).map((r) => ({ game: String(r.game), played: Number(r.played) || 0, last_at: r.last_at }));

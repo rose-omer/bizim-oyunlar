@@ -122,19 +122,21 @@ export function applyPatch(data, patch) {
 
 /**
  * Yedekten içe aktarma kuralı (sunucudaki doc_ice_aktar ile aynı): belge yoksa eklenir (tarihler yedekten,
- * yoksa simdi); varsa yalnız gelen updated_at daha yeniyse üstüne yazılır. hepsi = { id: belge } yerinde değişir.
+ * yoksa simdi; gelecek tarih simdi'ye çekilir). Varsa yalnız gelen updated_at daha yeniyse ya da var olan
+ * belge silinmişse üstüne yazılır (silinenler geri gelir). hepsi = { id: belge } yerinde değişir.
  * -> yazılan belge sayısı
  */
 export function iceAktarBirlestir(hepsi, belgeler, simdi) {
+  const kirp = (v) => (v && timeOf(v) > timeOf(simdi) ? simdi : v);
   let n = 0;
   for (const b of belgeler || []) {
     if (!b || typeof b.id !== 'string') continue;
-    const updated = b.updated_at || simdi;
+    const updated = kirp(b.updated_at) || null;
     const cur = hepsi[b.id];
-    if (cur && !(timeOf(updated) > timeOf(cur.updated_at))) continue;
+    if (cur && !cur.deleted && !(updated && timeOf(updated) > timeOf(cur.updated_at))) continue;
     hepsi[b.id] = {
       id: b.id, data: b.deleted ? {} : b.data, author: b.author ?? null, deleted: !!b.deleted,
-      created_at: cur?.created_at || b.created_at || simdi, updated_at: updated,
+      created_at: cur?.created_at || kirp(b.created_at) || simdi, updated_at: updated || simdi,
     };
     n++;
   }
@@ -242,10 +244,11 @@ const localBackend = {
 
 // ---------- Arka uç: Supabase ----------
 
-function rpcError(error, roomId) {
+/** kimlikli: istek cihaz kimliği taşıdı mı (eski sunucu önbelleğinde taşımaz; o zaman 42501 çıkarma sayılmaz). */
+function rpcError(error, roomId, kimlikli = true) {
   if (yetkiHatasiMi(error)) {
     durdu.add(roomId);
-    yetkiKaybedildi(roomId);
+    yetkiKaybedildi(roomId, { kimlikli });
     return Object.assign(new Error(YETKI_MESAJ), { yetki: true, code: '42501' });
   }
   if (error?.code === 'PGRST202') return new Error('Sunucu bu işlemi henüz desteklemiyor.');
@@ -259,41 +262,45 @@ function rpcError(error, roomId) {
 const supabaseBackend = {
   async put(roomId, kind, id, data, author, deleted) {
     const client = await getSupabase();
+    const k = kimlik(roomId);
     const { data: rows, error } = await client.rpc('doc_put', {
-      p_room: roomId, p_kind: kind, p_id: id, p_data: deleted ? {} : data, p_author: author, p_deleted: !!deleted,
-      ...kimlik(roomId),
+      p_room: roomId, p_kind: kind, p_id: id, p_data: deleted ? {} : data, p_author: author, p_deleted: !!deleted, ...k,
     });
-    if (error) throw rpcError(error, roomId);
+    if (error) throw rpcError(error, roomId, !!k.p_cihaz);
     return (Array.isArray(rows) ? rows[0] : rows) || null;
   },
   async patch(roomId, kind, id, patch, author) {
     const client = await getSupabase();
+    const k = kimlik(roomId);
     const { data: rows, error } = await client.rpc('doc_patch', {
-      p_room: roomId, p_kind: kind, p_id: id, p_patch: patch, p_author: author, ...kimlik(roomId),
+      p_room: roomId, p_kind: kind, p_id: id, p_patch: patch, p_author: author, ...k,
     });
-    if (error) throw rpcError(error, roomId);
+    if (error) throw rpcError(error, roomId, !!k.p_cihaz);
     return (Array.isArray(rows) ? rows[0] : rows) || null;
   },
   async list(roomId, kind, since, limit) {
     const client = await getSupabase();
+    const k = kimlik(roomId);
     const { data, error } = await client.rpc('doc_list', {
-      p_room: roomId, p_kind: kind, p_since: since, p_limit: limit, ...kimlik(roomId),
+      p_room: roomId, p_kind: kind, p_since: since, p_limit: limit, ...k,
     });
-    if (error) throw rpcError(error, roomId);
+    if (error) throw rpcError(error, roomId, !!k.p_cihaz);
     return data || [];
   },
   async page(roomId, kind, before, limit) {
     const client = await getSupabase();
+    const k = kimlik(roomId);
     const { data, error } = await client.rpc('doc_page', {
-      p_room: roomId, p_kind: kind, p_before: before, p_limit: limit, ...kimlik(roomId),
+      p_room: roomId, p_kind: kind, p_before: before, p_limit: limit, ...k,
     });
-    if (error) throw rpcError(error, roomId);
+    if (error) throw rpcError(error, roomId, !!k.p_cihaz);
     return data || [];
   },
   async iceAktar(roomId, belgeler) {
     const client = await getSupabase();
-    const { data, error } = await client.rpc('doc_ice_aktar', { p_room: roomId, p_belgeler: belgeler, ...kimlik(roomId) });
-    if (error) throw rpcError(error, roomId);
+    const k = kimlik(roomId);
+    const { data, error } = await client.rpc('doc_ice_aktar', { p_room: roomId, p_belgeler: belgeler, ...k });
+    if (error) throw rpcError(error, roomId, !!k.p_cihaz);
     return Number(data) || 0;
   },
 };

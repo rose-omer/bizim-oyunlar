@@ -245,14 +245,21 @@ export async function durumTazele(roomId) {
   return kaydet(roomId, s);
 }
 
-/** Sunucu 42501 dedi: erişim gitti. Önbellek 'yok' olur, olay yayılır (kapı ekranı açılır). */
-export function yetkiKaybedildi(roomId) {
+const kayitSuruyor = new Set(); // yeniden kayıt (oda_katil) süren odalar: bu arada gelen 42501'ler yok sayılır
+
+/**
+ * Sunucu 42501 dedi. Kimlikli istekse erişim gitmiştir: önbellek 'yok' olur, olay yayılır (kapı ekranı açılır).
+ * kimlikli = false (eski sunucu önbelleğiyle kimliksiz gitti) ya da hiç kayıt yoksa: koruma başlamış demektir;
+ * çıkarma sayılmaz, kimlikle bir kez yeniden kayıt olunur.
+ */
+export function yetkiKaybedildi(roomId, { kimlikli = true } = {}) {
+  if (kayitSuruyor.has(roomId)) return;
   const once = sonDurum(roomId);
   if (once && !girisAcikMi(once)) return; // zaten kapıda (bekliyor, reddedildi, yok...)
-  if (once?.durum === 'eski-sunucu') {
-    // Sunucu güncellenmiş, koruma başlamış: kimlikle yeniden kayıt ol.
+  if (!kimlikli || !once || once.durum === 'eski-sunucu') {
+    kayitSuruyor.add(roomId);
     writeStore(depo(), onbellekKey(roomId), null);
-    odaGiris(roomId).catch(() => {});
+    odaGiris(roomId).catch(() => {}).finally(() => kayitSuruyor.delete(roomId));
     return;
   }
   kaydet(roomId, { durum: 'yok', kanal: null, zorunlu: once?.zorunlu ?? null, ilk: false });

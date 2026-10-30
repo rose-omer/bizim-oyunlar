@@ -227,3 +227,22 @@ test('geri yükleme sonrası: refresh({ tam: true }) eski tarihli belgeleri de g
     sunucuModu();
   }
 });
+
+test('iceAktarBirlestir: silinmiş kayıt yedekten geri gelir; tarihsiz kopya var olanı ezmez; gelecek tarih şimdiye çekilir', () => {
+  const S = '2026-02-01T00:00:00.000Z';
+  const hepsi = {
+    sil: { id: 'sil', data: {}, author: 'x', deleted: true, created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-20T00:00:00Z' },
+    var: { id: 'var', data: { v: 1 }, author: 'x', deleted: false, created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-05T00:00:00Z' },
+  };
+  const n = iceAktarBirlestir(hepsi, [
+    { kind: 'liste', id: 'sil', data: { v: 'geri' }, updated_at: '2026-01-10T00:00:00Z' },
+    { kind: 'liste', id: 'var', data: { v: 'tarihsiz' } },
+    { kind: 'liste', id: 'gelecek', data: { v: 'g' }, created_at: '2099-01-01T00:00:00Z', updated_at: '2099-01-01T00:00:00Z' },
+  ], S);
+  assert.equal(n, 2);
+  assert.equal(hepsi.sil.deleted, false);
+  assert.equal(hepsi.sil.data.v, 'geri');
+  assert.equal(hepsi.var.data.v, 1);
+  assert.equal(hepsi.gelecek.created_at, S);
+  assert.equal(hepsi.gelecek.updated_at, S);
+});

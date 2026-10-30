@@ -486,16 +486,32 @@ let servicesStarted = false;
 /** Her sayfada bir kez: tema, PIN kilidi, service worker, Android köprüsü. mountShell çağırır; ana sayfa da çağırır. */
 // Bildirim açıksa aboneliği oturumda bir kez sunucuya yeniden yaz (oda değişimi, tarayıcının yenilediği abonelik).
 // İzin zaten verilmiş olduğundan kullanıcıya soru çıkmaz.
+// Cihaz kimliği (p_anahtar) ile yazılsın diye üyelik kapısından geçildikten sonra çalışır (önbellekte onay yoksa
+// 'bizim:uyelik' ile onay gelince); aksi hâlde kayıt koruma başlayınca sayılmaz.
 function tazeleBildirim() {
   const roomId = currentRoom();
   if (!roomId) return;
-  try {
-    if (sessionStorage.getItem('bizim.bildirim.tazelendi') === roomId) return;
-    sessionStorage.setItem('bizim.bildirim.tazelendi', roomId);
-  } catch { /* gizli sekme */ }
-  import('./bildirim.js')
-    .then(async (m) => { if ((await m.bildirimDurumu()) === 'acik') await m.bildirimAc(roomId); })
-    .catch((e) => console.warn('[bildirim]', e));
+  const calistir = () => {
+    try {
+      if (sessionStorage.getItem('bizim.bildirim.tazelendi') === roomId) return;
+      sessionStorage.setItem('bizim.bildirim.tazelendi', roomId);
+    } catch { /* gizli sekme */ }
+    import('./bildirim.js')
+      .then(async (m) => { if ((await m.bildirimDurumu()) === 'acik') await m.bildirimAc(roomId); })
+      .catch((e) => console.warn('[bildirim]', e));
+  };
+  import('./uyelik.js').then((u) => {
+    if (u.girisAcikMi(u.sonDurum(roomId))) {
+      calistir();
+      return;
+    }
+    const bekle = (e) => {
+      if (e?.detail?.roomId !== roomId || !u.girisAcikMi(e.detail)) return;
+      window.removeEventListener('bizim:uyelik', bekle);
+      calistir();
+    };
+    window.addEventListener('bizim:uyelik', bekle);
+  }).catch((e) => console.warn('[bildirim]', e));
 }
 
 export function startAppServices() {

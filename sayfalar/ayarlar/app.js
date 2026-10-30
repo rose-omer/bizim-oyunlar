@@ -758,7 +758,7 @@ async function geriYukle(dosya) {
     return;
   }
   const atlanan = hatalar.length ? ' Okunamayan birkaç kayıt atlanır.' : '';
-  const ok = await confirmDialog(`${yedekOzeti(sayilar)}.${atlanan} Var olan kayıtlar silinmez; yedekteki daha eski kopyalar atlanır.`, { ok: 'Geri yükle' });
+  const ok = await confirmDialog(`${yedekOzeti(sayilar)}.${atlanan} Var olan kayıtlar silinmez; daha yeni kopyalar korunur; silinmiş kayıtlar geri gelir.`, { ok: 'Geri yükle' });
   if (!ok) return;
 
   const toplam = belgeler.length;
@@ -998,7 +998,11 @@ const odaKart = kart(
         const ok = await confirmDialog(metin, { ok: 'Odadan çık' });
         if (!ok) return;
         // Cihaz kaydını da sil: anahtar unutulunca aynı cihazla geri dönüş çakışma vermesin.
-        if (uye) await cihazCikar(roomId, myId);
+        // Silinemezse (bağlantı yok) unutma: yoksa bu cihaz geri dönünce "tanınmadı" ekranında kalır.
+        if (uye && !(await cihazCikar(roomId, myId))) {
+          toast('Odadan çıkılamadı. İnternet bağlantını kontrol edip tekrar dener misin?');
+          return;
+        }
         await cihazdanUnut(roomId);
         location.replace(lobbyUrl());
       },

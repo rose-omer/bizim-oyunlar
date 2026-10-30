@@ -259,3 +259,23 @@ test('yerel sıkı mod: kurucu → bekleyen → onay → davet → kurtarma → 
   sekme('omer', R);
   assert.equal(await cihazReddet(R, 'tablet'), false, 'onaylıyı reddetmek olmaz');
 });
+
+test('yetkiKaybedildi: kimliksiz istekte (eski sunucu önbelleği) ya da kayıtsızken çıkarma sayılmaz; bir kez kayıt olunur', async () => {
+  sunucuModu();
+  const R = 'kimliksiz2';
+  let katil = 0;
+  kur({});
+  await odaGiris(R); // eski sunucu
+  let bitir;
+  const bekle = new Promise((r) => { bitir = r; });
+  kur({ oda_katil: async () => { katil++; await bekle; return { data: { durum: 'onayli', kanal: KANAL }, error: null }; } });
+  olaylar.length = 0;
+  yetkiKaybedildi(R, { kimlikli: false });
+  yetkiKaybedildi(R, { kimlikli: false }); // ikinci 42501: kayıt sürerken yok sayılır
+  yetkiKaybedildi(R); // önbellek boş ama kayıt sürüyor: 'yok' yazılmaz
+  bitir();
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(katil, 1);
+  assert.equal(sonDurum(R).durum, 'onayli');
+  assert.deepEqual(olaylar.map((o) => o.durum), ['onayli']);
+});

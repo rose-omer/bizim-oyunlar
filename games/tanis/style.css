@@ -1,0 +1,8 @@
+@import url('../_soru/soru.css');
+
+/* Beni Ne Kadar Tanıyorsun? — oyuna özel küçük dokunuşlar. */
+.tn-subject {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

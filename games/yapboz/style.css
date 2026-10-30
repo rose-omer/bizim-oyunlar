@@ -1,0 +1,495 @@
+/* Yapboz sayfası. Renkler yalnız base.css değişkenlerinden (gerekirse color-mix ile) türetilir.
+   Telefon öncelikli; yatay kaydırma yok; çentik/alt çubuk güvenli alanı gözetilir. */
+
+[hidden] { display: none !important; }
+
+html.yb-lock,
+html.yb-lock body {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+/* ---------- Kurulum, devam ve bekleme ekranları ---------- */
+
+.yb-card {
+  width: min(100%, 440px);
+  margin-inline: auto;
+  text-align: start; /* .center ortalar; form alanları sola yaslı */
+}
+
+.yb-wait,
+.yb-veil-card {
+  text-align: center;
+  align-items: center;
+}
+
+.yb-pick {
+  position: relative;
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  min-height: 168px;
+  padding: 16px;
+  box-sizing: border-box;
+  border: 2px dashed color-mix(in oklab, var(--accent) 45%, var(--line));
+  border-radius: var(--radius-lg);
+  background: color-mix(in oklab, var(--accent-soft) 55%, var(--surface));
+  color: var(--text);
+  text-align: center;
+  cursor: pointer;
+  overflow: hidden;
+  transition: border-color 0.15s, background-color 0.15s;
+}
+
+.yb-pick:hover,
+.yb-pick.is-over {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.yb-pick:focus-within {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.yb-pick.has-photo {
+  min-height: 0;
+  padding: 10px;
+  border-style: solid;
+}
+
+.yb-pick.is-busy {
+  cursor: progress;
+}
+
+.yb-pick.is-busy .yb-pick-text {
+  animation: yb-fade 1.2s ease-in-out infinite alternate;
+}
+
+.yb-file {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.yb-pick-text {
+  display: grid;
+  gap: 2px;
+  justify-items: center;
+}
+
+.yb-pick-text strong {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+}
+
+.yb-preview,
+.yb-thumb {
+  display: block;
+  width: 100%;
+  max-height: min(42vh, 280px);
+  object-fit: contain;
+  border-radius: var(--radius);
+}
+
+.yb-thumb {
+  box-shadow: var(--shadow);
+}
+
+.yb-field {
+  display: grid;
+  gap: 8px;
+}
+
+.yb-label {
+  margin: 0;
+  font-weight: 600;
+}
+
+.yb-card .seg {
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.yb-card .seg > button {
+  flex: 1 1 0;
+}
+
+.yb-grid-info,
+.yb-meta {
+  margin: 0;
+  font-size: 0.92rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.yb-note {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 4.5em;
+  resize: vertical;
+}
+
+.yb-hint {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.yb-start {
+  width: 100%;
+}
+
+.yb-status {
+  min-height: 1.3em;
+  margin: 0;
+  font-size: 0.92rem;
+  color: var(--muted);
+}
+
+.yb-status:empty {
+  min-height: 0;
+}
+
+.yb-status.is-error {
+  color: var(--bad);
+}
+
+.yb-spinner {
+  width: 36px;
+  height: 36px;
+  margin-inline: auto;
+  box-sizing: border-box;
+  border: 4px solid var(--accent-soft);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: yb-spin 0.9s linear infinite;
+}
+
+.yb-heart {
+  width: 44px;
+  height: 44px;
+  margin-inline: auto;
+  color: var(--accent);
+  animation: yb-beat 1.8s ease-in-out infinite;
+}
+
+.yb-heart svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  fill: currentColor;
+}
+
+@keyframes yb-spin {
+  to { transform: rotate(1turn); }
+}
+
+@keyframes yb-beat {
+  0%, 60%, 100% { transform: scale(1); }
+  15% { transform: scale(1.12); }
+  30% { transform: scale(0.98); }
+  45% { transform: scale(1.07); }
+}
+
+@keyframes yb-fade {
+  from { opacity: 1; }
+  to { opacity: 0.45; }
+}
+
+/* ---------- Oyun: masa + HUD ---------- */
+
+.yb-game {
+  --yb-shade: var(--text); /* açık temada gölge koyu yazı renginden */
+  position: fixed;
+  z-index: 1;
+  inset: var(--shell-h, 56px) 0 0 0; /* --shell-h'yi mountShell ölçer */
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+
+@media (prefers-color-scheme: dark) {
+  .yb-game { --yb-shade: var(--bg); }
+}
+
+/* Keçe / keten masa: hafif mor tonlu yüzey, keten iplikleri, kenarlarda gölge. */
+.yb-table {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  background-color: color-mix(in oklab, var(--surface-2) 84%, var(--plum));
+  background-image:
+    radial-gradient(130% 100% at 50% 42%, transparent 52%, color-mix(in oklab, var(--yb-shade) 16%, transparent)),
+    radial-gradient(70% 55% at 50% 42%, color-mix(in oklab, var(--surface) 30%, transparent), transparent),
+    repeating-linear-gradient(0deg, color-mix(in oklab, var(--yb-shade) 5%, transparent) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(90deg, color-mix(in oklab, var(--surface) 18%, transparent) 0 1px, transparent 1px 4px);
+}
+
+.yb-canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  outline: none;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.yb-hud {
+  position: relative;
+  z-index: 2;
+  flex: none;
+  display: grid;
+  gap: 8px;
+  padding: 8px max(10px, env(safe-area-inset-right)) calc(8px + var(--safe-bottom, 0px)) max(10px, env(safe-area-inset-left));
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+  box-shadow: 0 -8px 24px color-mix(in oklab, var(--yb-shade) 8%, transparent);
+}
+
+.yb-hud-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.yb-zoom {
+  flex: none;
+  display: flex;
+  gap: 4px;
+}
+
+.yb-stat {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.yb-progress {
+  flex: 1 1 auto;
+  min-width: 40px;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--text) 12%, transparent);
+}
+
+.yb-progress-fill {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent), color-mix(in oklab, var(--accent) 55%, var(--plum)));
+  transition: width 0.35s ease;
+}
+
+.yb-pct,
+.yb-time {
+  flex: none;
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.yb-pct {
+  font-weight: 700;
+}
+
+.yb-time {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.yb-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.yb-actions .yb-tool {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.yb-tool {
+  box-sizing: border-box;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 4px 6px;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  color: var(--text);
+  font: 600 0.72rem/1.1 var(--font-body);
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s, transform 0.1s;
+}
+
+.yb-tool:hover {
+  border-color: color-mix(in oklab, var(--accent) 50%, var(--line));
+}
+
+.yb-tool:active {
+  transform: scale(0.96);
+}
+
+.yb-tool:focus-visible,
+.yb-x:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.yb-tool[aria-pressed="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+.yb-tool svg,
+.yb-x svg {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.yb-tool-label {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (min-width: 760px) {
+  .yb-hud {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 16px;
+    padding-inline: max(16px, env(safe-area-inset-left)) max(16px, env(safe-area-inset-right));
+  }
+
+  .yb-hud-top {
+    gap: 16px;
+  }
+
+  .yb-stat {
+    max-width: 440px;
+  }
+
+  .yb-actions {
+    gap: 8px;
+  }
+
+  .yb-actions .yb-tool {
+    flex: none;
+    flex-direction: row;
+    gap: 6px;
+    padding: 6px 12px;
+    font-size: 0.88rem;
+  }
+}
+
+/* Misafir: ev sahibi yokken masayı örter, girdi almaz. */
+.yb-veil {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: color-mix(in oklab, var(--bg) 72%, transparent);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+}
+
+.yb-veil-card {
+  box-sizing: border-box;
+  width: min(100%, 340px);
+}
+
+/* Ev sahibi: "Sevgilin henüz burada değil" şeridi (engellemez).
+   Kartta akış içinde; oyunda masanın üstünde yüzer. */
+.yb-banner {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  padding: 4px 4px 4px 14px;
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  font-size: 0.9rem;
+  line-height: 1.25;
+}
+
+.yb-table > .yb-banner {
+  position: absolute;
+  z-index: 3;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100% - 24px);
+  background: var(--surface);
+  border-radius: 999px;
+  box-shadow: var(--shadow);
+}
+
+.yb-banner-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.yb-banner .btn {
+  flex: none;
+}
+
+.yb-x {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.yb-x:hover {
+  color: var(--text);
+  background: var(--surface-2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .yb-spinner { animation-duration: 2.4s; }
+  .yb-heart,
+  .yb-pick.is-busy .yb-pick-text { animation: none; }
+  .yb-progress-fill,
+  .yb-tool { transition: none; }
+}

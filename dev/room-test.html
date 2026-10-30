@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Oda testi · Bizim Oyunlar</title>
+  <style>
+    :root { color-scheme: light dark; font: 15px/1.4 system-ui, sans-serif; }
+    body { margin: 0 auto; max-width: 640px; padding: 16px; }
+    h1 { font-size: 1.2rem; margin: 0 0 12px; }
+    dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 0 0 12px; }
+    dt { font-weight: 600; }
+    dd { margin: 0; overflow-wrap: anywhere; }
+    form, .row { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 12px; }
+    input { flex: 1 1 200px; min-height: 44px; padding: 0 10px; font: inherit; }
+    button { min-height: 44px; padding: 0 14px; font: inherit; cursor: pointer; }
+    #log { list-style: none; margin: 0; padding: 0; font: 13px/1.4 ui-monospace, monospace; }
+    #log li { padding: 4px 0; border-top: 1px solid #8884; overflow-wrap: anywhere; }
+    .s-online { color: #2a9d4b; } .s-error { color: #d33; } .s-offline { color: #888; } .s-connecting { color: #c80; }
+  </style>
+</head>
+<body>
+  <h1>Oda testi</h1>
+  <p>İki sekmede aç: <code>?yerel=1&amp;oda=test123456&amp;ns=lobby&amp;ad=Ali</code> (ikincisinde <code>ad=Ayşe</code>).
+    Supabase'i denemek için <code>yerel=1</code>'i çıkar.</p>
+  <dl>
+    <dt>Ben</dt><dd id="me">…</dd>
+    <dt>Arka uç</dt><dd id="backend">…</dd>
+    <dt>Durum</dt><dd id="status">…</dd>
+    <dt>Partner</dt><dd id="partner">…</dd>
+  </dl>
+  <form id="form">
+    <input id="text" autocomplete="off" placeholder='Mesaj (metin ya da JSON: {"t":"join"})' aria-label="Mesaj">
+    <button type="submit">Gönder (ns)</button>
+    <button type="button" id="all">Herkese (*)</button>
+  </form>
+  <div class="row">
+    <button type="button" id="rejoin">Ayrıl / yeniden katıl</button>
+    <button type="button" id="clear">Günlüğü temizle</button>
+  </div>
+  <ul id="log" aria-live="polite"></ul>
+
+  <script type="module">
+    import { joinRoom } from '../js/core/room.js';
+    import { me, setName, isLocalMode } from '../js/core/identity.js';
+
+    const q = new URLSearchParams(location.search);
+    const roomId = q.get('oda') || 'test123456';
+    const ns = q.get('ns') || 'lobby';
+    if (q.get('ad')) setName(q.get('ad'));
+    else if (!me().name) setName('Sekme-' + me().clientId.slice(0, 4));
+
+    const $ = (id) => document.getElementById(id);
+    const log = (text) => {
+      const li = document.createElement('li');
+      li.textContent = `${new Date().toLocaleTimeString('tr-TR')}  ${text}`;
+      $('log').prepend(li);
+    };
+    const parse = (s) => { try { return JSON.parse(s); } catch { return { t: 'text', text: s }; } };
+
+    let room = null;
+    let offs = [];
+
+    async function join() {
+      room = await joinRoom({ roomId, ns });
+      $('me').textContent = `${room.me.name} (${room.me.clientId.slice(0, 8)}) · oda ${roomId} · ns ${ns}`;
+      $('backend').textContent = room.backend + (isLocalMode() ? ' (yerel mod)' : '');
+      offs = [
+        room.on('status', (s, detail) => {
+          $('status').textContent = s + (detail ? ` — ${detail}` : '');
+          $('status').className = 's-' + s;
+          log(`durum: ${s}${detail ? ' — ' + detail : ''}`);
+        }),
+        room.on('presence', (p) => {
+          $('partner').textContent = p ? `${p.name || '(adsız)'} (${p.clientId.slice(0, 8)}) · sayfa: ${p.page}` : 'yok';
+          log(`presence: ${p ? JSON.stringify(p) : 'null'}`);
+        }),
+        room.on('message', (m, from) => log(`← ${from.name}: ${JSON.stringify(m)}`)),
+      ];
+      log('katıldı');
+    }
+
+    function send(all) {
+      const text = $('text').value.trim();
+      if (!text || !room) return;
+      const msg = parse(text);
+      const ok = all ? room.sendAll(msg) : room.send(msg);
+      log(`→ ${all ? '*' : ns}: ${JSON.stringify(msg)} ${ok ? '' : '(GÖNDERİLEMEDİ: bağlı değil)'}`);
+      $('text').value = '';
+    }
+
+    $('form').addEventListener('submit', (e) => { e.preventDefault(); send(false); });
+    $('all').addEventListener('click', () => send(true));
+    $('clear').addEventListener('click', () => { $('log').textContent = ''; });
+    $('rejoin').addEventListener('click', async () => {
+      if (room) {
+        offs.forEach((off) => off());
+        await room.leave();
+        room = null;
+        $('status').textContent = 'ayrıldı';
+        $('status').className = 's-offline';
+        $('partner').textContent = '—';
+        log('ayrıldı');
+      } else {
+        await join();
+      }
+    });
+
+    join();
+  </script>
+</body>
+</html>

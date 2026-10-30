@@ -1,0 +1,9 @@
+{
+  "name": "bizim-yapboz",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node dev/serve.mjs",
+    "test": "node --test --test-timeout=15000 tests/*.test.mjs"
+  }
+}

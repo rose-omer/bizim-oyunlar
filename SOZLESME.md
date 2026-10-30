@@ -1,0 +1,231 @@
+# Bizim Oyunlar — Modül sözleşmesi
+
+Modüller arası tek doğru kaynak. Her ajan yalnız kendi dosyalarına yazar.
+API değişikliği gerekirse kodu değiştirmez; raporunda önerir.
+
+## 1. Ürün
+- İki sevgilinin birlikte oynadığı oyun sitesi. Ana sayfa = "Odamız" (lobi).
+- Bir kişi oda kurar, davet linkini gönderir. İkisi de lobide oyunu seçer ve oynar.
+- Oda kalıcıdır: link bir kez gönderilir; tarayıcı odayı hatırlar.
+- Statik site. Build yok. Gerçek zamanlı iletişim ve veri: Supabase (ücretsiz plan).
+- Supabase ayarı yoksa ya da URL'de `?yerel=1` varsa "yerel mod": aynı tarayıcının sekmeleri
+  BroadcastChannel ile konuşur. Geliştirme ve test bu modla yapılır.
+- Arayüz dili Türkçe. Telefon öncelikli; masaüstünde de tam çalışır. Yatay kaydırma yok.
+
+## 2. Oyunlar (v1)
+| id | Ad | Kişi | Özet |
+|---|---|---|---|
+| `yapboz` | Yapboz | 1–2 | Fotoğraf yükle, 100/200/500/1000 parça, birlikte aynı anda çöz. |
+| `tanis` | Beni Ne Kadar Tanıyorsun? | 2 | Biri kendini cevaplar, diğeri tahmin eder; sırayla. |
+| `aynikafa` | Aynı Kafa | 2 | "Bu mu, o mu?" ikiniz aynı anda seçersiniz; uyum yüzdesi. |
+| `dogruluk` | Doğruluk mu Cesaret mi | 2 | Sırayla kart; tatlı / eğlenceli / cesur seviyeleri. |
+| `hafiza` | Hafıza Kartları | 1–2 | Sırayla kart çevir, eşleri bul; puan. |
+| `ciz` | Çiz Bakalım | 1–2 | Ortak tuval ya da çiz-tahmin et. |
+
+Kayıt: `js/core/games.js` → `GAMES` dizisi (koordinatör yazdı).
+
+## 3. Klasörler ve sahipler
+| Yol | Sahip |
+|---|---|
+| `js/core/room.js`, `identity.js`, `storage.js`, `db.js`, `js/config.js`, `supabase/schema.sql`, `.github/workflows/keepalive.yml`, `tests/core-*.test.mjs`, `dev/room-test.html` | Çekirdek ajanı |
+| `index.html`, `css/base.css`, `js/hub.js`, `js/core/ui.js`, `js/core/sound.js`, `assets/*` | Ana sayfa ajanı |
+| `games/yapboz/grid.js`, `model.js`, `board.js`, `tests/yapboz-*.test.mjs` | Yapboz motor ajanı |
+| `games/yapboz/index.html`, `app.js`, `image.js`, `store.js`, `style.css` | Yapboz sayfa ajanı |
+| `games/tanis/*`, `games/aynikafa/*`, `games/dogruluk/*`, `games/_soru/*`, `tests/soru-*.test.mjs` | Soru oyunları ajanı |
+| `games/hafiza/*`, `games/ciz/*`, `tests/hafiza-*.test.mjs`, `tests/ciz-*.test.mjs` | Hafıza+Çiz ajanı |
+| `package.json`, `dev/serve.mjs`, `js/core/games.js`, `vendor/supabase.js`, `SOZLESME.md`, `README.md` | Koordinatör |
+
+## 4. Genel kurallar
+- Tüm JS dosyaları ES modülü. Build yok, npm paketi yok. Tek dış kod: `vendor/supabase.js` (supabase-js 2.118.0 UMD, `globalThis.supabase`).
+- **Tüm yollar göreli.** Site bir alt klasörde de çalışmalı (ör. `kullanici.github.io/repo/`).
+  Başka modüle göre adres üretmek için `new URL('...', import.meta.url)` kullan.
+- Testler: `node --test tests/` (Node 25). Testler DOM'a dokunmaz. Saf mantığı ayrı modülde tut ve test et.
+- Yerel sunucu: `node dev/serve.mjs` → http://localhost:5173 (koordinatör çalıştırır).
+- Alt ajanlar tarayıcı aracı kullanmaz. Tarayıcı testini koordinatör yapar.
+- Ağ bütçesi: istemci başına en fazla 10 mesaj/sn (sürekli). Tek mesaj < 100 KB.
+  Sürükleme ve çizim verisi 100 ms'de bir toplu gönderilir; alıcı yumuşatır.
+- Font: Google Fonts `@import` ile `css/base.css` içinde. Başka CDN yok.
+- Erişilebilirlik: gerçek `<button>`, görünür odak, `aria-label`, en az 44 px dokunma alanı.
+- Kullanıcıya görünen metin Türkçe, sıcak ve kısa. Açık saçık içerik yok (en fazla PG-13).
+
+## 5. js/core/identity.js (Çekirdek)
+```js
+export function me()                  // -> { clientId, name }  clientId kalıcı (localStorage 'bizim.client')
+export function setName(name)
+export function currentRoom()         // -> roomId | null  (localStorage 'bizim.room')
+export function setRoom(roomId)
+export function clearRoom()
+export function newRoomId()           // -> 10 karakter [a-z2-9], karışan harf yok (l, o, 0, 1)
+export function inviteUrl(roomId)     // -> mutlak URL: <site kökü>/#oda=<roomId>
+export function lobbyUrl()            // -> <site kökü>/
+export function gameUrl(gameId, { roomId, host }) // -> <site kökü>/games/<gameId>/?oda=..&host=..
+export function readGameParams()      // oyun sayfasında: -> { roomId|null, hostId|null, isHost, solo }
+//  solo = roomId yok. isHost = solo || !hostId || hostId === me().clientId
+export function isLocalMode()         // config boş ya da URL'de ?yerel=1 (yerel mod, sayfalar arası geçişte korunur)
+```
+- Site kökü: `new URL('../../', import.meta.url)`. Yerel modda ürettiği URL'lere `yerel=1` ekler.
+
+## 6. js/core/room.js (Çekirdek)
+```js
+export async function joinRoom({ roomId, ns })  // -> Room. roomId null ise "yalnız oda" (no-op) döner.
+// Room:
+room.me                    // { clientId, name }
+room.backend               // 'supabase' | 'local' | 'solo'
+room.send(msg)             // aynı ns'deki karşı tarafa. msg JSON nesnesi. Bağlı değilse false.
+room.sendAll(msg)          // ns '*': karşı tarafın hangi sayfada olursa olsun alması için
+room.on('message', (msg, from) => {})  // aynı ns ve '*' mesajları; from = { clientId, name }. Kendi mesajın gelmez.
+room.on('presence', (partner) => {})   // partner = { clientId, name, page } | null. Abone olunca hemen bir kez çağrılır.
+room.on('status', (status, detail) => {}) // 'connecting' | 'online' | 'offline' | 'error'; detail Türkçe
+room.partner()             // şimdiki partner | null
+room.leave()
+// on(...) bir "abonelikten çık" fonksiyonu döner.
+```
+- Supabase: kanal `oda:<roomId>`, broadcast olayı `m`, yük `{ ns, from, m }`. Presence anahtarı clientId,
+  yük `{ clientId, name, page: ns }`. Partner = kendinden farklı ilk clientId.
+- Yerel: BroadcastChannel `bizim:<roomId>`; presence 3 sn'de bir "buradayım", 8 sn sessizlik = yok.
+- Bağlantı kopunca kendisi yeniden bağlanır; sekme arka plandan dönünce durumu tazeler.
+
+## 7. js/core/storage.js ve js/core/db.js (Çekirdek)
+```js
+// storage.js
+export async function uploadPhoto(blob, roomId) // -> url (string). Supabase: herkese açık 'photos' kovası,
+                                                //    yol `<roomId>/<uuid>.jpg`. Yerel: IndexedDB, 'local:<id>'.
+export async function loadPhoto(url)            // -> Blob
+// db.js  (oda kimliği = çift kimliği)
+export async function logGame(roomId, gameId, result) // sessizce dener; hata fırlatmaz. result küçük JSON.
+export async function roomStats(roomId)         // -> [{ game, played, last_at }]
+export async function ping()                    // -> true/false
+```
+- Yerel modda db.js localStorage kullanır.
+- Oyun bitince `logGame` yalnız ev sahibi (isHost) çağırır.
+
+## 8. js/config.js (Çekirdek)
+```js
+export const SUPABASE_URL = '';       // örn. https://abcd.supabase.co
+export const SUPABASE_ANON_KEY = '';  // anon / publishable anahtar (gizli değildir)
+export const PHOTO_BUCKET = 'photos';
+```
+
+## 9. Ortak arayüz: js/core/ui.js, js/core/sound.js, css/base.css (Ana sayfa)
+```js
+// ui.js
+export function mountShell({ title, room })   // <header id="shell"> doldurur: "← Odamız" (lobbyUrl), başlık,
+//   partner çipi (nokta + ad + "çevrimiçi" / "çevrimdışı" / "<oyun adı>'nda"), ses aç/kapa, yerel modda "Yerel" çipi.
+//   '*' gelen { t:'go', game, host } mesajında toast: "<ad> <oyun>'u açtı" + [Git] düğmesi (gameUrl).
+export function toast(text, { action, ms } = {}) // action = { label, onClick }
+export function celebrate({ title, lines = [], buttons = [] }) // tam ekran bitiş: kalp animasyonu.
+//   buttons = [{ label, onClick, primary }]. -> close()
+export function waitForPartner(room, { text, allowSolo = false }) // -> Promise<'partner' | 'solo'>
+//   Partner bu sayfada değilse kaplama gösterir: metin, davet linki paylaş/kopyala, (allowSolo) "Tek başıma".
+//   Partner aynı sayfaya (page === room ns) gelince çözülür. roomId yoksa: allowSolo ise hemen 'solo'.
+export function confirmDialog(text, { ok = 'Evet', cancel = 'Vazgeç' } = {}) // -> Promise<boolean>
+export async function shareInvite(roomId)      // navigator.share ya da panoya kopyala + toast
+
+// sound.js  (WebAudio ile sentez, dosya yok)
+export function sfx(name)   // 'tap' | 'snap' | 'flip' | 'match' | 'wrong' | 'win' | 'pop' | 'tick'
+export function setMuted(bool); export function isMuted()
+```
+`css/base.css` sağlar (oyunlar bunları kullanır, renk sabit yazmaz):
+- Değişkenler: `--bg --surface --surface-2 --line --text --muted --accent --accent-ink --accent-soft --plum --good --bad --radius --radius-lg --shadow --font-display --font-body --safe-top --safe-bottom`
+- Sınıflar: `.btn` `.btn.primary` `.btn.ghost` `.btn.small` `.card` `.chip` `.input` `.seg` (içinde `button[aria-pressed]`)
+  `.stack` (dikey boşluklu) `.row` (yatay, sarar) `.screen` (tam yükseklik bölüm) `.center` `.title` `.subtitle` `.muted` `.hidden`
+- `<header id="shell">` üstte sabit; `<main id="app">` kalan alan. Koyu/açık tema: `prefers-color-scheme`.
+
+## 10. Oyun sayfası şablonu
+```html
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Yapboz · Bizim Oyunlar</title>
+  <link rel="stylesheet" href="../../css/base.css">
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <header id="shell"></header>
+  <main id="app"></main>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
+```
+```js
+import { joinRoom } from '../../js/core/room.js';
+import { readGameParams } from '../../js/core/identity.js';
+import { mountShell, waitForPartner } from '../../js/core/ui.js';
+const { roomId, isHost } = readGameParams();
+const room = await joinRoom({ roomId, ns: 'yapboz' });   // ns = oyun id
+mountShell({ title: 'Yapboz', room });
+```
+- Ev sahibi (isHost) oyunun otoritesidir: karıştırma, soru seçimi, sıra, puan, çakışma kararı.
+- Misafir sayfaya girince `{ t:'join' }` gönderir; ev sahibi tam durumu (`{ t:'state', ... }`) yollar.
+  Partner presence yeniden görünürse misafir tekrar `join` gönderir. Böylece yenileme ve kopma toparlanır.
+- Ev sahibi yokken misafir oynamaz; "Sevgilin dönünce devam" gösterilir.
+- Rastgelelik tohumlu (`seed`) olur; ev sahibi seed'i gönderir.
+- Bitişte: `celebrate(...)`, `sfx('win')`, ev sahibi `logGame(...)`. "Tekrar" ve "Odamıza dön" düğmeleri.
+
+## 11. Lobi akışı (Ana sayfa)
+- URL'de `#oda=<id>` varsa: odayı kaydet (`setRoom`), adres çubuğundan hash'i temizle.
+- Ad yoksa önce ad sor. Oda yoksa: "Odamızı kur" → `newRoomId` → davet linki ekranı.
+- Lobi: iki kişinin durumu, oyun kartları (`GAMES`), "Birlikte oynadıklarımız" (`roomStats`).
+- Kart seçilince: `room.sendAll({ t:'go', game, host: me().clientId })`, sonra `gameUrl(game, { roomId, host })`'a git.
+- Lobideki partner `go` alınca 1,5 sn'lik bildirimle aynı oyuna otomatik geçer.
+- Odasız da tek kişilik oyunlar (`players` '1–2') açılabilir: `gameUrl(game, {})` (solo).
+
+## 12. Yapboz (Motor ↔ Sayfa)
+Koordinatlar: dünya birimi = normalize fotoğraf pikseli (`imgW × imgH`). Çerçeve `[0,0]–[imgW,imgH]`.
+`pw = imgW/cols`, `ph = imgH/rows`. Parça `id = row*cols + col`.
+Grup ofseti `(x, y)`: parçanın sol-üstü = `(x + col*pw, y + row*ph)`. Hizalı ⇔ ofsetler eşit; doğru yerde ⇔ `(0,0)`.
+Grup id = gruptaki en küçük parça id. Bitti ⇔ tek grup.
+
+`BoardState = { v:1, groups:[{ id, x, y, pieces:number[] }] }` (dizi sırası = z sırası, alttan üste; x,y 1 ondalık).
+
+```js
+// grid.js
+export const PIECE_COUNTS = [100, 200, 500, 1000];
+export function computeGrid(target, imgW, imgH) // -> { cols, rows, count }; parça kareye yakın; 4:3 & 1000 -> ~37x27
+export function mulberry32(seed)               // -> () => [0,1)
+export function generateEdges(cols, rows, seed) // -> [{ id, col, row, top, right, bottom, left }]; 0 düz, 1 çıkıntı, -1 girinti
+export function tabMargin(pw, ph)
+export function piecePathD(piece, pw, ph)       // SVG path d, yerel koordinat; komşu kenarlar birebir aynı eğri
+
+// board.js
+const board = new Board(canvas, { image, cols, rows, seed, state, onAction, onProgress, onSnap, onComplete });
+board.getState(); board.setState(state); board.applyRemote(action); board.cancelLocalDrag();
+board.isDragging(); board.draggingGroup(); board.setPeerCursor({ x, y, name } | null); board.clearPeerHolds();
+board.hash(); board.setEdgeOnly(bool); board.setGhost(bool); board.zoomBy(f); board.fitView();
+board.shuffleLoose(); board.resize(); board.destroy();
+// onProgress({ total, groups, percent }); percent = round(100*(total-groups)/(total-1))
+```
+Eylemler (`onAction` yayar, `applyRemote` kabul eder):
+```js
+{ type:'grab', g }
+{ type:'move', g, x, y }            // kare başına en fazla bir; sayfa 100 ms'ye kısar; applyRemote yumuşatır (~100 ms)
+{ type:'drop', g, x, y, pieces }    // yapışma sonrası nihai grup. Alıcı: pieces'tan herhangi birini içeren TÜM grupları
+                                    //  tek grupta birleştirir (id = en küçük), ofset (x,y), tutmayı kaldırır.
+{ type:'scatter', moves:[{ g, x, y }] }
+{ type:'cursor', x, y }             // en fazla 100 ms'de bir; applyRemote kullanmaz (sayfa setPeerCursor çağırır)
+```
+- Yapışma toleransı `0.22*min(pw,ph)`. Komşusu olan ve ofseti yakın grupla birleş; `(0,0)`'a yakınsa otur.
+- `applyRemote(grab)`: grup karşı tarafta; yerelde tutulamaz, yerel yapışma ona bağlanmaz; pembe çerçeve.
+- Birleşen gruplardan biri yerelde sürükleniyorsa önce `cancelLocalDrag()`.
+
+Yapboz mesajları (`room.send`):
+| Yön | Mesaj |
+|---|---|
+| misafir → ev sahibi | `{ t:'join' }` |
+| ev sahibi → misafir | `{ t:'hello', photo, cols, rows, seed, count, note, elapsed }` (photo = uploadPhoto URL), ardından `{ t:'state', state }` |
+| iki yön | `{ t:'act', a }`, `{ t:'cur', x, y }` |
+| ev sahibi → misafir | `{ t:'deny', g }`; her 5 sn `{ t:'hash', h, elapsed }` |
+| misafir → ev sahibi | `{ t:'need' }` → `{ t:'state', state }` |
+| ev sahibi → misafir | `{ t:'setup' }` ev sahibi yeni yapboz kuruyor |
+
+Çakışma: ev sahibi kazanır. Ev sahibi, kendi sürüklediği grup için `grab` alırsa uygulamaz, `deny` yollar.
+Misafir, kendi sürüklediği grup için `grab` alırsa `cancelLocalDrag()` sonra uygular; `deny` alırsa `cancelLocalDrag()`.
+Misafir `hash` farkı görürse (sürüklemiyor ve son 1 sn eylem yok) `need` yollar.
+
+## 13. Supabase (Çekirdek: supabase/schema.sql)
+- Tablo `game_log(id, room, game, result jsonb, created_at)`; RLS açık, politika yok (doğrudan erişim kapalı).
+- RPC (security definer, `anon`'a execute): `log_game(p_room, p_game, p_result)`, `room_stats(p_room)`, `ping()`.
+- Depolama: herkese açık `photos` kovası; 5 MB sınır; yalnız jpeg/webp/png; `anon` yalnız INSERT (listeleme yok).
+- Ücretsiz proje 7 gün hareketsiz kalırsa durur: `keepalive.yml` 3 günde bir `ping` çağırır.

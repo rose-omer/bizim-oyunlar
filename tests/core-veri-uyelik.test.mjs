@@ -210,9 +210,9 @@ test('geri yükleme sonrası: refresh({ tam: true }) eski tarihli belgeleri de g
   const { readStore } = await import('../js/core/identity.js');
   writeStore('session', 'bizim.yerel', '1');
   const R = 'tamtazele2';
+  await putDoc(R, 'liste', 'ilk', { metin: 'yeni' }); // ilk yükleme bunu çeker: 'since' ilerler
   const col = await openCollection(odaNesnesi(R), 'liste');
   try {
-    await col.put({ metin: 'yeni' });
     await iceAktar(R, [{ kind: 'liste', id: 'eski1', data: { metin: 'yedekten' }, created_at: '2020-01-01T00:00:00Z', updated_at: '2020-01-01T00:00:00Z' }]);
     await col.refresh();
     assert.equal(col.get('eski1'), null, 'artımlı tazeleme eski tarihi atlar');

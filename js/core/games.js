@@ -104,6 +104,22 @@ export const GAMES = [
     players: '2',
     minutes: '10–20 dk',
   },
+  {
+    id: 'duello',
+    title: 'Kelime Düellosu',
+    emoji: '🔤',
+    desc: 'Birbirinize gizli bir kelime seçin, aynı anda bulmaya çalışın. Az denemede bulan kazanır.',
+    players: '2',
+    minutes: '5–10 dk',
+  },
+  {
+    id: 'sudoku',
+    title: 'Birlikte Sudoku',
+    emoji: '🔢',
+    desc: 'Aynı tahtayı birlikte doldurun. Kolay, orta ya da zor; not alın, geri alın.',
+    players: '1–2',
+    minutes: '10–30 dk',
+  },
 ];
 
 export function gameById(id) {

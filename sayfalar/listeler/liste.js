@@ -6,6 +6,8 @@
 // 'alacak' yalnız hediye listesinde: "Ben alacağım 🤫" diyen partnerin clientId'si.
 //   UYARI: Bu işaret gerçek bir gizlilik değildir. Belge iki cihaza da gider; sahibi
 //   tarayıcı araçlarıyla görebilir. Yalnız arayüzde sahibinden gizlenir (gizliIsaret, sahibeGoster).
+// 'sarki' listesi (Şarkılarımız): işaretlenmez. Ek alanlar: baglanti?: https YouTube/Spotify/Apple Music adresi,
+//   bizim?: ISO ("Bizim şarkımız" işaretlendiği an; tek şarkı: en son işaretlenen geçerlidir, bizimSarkimiz).
 
 export const LISTELER = [
   {
@@ -38,7 +40,23 @@ export const LISTELER = [
     bos: 'Alışveriş listesi boş. Dolap dolu demek!',
     fiil: ['aldın', 'aldı'],
   },
+  {
+    id: 'sarki', emoji: '🎵', ad: 'Şarkılarımız', kisa: 'Şarkılar',
+    ipucu: 'Şarkı – sanatçı',
+    bos: 'Henüz şarkımız yok. Aklına ilk gelen hangisi?',
+    fiil: null,
+    isaretsiz: true, // yapıldı işareti yok; yerine "Bizim şarkımız"
+  },
 ];
+
+export const MAX_BAGLANTI = 300;
+// Bağlantı yalnız bu sunuculara (tam ad eşleşmesi; alt alan aldatması geçmez).
+const BAGLANTI_KAYNAK = {
+  'youtube.com': 'youtube', 'www.youtube.com': 'youtube', 'm.youtube.com': 'youtube', 'music.youtube.com': 'youtube',
+  'youtu.be': 'youtube',
+  'open.spotify.com': 'spotify', 'spotify.link': 'spotify',
+  'music.apple.com': 'apple',
+};
 
 export const MAX_METIN = 140;
 export const MAX_NOT = 500;
@@ -66,25 +84,77 @@ function metinNotKontrol(metin, not) {
 }
 
 /** Yeni öğe verisi. -> { data } | { hata } */
-export function yeniOge({ liste, metin, not, me }) {
+export function yeniOge({ liste, metin, not, me, baglanti }) {
   if (!listeById(liste)) return { hata: 'Bilinmeyen liste.' };
   const k = metinNotKontrol(metin, not);
   if (k.hata) return k;
   const data = { liste, metin: k.m };
   if (k.n) data.not = k.n;
+  if (liste === 'sarki') {
+    const b = baglantiDogrula(baglanti);
+    if (b.hata) return b;
+    if (b.url) data.baglanti = b.url;
+  }
   if (me) data.ekleyen = me;
   if (liste === 'hediye') data.kimin = me;
   return { data };
 }
 
-/** Metin ve notu değiştirir; diğer alanları (yapildi, kimin, alacak) korur. -> { data } | { hata } */
-export function duzenle(data, { metin, not }) {
+/**
+ * Metin ve notu (şarkıda bağlantıyı da) değiştirir; diğer alanları (yapildi, kimin, alacak, bizim) korur.
+ * baglanti verilmezse (undefined) olduğu gibi kalır. -> { data } | { hata }
+ */
+export function duzenle(data, { metin, not, baglanti }) {
   const k = metinNotKontrol(metin, not);
   if (k.hata) return k;
   const out = { ...data, metin: k.m };
   if (k.n) out.not = k.n;
   else delete out.not;
+  if (data?.liste === 'sarki' && baglanti !== undefined) {
+    const b = baglantiDogrula(baglanti);
+    if (b.hata) return b;
+    if (b.url) out.baglanti = b.url;
+    else delete out.baglanti;
+  }
   return { data: out };
+}
+
+/** Şarkı bağlantısı: boş serbest; doluysa yalnız https YouTube, Spotify ya da Apple Music. -> { url } | { hata } */
+export function baglantiDogrula(metin) {
+  const s = String(metin ?? '').trim();
+  if (!s) return { url: null };
+  if (s.length > MAX_BAGLANTI) return { hata: `Bağlantı en çok ${MAX_BAGLANTI} karakter olsun.` };
+  const hata = { hata: 'Bağlantı yalnız YouTube, Spotify ya da Apple Music adresi olabilir (https://…).' };
+  let u;
+  try { u = new URL(s); } catch { return hata; }
+  if (u.protocol !== 'https:' || u.username || u.password || u.port || !BAGLANTI_KAYNAK[u.hostname]) return hata;
+  return { url: u.href };
+}
+
+/** -> 'youtube' | 'spotify' | 'apple' | null */
+export function baglantiKaynagi(url) {
+  try { return BAGLANTI_KAYNAK[new URL(url).hostname] || null; } catch { return null; }
+}
+
+/** "Bizim şarkımız": bizim işareti olan şarkılardan en son işaretlenenin id'si | null. */
+export function bizimSarkimiz(docs) {
+  let en = null;
+  for (const d of docs || []) {
+    if (d?.data?.liste !== 'sarki' || !d.data.bizim) continue;
+    if (!en || zaman(d.data.bizim) > zaman(en.data.bizim)) en = d;
+  }
+  return en ? en.id : null;
+}
+
+/**
+ * "Bizim şarkımız" dokunuşunun yamaları: [[id, { bizim }], ...] (veri.js patch).
+ * İşaretli şarkıya dokunmak işareti kaldırır; başkasına dokunmak onu işaretler, eskileri temizler.
+ */
+export function bizimYamalari(docs, id, simdi = new Date()) {
+  const isaretli = (docs || []).filter((d) => d?.data?.liste === 'sarki' && d.data.bizim);
+  const temizle = (d) => [d.id, { bizim: null }];
+  if (bizimSarkimiz(isaretli) === id) return isaretli.map(temizle);
+  return [[id, { bizim: new Date(simdi).toISOString() }], ...isaretli.filter((d) => d.id !== id).map(temizle)];
 }
 
 /**
@@ -121,6 +191,10 @@ export function ogeler(docs, { liste, me = null, grup = 'ben', gizle = false } =
   const hepsi = (docs || []).filter((d) => listeninMi(d, liste, me, grup));
   const acik = hepsi.filter((d) => !d.data.yapildi)
     .sort((a, b) => zaman(b.created_at) - zaman(a.created_at));
+  if (liste === 'sarki') {
+    const bizim = bizimSarkimiz(hepsi); // "Bizim şarkımız" en üstte
+    if (bizim) acik.sort((a, b) => (b.id === bizim) - (a.id === bizim));
+  }
   if (gizle) return acik;
   const biten = hepsi.filter((d) => d.data.yapildi)
     .sort((a, b) => zaman(b.data.yapildi) - zaman(a.data.yapildi));
@@ -151,7 +225,9 @@ export function geriAl(data) {
 
 /** Hediyeyi yalnız sahibi işaretler ("geldi"); partner işaretlerse sürpriz bozulur. */
 export function isaretleyebilir(doc, me) {
-  return doc?.data?.liste !== 'hediye' || sahibi(doc) === me;
+  const liste = doc?.data?.liste;
+  if (listeById(liste)?.isaretsiz) return false;
+  return liste !== 'hediye' || sahibi(doc) === me;
 }
 
 /** Hediye istek listesini yalnız sahibi düzenler ve siler. */

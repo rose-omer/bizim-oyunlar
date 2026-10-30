@@ -27,6 +27,7 @@ const durum = {
   menu: null,           // eylemleri açık öğe
   duzen: null,          // düzenlenen öğe
   bekleyen: new Set(),  // işaret animasyonu süren öğeler
+  bizim: null,          // "Bizim şarkımız" belgesinin id'si (şarkılar sekmesinde)
 };
 let duzenLi = null;
 // Giriş animasyonu yalnız yeni gelen öğelere (canlı yeniden çizimde titreme olmasın).
@@ -85,12 +86,16 @@ const notGirdi = h('textarea', {
   class: 'input ls-not-girdi', name: 'not', rows: 2, maxlength: L.MAX_NOT,
   placeholder: 'Not (isteğe bağlı)', 'aria-label': 'Not', hidden: true,
 });
+const baglantiGirdi = h('input', {
+  class: 'input ls-baglanti-girdi', type: 'url', inputmode: 'url', name: 'baglanti', maxlength: L.MAX_BAGLANTI,
+  autocomplete: 'off', placeholder: 'YouTube, Spotify ya da Apple Music', 'aria-label': 'Şarkı bağlantısı (isteğe bağlı)', hidden: true,
+});
 const notBtn = h('button', { type: 'button', class: 'btn ghost small ls-not-ac', 'aria-expanded': 'false', onclick: notAcKapa },
   ikon('plus'), 'Not ekle');
-const form = h('form', { class: 'ls-ekle', onsubmit: ekle },
+const form = h('form', { class: 'ls-ekle', novalidate: true, onsubmit: ekle },
   h('div', { class: 'ls-ekle-satir' }, girdi,
     h('button', { type: 'submit', class: 'btn primary ls-ekle-btn' }, ikon('plus'), h('span', {}, 'Ekle'))),
-  notGirdi, notBtn);
+  baglantiGirdi, notGirdi, notBtn);
 
 const gizleGirdi = h('input', { type: 'checkbox', role: 'switch', class: 'anahtar-girdi' });
 gizleGirdi.checked = durum.gizle;
@@ -126,14 +131,14 @@ function ciz() {
     const on = x.id === l.id;
     b.setAttribute('aria-selected', String(on));
     b.tabIndex = on ? 0 : -1;
-    b.querySelector('.ls-sekme-sayac').textContent = `${s.yapilan}/${s.toplam}`;
-    b.setAttribute('aria-label', `${x.ad}: ${s.toplam} öğeden ${s.yapilan} tanesi tamam`);
+    b.querySelector('.ls-sekme-sayac').textContent = x.isaretsiz ? String(s.toplam) : `${s.yapilan}/${s.toplam}`;
+    b.setAttribute('aria-label', x.isaretsiz ? `${x.ad}: ${s.toplam} şarkı` : `${x.ad}: ${s.toplam} öğeden ${s.yapilan} tanesi tamam`);
   }
   panel.setAttribute('aria-labelledby', `sekme-${l.id}`);
 
   baslik.textContent = l.ad;
   const s = L.sayac(docs, l.id, { me: myId, grup });
-  ozet.textContent = s.toplam ? `${s.yapilan} / ${s.toplam} tamam` : '';
+  ozet.textContent = !s.toplam ? '' : l.isaretsiz ? `${s.toplam} şarkı` : `${s.yapilan} / ${s.toplam} tamam`;
 
   grupSeg.hidden = !hediye;
   grupBen.setAttribute('aria-pressed', String(durum.grup === 'ben'));
@@ -145,12 +150,14 @@ function ciz() {
   form.hidden = onunki;
   girdi.placeholder = l.ipucu;
   girdi.setAttribute('aria-label', `${l.ad} listesine ekle`);
+  baglantiGirdi.hidden = l.id !== 'sarki';
+  durum.bizim = l.id === 'sarki' ? L.bizimSarkimiz(docs) : null;
 
   const hepsi = L.ogeler(docs, { liste: l.id, me: myId, grup: grup || 'ben' });
   const gorunen = durum.gizle ? hepsi.filter((d) => !d.data.yapildi) : hepsi;
   const gizlenen = hepsi.length - gorunen.length;
   gizliSayi.textContent = gizlenen && durum.gizle ? `${gizlenen} tamamlanan gizli` : '';
-  arac.hidden = !hepsi.length;
+  arac.hidden = !hepsi.length || !!l.isaretsiz;
 
   // Yeniden çizimde odağı koru (canlı güncelleme klavyeyi bölmesin).
   const odak = document.activeElement?.dataset?.odak || null;
@@ -184,7 +191,16 @@ function ogeEl(d) {
   if (yapildi) ds.yapildi = '1';
   if (gizli?.ben) ds.alacak = '1';
 
-  const kutu = L.isaretleyebilir(d, myId)
+  const sarki = data.liste === 'sarki';
+  const bizim = sarki && durum.bizim === d.id;
+  if (bizim) ds.bizim = '1';
+  const kutu = sarki
+    ? h('button', {
+      type: 'button', class: 'oge-bizim', 'aria-pressed': String(bizim), dataset: { odak: `bizim:${d.id}` },
+      'aria-label': bizim ? `Bizim şarkımız: ${data.metin}. İşareti kaldır` : `Bizim şarkımız yap: ${data.metin}`,
+      onclick: () => bizimDegistir(d),
+    }, ikon('heart'))
+    : L.isaretleyebilir(d, myId)
     ? h('button', {
       type: 'button', class: 'oge-kutu', role: 'checkbox', 'aria-checked': String(yapildi),
       'aria-label': data.metin, dataset: { odak: `kutu:${d.id}` },
@@ -199,8 +215,10 @@ function ogeEl(d) {
 
   const li = h('li', { class: 'oge', dataset: ds }, kutu,
     h('div', { class: 'oge-govde' },
+      bizim ? h('p', { class: 'oge-rozet' }, 'Bizim şarkımız') : null,
       h('p', { class: 'oge-metin' }, data.metin),
       data.not ? h('p', { class: 'oge-not' }, data.not) : null,
+      sarki ? dinleBaglantisi(data.baglanti) : null,
       h('p', { class: 'oge-meta' }, meta)));
 
   if (L.duzenleyebilir(d, myId)) {
@@ -261,14 +279,17 @@ function notAcKapa(ac) {
 
 async function ekle(e) {
   e.preventDefault();
-  const r = L.yeniOge({ liste: durum.liste, metin: girdi.value, not: notGirdi.value, me: myId });
+  const r = L.yeniOge({ liste: durum.liste, metin: girdi.value, not: notGirdi.value, me: myId, baglanti: baglantiGirdi.value });
   if (r.hata) {
-    girdi.setAttribute('aria-invalid', 'true');
+    const alan = /Bağlantı/.test(r.hata) ? baglantiGirdi : girdi;
+    alan.setAttribute('aria-invalid', 'true');
     toast(r.hata);
-    girdi.focus();
+    alan.focus();
     return;
   }
   girdi.removeAttribute('aria-invalid');
+  baglantiGirdi.removeAttribute('aria-invalid');
+  baglantiGirdi.value = '';
   girdi.value = '';
   notGirdi.value = '';
   notAcKapa(false);
@@ -338,6 +359,12 @@ function duzenAc(d) {
   metin.value = d.data.metin || '';
   const not = h('textarea', { class: 'input', rows: 2, maxlength: L.MAX_NOT, 'aria-label': 'Not', placeholder: 'Not (isteğe bağlı)' });
   not.value = d.data.not || '';
+  const sarki = d.data.liste === 'sarki';
+  const baglanti = sarki ? h('input', {
+    class: 'input', type: 'url', inputmode: 'url', maxlength: L.MAX_BAGLANTI, autocomplete: 'off',
+    'aria-label': 'Şarkı bağlantısı (isteğe bağlı)', placeholder: 'YouTube, Spotify ya da Apple Music',
+  }) : null;
+  if (baglanti) baglanti.value = d.data.baglanti || '';
   const kapat = () => {
     durum.duzen = null;
     duzenLi = null;
@@ -345,20 +372,22 @@ function duzenAc(d) {
     liste.querySelector(`[data-odak="menu:${CSS.escape(d.id)}"]`)?.focus();
   };
   const f = h('form', {
-    class: 'oge-duzen',
+    class: 'oge-duzen', novalidate: true,
     onsubmit: (e) => {
       e.preventDefault();
-      const r = L.duzenle(col.get(d.id)?.data || d.data, { metin: metin.value, not: not.value });
+      const r = L.duzenle(col.get(d.id)?.data || d.data, { metin: metin.value, not: not.value, baglanti: baglanti?.value });
       if (r.hata) {
-        metin.setAttribute('aria-invalid', 'true');
+        const alan = baglanti && /Bağlantı/.test(r.hata) ? baglanti : metin;
+        alan.setAttribute('aria-invalid', 'true');
         toast(r.hata);
+        alan.focus();
         return;
       }
-      yamala(d.id, r.data, ['metin', 'not']);
+      yamala(d.id, r.data, sarki ? ['metin', 'not', 'baglanti'] : ['metin', 'not']);
       kapat();
     },
   },
-  metin, not,
+  metin, baglanti, not,
   h('div', { class: 'oge-duzen-eylem' },
     h('button', { type: 'button', class: 'btn ghost small', onclick: kapat }, 'Vazgeç'),
     h('button', { type: 'submit', class: 'btn primary small' }, 'Kaydet')));
@@ -380,6 +409,26 @@ function alacak(d) {
   yamala(d.id, r.data, ['alacak']);
   sfx('pop');
   if (r.data.alacak) toast('Sır aramızda 🤫');
+}
+
+const KAYNAK_ADI = { youtube: "YouTube'da dinle", spotify: "Spotify'da dinle", apple: "Apple Music'te dinle" };
+
+/** Şarkı bağlantısı: yalnız doğrulanmış adres; dış uygulamada (yeni sekme) açılır. */
+function dinleBaglantisi(adres) {
+  const url = L.baglantiDogrula(adres).url; // eşten gelen veri de yeniden denetlenir
+  if (!url) return null;
+  return h('a', {
+    class: 'btn small oge-dinle', href: url, target: '_blank', rel: 'noopener noreferrer',
+  }, ikon('dis'), KAYNAK_ADI[L.baglantiKaynagi(url)] || 'Dinle');
+}
+
+/** "Bizim şarkımız": tek şarkı. İşaretliye dokunmak kaldırır; başkasına dokunmak onu seçer. */
+function bizimDegistir(d) {
+  const yamalar = L.bizimYamalari(col.all(), d.id);
+  for (const [id, p] of yamalar) col.patch(id, p).catch((e) => toast(e.message));
+  const secildi = yamalar[0]?.[0] === d.id && !!yamalar[0][1].bizim;
+  sfx(secildi ? 'match' : 'tap');
+  if (secildi) toast(`Bizim şarkımız: ${d.data.metin}`);
 }
 
 // ---------- Canlı ----------

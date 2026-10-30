@@ -10,10 +10,10 @@
   padding: 16px var(--gutter) 32px;
 }
 
-/* ---------- Liste sekmeleri: beş kutucuk ---------- */
+/* ---------- Liste sekmeleri: altı kutucuk (telefonda 3×2, genişte tek sıra) ---------- */
 .ls-sekmeler {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
 }
 .ls-sekme {
@@ -252,4 +252,54 @@
   .ls { padding-top: 28px; gap: 24px; }
   .ls-sekme { min-height: 88px; font-size: 0.8125rem; }
   .ls-baslik { font-size: 1.875rem; }
+}
+
+/* ---------- Sekme ızgarası: telefonda kısa kutucuk, genişte tek sıra ---------- */
+@media (max-width: 559px) {
+  .ls-sekme { min-height: 66px; padding: 6px 2px; }
+}
+@media (min-width: 560px) {
+  .ls-sekmeler { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+}
+
+/* ---------- Şarkılarımız ---------- */
+.ls-baglanti-girdi { font-size: 1rem; }
+.oge-bizim {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  touch-action: manipulation;
+  transition: color 0.2s ease, transform 0.2s var(--ease);
+}
+.oge-bizim svg { width: 24px; height: 24px; }
+.oge-bizim svg path { fill: transparent; transition: fill 0.2s ease; }
+.oge-bizim:active { transform: scale(0.88); }
+.oge-bizim[aria-pressed='true'] { color: var(--accent); }
+.oge-bizim[aria-pressed='true'] svg path { fill: currentColor; }
+@media (hover: hover) { .oge-bizim:hover { color: var(--accent); } }
+.oge[data-bizim] {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+  background: color-mix(in srgb, var(--accent-soft) 50%, var(--surface));
+}
+.oge-rozet {
+  display: inline-flex;
+  margin-bottom: 4px;
+  padding: 1px 9px;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 0.75rem;
+  font-weight: 800;
+  line-height: 1.5;
+}
+.oge-dinle { margin-top: 8px; }
+.oge-dinle svg { width: 1.05em; height: 1.05em; }
+@media (prefers-reduced-motion: reduce) {
+  .oge-bizim, .oge-bizim svg path { transition: none; }
 }

@@ -1,24 +1,30 @@
 // Sohbet sayfası: ikinizin mesajlaşma yeri.
 // Veri: 'mesaj' (son 100, yukarı kaydırınca eskiler) ve 'okundu' (id = clientId, { son, at }).
+// Mesaj ekleri: foto (WebP/JPEG), ses ({ url, sure, tur }), yildiz ({ [clientId]: true }).
 // Canlı sinyal: room.send({ t:'yaziyor' }) en çok 2 sn'de bir.
 import { bootPage } from '../../js/core/sayfa.js';
 import { openCollection } from '../../js/core/veri.js';
 import { openProfil } from '../../js/core/profil.js';
-import { uploadPhoto, isAllowedPhotoUrl } from '../../js/core/storage.js';
+import { uploadPhoto, uploadAudio, isAllowedPhotoUrl, SES_MAX_BAYT } from '../../js/core/storage.js';
+import { fotoKucult } from '../../js/core/foto.js';
 import { readStore, writeStore } from '../../js/core/identity.js';
 import { bildir } from '../../js/core/bildirim.js';
 import { partnerGoruyor } from '../../js/core/room.js';
 import { h, toast, confirmDialog, knownPartner, fotoSrc } from '../../js/core/ui.js';
 import { sfx } from '../../js/core/sound.js';
 import { titret } from '../../js/core/mobil.js';
-import { normalizeImage } from '../../games/yapboz/image.js';
 import * as M from './mantik.js';
-import { ikon, gunSatiri, mesajSatiri, yuklemeSatiri } from './ekran.js';
+import { ikon, gunSatiri, mesajSatiri, yuklemeSatiri, sesBoya } from './ekran.js';
 import { jestleriBagla, CIFT_MS } from './jest.js';
+import { aramaPaneli } from './panel.js';
+import {
+  kayitDestegi, kayitBaslat, tekOynatici, sesVerisi, sesSuresi, sureYazisi, kaydirIptalMi, IPTAL_ESIK, SES_EN_AZ_MS,
+} from './ses.js';
 
 const EMOJILER = ['❤️', '😘', '🥰', '😍', '😂', '🤭', '😊', '🥺', '😢', '😴', '🤗', '🙈', '🔥', '✨', '🌹', '💌'];
 const ONERILER = ['Günaydın sevgilim ☀️', 'Seni özledim 🥺', 'Bu akşam ne yapıyoruz?'];
 const ESKI_ESIK = 500; // tepeye bu kadar yaklaşınca eski mesajlar yüklenir
+const TUTMA_MS = 350; // mikrofona bu kadar basılı tutunca kayıt başlar (bırakınca gönderilir)
 const kok = document.documentElement;
 const kaba = typeof matchMedia === 'function' ? matchMedia('(pointer: coarse)') : { matches: false };
 const azHareket = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : { matches: false };
@@ -76,12 +82,21 @@ const fotoInput = h('input', { type: 'file', accept: 'image/*', multiple: true, 
 const fotoBtn = h('button', { type: 'button', class: 'sh-ikon-btn', 'aria-label': 'Fotoğraf gönder' }, ikon('foto'));
 const emojiBtn = h('button', { type: 'button', class: 'sh-ikon-btn', 'aria-label': 'Emoji', 'aria-expanded': 'false', 'aria-controls': 'sh-emojiler' }, ikon('emoji'));
 const gonderBtn = h('button', { type: 'submit', class: 'sh-gonder' });
-const form = h('form', { class: 'sh-giris' }, fotoBtn, fotoInput, h('div', { class: 'sh-yazi-kap' }, ta, emojiBtn), gonderBtn);
+const sesVar = kayitDestegi();
+const micBtn = h('button', { type: 'button', class: 'sh-ikon-btn sh-mik', 'aria-label': 'Sesli mesaj kaydet', title: 'Dokun ya da basılı tut', hidden: !sesVar }, ikon('mikrofon'));
+const kayitSil = h('button', { type: 'button', class: 'sh-ikon-btn sh-kayit-sil', 'aria-label': 'Kaydı sil' }, ikon('sil'));
+const kayitSure = h('span', { class: 'sh-kayit-sure', role: 'timer', 'aria-label': 'Kayıt süresi' }, '0:00');
+const kayitIpucu = h('span', { class: 'sh-kayit-ipucu' });
+const kayitGonder = h('button', { type: 'button', class: 'sh-gonder sh-kayit-gonder', 'aria-label': 'Sesli mesajı gönder' }, ikon('gonder'));
+const kayitBar = h('div', { class: 'sh-kayit', hidden: true, role: 'group', 'aria-label': 'Sesli mesaj kaydı' },
+  kayitSil, h('span', { class: 'sh-kayit-nokta', 'aria-hidden': 'true' }), kayitSure, kayitIpucu, kayitGonder);
+const form = h('form', { class: 'sh-giris' }, fotoBtn, fotoInput, h('div', { class: 'sh-yazi-kap' }, ta, emojiBtn, micBtn), gonderBtn, kayitBar);
 const sayac = h('div', { class: 'sh-sayac', hidden: true });
 const alt = h('div', { class: 'sh-alt' }, h('div', { class: 'sh-sutun' }, ek, emojiPanel, form, sayac));
 const duyuru = h('div', { class: 'sr-only', 'aria-live': 'polite' });
 
-app.replaceChildren(h('div', { class: 'sh-liste-kutu' }, kaydirma, asagi), alt, duyuru);
+const listeKutu = h('div', { class: 'sh-liste-kutu' }, kaydirma, asagi);
+app.replaceChildren(listeKutu, alt, duyuru);
 ust.replaceChildren(h('span', { class: 'sh-donen', 'aria-hidden': 'true' }), h('span', {}, 'Mesajlar yükleniyor…'));
 
 // ---------- Veri ----------
@@ -112,6 +127,34 @@ function fotoKaynak(img, url) {
   if (!isAllowedPhotoUrl(url)) { kirik(); return; }
   img.addEventListener('error', kirik, { once: true });
   fotoSrc(url).then((s) => { if (s) img.src = s; else kirik(); });
+}
+
+// ---------- Sesli mesaj oynatma (bir anda tek ses) ----------
+const sesHazir = new Map(); // url -> blob: kendi kaydım hemen çalınır
+let calanId = null;
+const sesKutusuBul = (id) => liste.querySelector(`.sh-satir[data-id="${CSS.escape(id)}"] .sh-ses`);
+const oynatici = tekOynatici({
+  onDurum: (d) => {
+    if (calanId && calanId !== d.id) sesBoya(sesKutusuBul(calanId), null);
+    calanId = d.id;
+    if (d.id) sesBoya(sesKutusuBul(d.id), d);
+  },
+  onHata: () => toast('Bu sesli mesaj bu cihazda çalınamadı.'),
+});
+/** -> src | Promise<src|null> | null. Yalnız bizim kova / yerel depo. */
+function sesKaynak(url) {
+  if (sesHazir.has(url)) return sesHazir.get(url);
+  if (!isAllowedPhotoUrl(url)) return null;
+  return url.startsWith('local:') ? fotoSrc(url) : url; // Supabase adresi eşzamanlı: iPhone'da dokunma anında çalar
+}
+async function sesOynat(id) {
+  const s = col.get(id)?.data?.ses;
+  if (!s) return;
+  if (oynatici.durum().id === id) { oynatici.ac(id); return; }
+  let src = sesKaynak(s.url);
+  if (src && typeof src.then === 'function') src = await src;
+  if (!src) { toast('Bu sesli mesaj açılamadı.'); return; }
+  oynatici.ac(id, src, Number(s.sure) || 0);
 }
 
 // ---------- Çizim ----------
@@ -192,13 +235,17 @@ function ciz() {
     anahtarlar.add(anahtar);
     let e = elemanlar.get(anahtar);
     if (!e || e.imza !== imza) {
-      e = { el: yuklemeSatiri(y, { tekrar: fotoGonder, vazgec: yuklemeVazgec }), imza };
+      e = { el: yuklemeSatiri(y, { tekrar: (x) => (x.tur === 'ses' ? sesGonder(x) : fotoGonder(x)), vazgec: yuklemeVazgec }), imza };
       elemanlar.set(anahtar, e);
     }
     istenen.push(e.el);
   }
   for (const k of [...elemanlar.keys()]) if (!anahtarlar.has(k)) elemanlar.delete(k);
   esitle(liste, istenen);
+  if (calanId) {
+    if (col.get(calanId)) sesBoya(sesKutusuBul(calanId), oynatici.durum()); // yeniden kurulan satır
+    else oynatici.durdur(); // silindi
+  }
 
   // Yeniden kurulan balon odağı kaybetmesin.
   if (odakId && (document.activeElement === document.body || !document.activeElement)) {
@@ -244,21 +291,29 @@ function asagiGuncelle() {
   asagi.setAttribute('aria-label', yeniSayisi > 0 ? `${asagiYazi.textContent}, en alta in` : 'En alta in');
 }
 
-async function eskileriYukle() {
-  if (eskiYukleniyor || !col.hasOlder()) return;
-  eskiYukleniyor = true;
-  const alttan = kaydirma.scrollHeight - kaydirma.scrollTop;
-  ustGuncelle();
-  kaydirma.scrollTop = kaydirma.scrollHeight - alttan;
-  try {
-    await col.loadOlder(50);
-  } catch (e) {
-    hataGoster(e);
-  }
-  eskiYukleniyor = false;
-  ustGuncelle();
-  kaydirma.scrollTop = kaydirma.scrollHeight - alttan; // okunan yer kaymasın
-  altaYapisik = M.altaYakinMi(kaydirma);
+let eskiSoz = null;
+/** -> Promise<yüklenen sayısı>. Süren yükleme varsa onu bekler. */
+function eskileriYukle() {
+  if (eskiSoz) return eskiSoz;
+  if (!col.hasOlder()) return Promise.resolve(0);
+  eskiSoz = (async () => {
+    eskiYukleniyor = true;
+    const alttan = kaydirma.scrollHeight - kaydirma.scrollTop;
+    ustGuncelle();
+    kaydirma.scrollTop = kaydirma.scrollHeight - alttan;
+    let n = 0;
+    try {
+      n = await col.loadOlder(50);
+    } catch (e) {
+      hataGoster(e);
+    }
+    eskiYukleniyor = false;
+    ustGuncelle();
+    kaydirma.scrollTop = kaydirma.scrollHeight - alttan; // okunan yer kaymasın
+    altaYapisik = M.altaYakinMi(kaydirma);
+    return n;
+  })().finally(() => { eskiSoz = null; });
+  return eskiSoz;
 }
 
 async function doldur() {
@@ -331,6 +386,7 @@ function boyutla() {
   ta.style.height = `${Math.min(ta.scrollHeight, 148)}px`;
 }
 function gonderBtnGuncelle() {
+  micBtn.hidden = !sesVar || !!duzenlenen || !!ta.value.trim();
   let tur = 'gonder';
   if (duzenlenen) tur = 'tamam';
   else if (!ta.value.trim()) tur = 'kalp';
@@ -522,8 +578,7 @@ async function fotoGonder(y) {
   ciz();
   try {
     if (!y.blob) {
-      const n = await normalizeImage(y.dosya);
-      try { n.image?.close?.(); } catch { /* tuval */ }
+      const n = await fotoKucult(y.dosya); // WebP (destek varsa) ya da JPEG
       y.blob = n.blob;
       y.en = n.width;
       y.boy = n.height;
@@ -552,6 +607,200 @@ async function fotoGonder(y) {
     ciz();
   }
 }
+
+// ---------- Sesli mesaj: kayıt ve gönderim ----------
+// Dokun: kayıt başlar, şeritteki Gönder / Sil ile biter. Basılı tut: bırakınca gönderilir, sola kaydırınca silinir.
+let kayit = null;   // { mod: 'dokun'|'tut', k, hazir, birakildi, doldu }
+let tutma = null;   // { id, x, zaman, tut }
+let tutmaBitti = 0;
+let kayitSaat = 0;
+
+function kayitArayuz(acik) {
+  form.classList.toggle('kayitta', acik);
+  kayitBar.hidden = !acik;
+  if (!acik) {
+    kayitBar.style.removeProperty('--kaydir');
+    kayitBar.classList.remove('tut', 'doldu', 'iptal-yakin', 'hazir');
+  }
+}
+function kayitYaz() {
+  if (!kayit) return;
+  kayitSure.textContent = sureYazisi(kayit.k ? kayit.k.gecen() : 0);
+  const ipucu = !kayit.hazir ? 'Mikrofon açılıyor…'
+    : kayit.doldu ? 'Süre doldu. Gönderebilirsin.'
+      : kayit.mod === 'tut' ? 'İptal için sola kaydır' : 'Kaydediliyor';
+  if (kayitIpucu.dataset.yazi !== ipucu) {
+    kayitIpucu.dataset.yazi = ipucu;
+    kayitIpucu.replaceChildren(kayit.mod === 'tut' && kayit.hazir && !kayit.doldu ? ikon('sol') : '', ipucu);
+  }
+}
+
+async function kayitBasla(mod) {
+  if (kayit || !sesVar) return;
+  oynatici.durdur();
+  emojiPanel.hidden = true;
+  emojiBtn.setAttribute('aria-expanded', 'false');
+  const bu = { mod, k: null, hazir: false, birakildi: false, doldu: false };
+  kayit = bu;
+  kayitArayuz(true);
+  kayitBar.classList.toggle('tut', mod === 'tut');
+  kayitYaz();
+  if (mod === 'dokun') kayitGonder.focus({ preventScroll: true });
+  let k;
+  try {
+    k = await kayitBaslat({
+      onSinir: (neden) => {
+        if (kayit !== bu) return;
+        bu.doldu = true;
+        kayitBar.classList.add('doldu');
+        kayitYaz();
+        titret(20);
+        duyuru.textContent = neden === 'sure' ? '2 dakika doldu. Gönderebilir ya da silebilirsin.' : 'Kayıt sınıra ulaştı. Gönderebilir ya da silebilirsin.';
+      },
+    });
+  } catch (e) {
+    if (kayit === bu) { kayit = null; kayitArayuz(false); }
+    toast(e?.message || 'Mikrofon açılamadı.');
+    return;
+  }
+  if (kayit !== bu) { k.iptal(); return; } // açılırken silindi
+  bu.k = k;
+  if (mod === 'tut' && bu.birakildi) { // izin sorulurken parmak kalktı
+    k.iptal();
+    kayit = null;
+    kayitArayuz(false);
+    toast('Mikrofon hazır. Kaydetmek için dokun ya da basılı tut.');
+    return;
+  }
+  bu.hazir = true;
+  kayitBar.classList.add('hazir');
+  titret(12);
+  kayitYaz();
+  duyuru.textContent = mod === 'tut' ? 'Kayıt başladı. Bırakınca gönderilir.' : 'Kayıt başladı.';
+  clearInterval(kayitSaat);
+  kayitSaat = setInterval(kayitYaz, 250);
+}
+
+async function kayitBitir(gonder) {
+  const bu = kayit;
+  if (!bu) return;
+  kayit = null;
+  clearInterval(kayitSaat);
+  const odakBardaydi = kayitBar.contains(document.activeElement);
+  kayitArayuz(false);
+  if (odakBardaydi) (micBtn.hidden ? ta : micBtn).focus({ preventScroll: true });
+  if (!bu.k) return; // mikrofon hâlâ açılıyor: kayitBasla kapatır
+  if (!gonder) {
+    bu.k.iptal();
+    duyuru.textContent = 'Kayıt silindi.';
+    return;
+  }
+  const { blob, ms } = await bu.k.bitir();
+  if (ms < SES_EN_AZ_MS || !blob.size) {
+    toast(bu.mod === 'tut' ? 'Çok kısa oldu. Basılı tutup konuş.' : 'Çok kısa oldu.');
+    return;
+  }
+  if (blob.size > SES_MAX_BAYT) { toast('Kayıt çok büyük oldu (en çok 2 MB).'); return; }
+  sesGonder({ id: `s${++yukSayac}`, tur: 'ses', blob, ms, sure: sesSuresi(ms), onizleme: URL.createObjectURL(blob) });
+}
+
+async function sesGonder(y) {
+  if (!yuklemeler.includes(y)) {
+    y.yanit = yanitlanan && col.get(yanitlanan) ? yanitlanan : null;
+    if (yanitlanan) ekKapat();
+    yuklemeler.push(y);
+  }
+  y.durum = 'yukleniyor';
+  y.hata = null;
+  zorlaAlta = true;
+  ciz();
+  try {
+    const url = await uploadAudio(y.blob, roomId);
+    sesHazir.set(url, y.onizleme);
+    const data = { ses: sesVerisi({ url, ms: y.ms, mime: y.blob.type }), kimden: benId };
+    if (y.yanit && col.get(y.yanit)) data.yanit = y.yanit;
+    yuklemeler = yuklemeler.filter((x) => x !== y);
+    zorlaAlta = true;
+    let id;
+    try {
+      id = await col.put(data);
+    } catch (e) {
+      toast(e.message);
+      return;
+    }
+    gonderildiBildir(id, data);
+  } catch (e) {
+    if (!yuklemeler.includes(y)) return;
+    y.durum = 'hata';
+    y.hata = /^(Ses|Sesi|Bu ses)/.test(e?.message || '') ? e.message : 'Gönderilemedi. Bağlantını kontrol et.';
+    ciz();
+  }
+}
+
+const tutmaOlaylari = [['pointermove', tutmaHareket], ['pointerup', tutmaBirak], ['pointercancel', tutmaKesildi]];
+function tutmaTemizle() {
+  clearTimeout(tutma?.zaman);
+  tutma = null;
+  for (const [t, fn] of tutmaOlaylari) window.removeEventListener(t, fn, true);
+}
+function tutmaHareket(e) {
+  if (!tutma || e.pointerId !== tutma.id || !tutma.tut || !kayit) return;
+  const dx = Math.min(0, e.clientX - tutma.x);
+  kayitBar.style.setProperty('--kaydir', `${Math.round(dx)}px`);
+  kayitBar.classList.toggle('iptal-yakin', dx < -IPTAL_ESIK * 0.6);
+  if (kaydirIptalMi(dx)) {
+    tutmaBitti = Date.now();
+    tutmaTemizle();
+    titret(15);
+    kayitBitir(false);
+  }
+}
+function tutmaBirak(e) {
+  if (!tutma || e.pointerId !== tutma.id) return;
+  const t = tutma;
+  tutmaTemizle();
+  if (!t.tut) return; // kısa dokunma: 'click' dokun kipini başlatır
+  tutmaBitti = Date.now();
+  if (!kayit) return;
+  if (!kayit.hazir) { kayit.birakildi = true; return; }
+  kayitBitir(true);
+}
+function tutmaKesildi(e) {
+  // Tarayıcı jesti aldı (kaydırma vb.): kayıt sürer, dokun kipine geçer.
+  if (!tutma || e.pointerId !== tutma.id) return;
+  const t = tutma;
+  tutmaTemizle();
+  if (!t.tut || !kayit) return;
+  tutmaBitti = Date.now();
+  kayit.mod = 'dokun';
+  kayitBar.classList.remove('tut', 'iptal-yakin');
+  kayitBar.style.removeProperty('--kaydir');
+  kayitYaz();
+}
+
+micBtn.addEventListener('contextmenu', (e) => e.preventDefault());
+micBtn.addEventListener('pointerdown', (e) => {
+  if (!sesVar || kayit || tutma || (e.pointerType === 'mouse' && e.button !== 0)) return;
+  e.preventDefault(); // klavye açıksa kapanmasın, metin seçilmesin
+  tutma = { id: e.pointerId, x: e.clientX, tut: false };
+  tutma.zaman = setTimeout(() => {
+    if (!tutma) return;
+    tutma.tut = true;
+    kayitBasla('tut');
+  }, TUTMA_MS);
+  for (const [t, fn] of tutmaOlaylari) window.addEventListener(t, fn, true);
+});
+micBtn.addEventListener('click', () => {
+  if (Date.now() - tutmaBitti < 600 || kayit) return;
+  kayitBasla('dokun');
+});
+kayitSil.addEventListener('click', () => kayitBitir(false));
+kayitGonder.addEventListener('click', () => kayitBitir(true));
+for (const b of [kayitSil, kayitGonder]) b.addEventListener('mousedown', (e) => e.preventDefault());
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && kayit) { e.preventDefault(); kayitBitir(false); }
+});
+window.addEventListener('pagehide', () => { if (kayit) kayitBitir(false); });
 
 function yuklemeVazgec(y) {
   yuklemeler = yuklemeler.filter((x) => x !== y);
@@ -607,6 +856,37 @@ async function kopyala(s) {
   toast(ok ? 'Kopyalandı' : 'Kopyalanamadı');
 }
 
+async function yildizla(id) {
+  const d = col.get(id);
+  if (!d) return;
+  const ekle = d.data.yildiz?.[benId] !== true;
+  try {
+    await col.patch(id, M.yildizYamasi(d, benId)); // yalnız kendi yıldızım
+  } catch (e) {
+    toast(e.message);
+    return;
+  }
+  if (ekle) toast('Yıldızlandı', { action: { label: 'Yıldızlılar', onClick: () => panel.ac('yildiz') } });
+  else toast('Yıldız kaldırıldı');
+}
+
+/** Mesaja kaydırır ve kısa süre vurgular. */
+function mesajaGit(id, { odak = false } = {}) {
+  const hedef = liste.querySelector(`.sh-satir[data-id="${CSS.escape(id)}"]`);
+  if (!hedef) { toast('Bu mesaj artık yok.'); return; }
+  altaYapisik = false; // yeniden çizim / boyut değişimi alta atmasın
+  // Uzaksa hedefin yakınına atla, kalanı yumuşak kaydır.
+  const kr = kaydirma.getBoundingClientRect();
+  const fark = hedef.getBoundingClientRect().top - kr.top - kr.height / 2;
+  if (!azHareket.matches && Math.abs(fark) > kr.height * 1.5) kaydirma.scrollTop += fark - Math.sign(fark) * kr.height;
+  hedef.scrollIntoView({ block: 'center', behavior: azHareket.matches ? 'auto' : 'smooth' });
+  hedef.classList.remove('parla');
+  void hedef.offsetWidth;
+  hedef.classList.add('parla');
+  setTimeout(() => hedef.classList.remove('parla'), 1400);
+  if (odak) hedef.querySelector('.sh-balon')?.focus({ preventScroll: true });
+}
+
 async function silSor(id) {
   const ok = await confirmDialog('Bu mesaj ikiniz için de silinsin mi?', { ok: 'Sil', cancel: 'Vazgeç' });
   if (!ok) return;
@@ -626,6 +906,7 @@ function menuAc(satir, { basili = false } = {}) {
   const benim = M.gonderen(d) === benId;
   const metin = typeof d.data.metin === 'string' ? d.data.metin : '';
   const benimTepki = d.data.tepki?.[benId] || null;
+  const benimYildiz = d.data.yildiz?.[benId] === true;
   titret(10);
   secili = id;
   satir.classList.add('secili');
@@ -646,6 +927,7 @@ function menuAc(satir, { basili = false } = {}) {
       }, e))),
     h('div', { class: 'sh-menu-eylemler' },
       eylem('yanitla', 'Yanıtla', () => yanitBasla(id)),
+      eylem(benimYildiz ? 'yildizDolu' : 'yildiz', benimYildiz ? 'Yıldızı kaldır' : 'Yıldızla', () => yildizla(id)),
       metin ? eylem('kopyala', 'Kopyala', () => kopyala(metin)) : null,
       benim && metin ? eylem('duzenle', 'Düzenle', () => duzenlemeBasla(id)) : null,
       benim ? eylem('sil', 'Sil', () => silSor(id), 'tehlike') : null)));
@@ -679,16 +961,11 @@ let sonCift = 0;
 liste.addEventListener('click', (e) => {
   const alinti = e.target.closest('.sh-alinti[data-hedef]');
   if (alinti) {
-    const hedef = liste.querySelector(`.sh-satir[data-id="${CSS.escape(alinti.dataset.hedef)}"]`);
-    if (hedef) {
-      hedef.scrollIntoView({ block: 'center', behavior: azHareket.matches ? 'auto' : 'smooth' });
-      hedef.classList.remove('parla');
-      void hedef.offsetWidth;
-      hedef.classList.add('parla');
-      setTimeout(() => hedef.classList.remove('parla'), 1400);
-    }
+    if (liste.querySelector(`.sh-satir[data-id="${CSS.escape(alinti.dataset.hedef)}"]`)) mesajaGit(alinti.dataset.hedef);
     return;
   }
+  const oynat = e.target.closest('.sh-ses:not(.yer) .sh-ses-oynat');
+  if (oynat) { sesOynat(oynat.closest('.sh-satir').dataset.id); return; }
   const pil = e.target.closest('.sh-tepkiler');
   if (pil) { menuAc(pil.closest('.sh-satir')); return; }
   const foto = e.target.closest('.sh-foto:not(.yer)');
@@ -708,6 +985,11 @@ liste.addEventListener('keydown', (e) => {
   }
 });
 
+// Oynat düğmesi jest sayılmaz: hızlı oynat/duraklat çift dokunma (❤️) olmasın.
+liste.addEventListener('pointerdown', (e) => {
+  if (e.target.closest?.('.sh-ses-oynat')) e.stopPropagation();
+}, true);
+
 jestleriBagla(liste, {
   uzunBas: (satir, secenek) => menuAc(satir, secenek),
   ciftDokun: (satir, x, y) => {
@@ -723,10 +1005,41 @@ jestleriBagla(liste, {
   okIkonu: () => ikon('yanitla'),
 });
 
+// ---------- Arama ve yıldızlılar ----------
+const araBtn = h('button', {
+  type: 'button', class: 'icon-btn sh-ara-btn', 'aria-label': 'Sohbette ara', title: 'Ara ve yıldızlılar',
+  'aria-controls': 'sh-ara', 'aria-expanded': 'false',
+}, ikon('ara'));
+const panel = aramaPaneli({
+  col, benId, ad, partnerAd,
+  mesajaGit: (id) => mesajaGit(id, { odak: true }),
+  eskiYukle: eskileriYukle,
+  arkaPlan: [listeKutu, alt],
+  donus: araBtn,
+});
+app.append(panel.el);
+const araclar = document.querySelector('#shell .shell-tools');
+if (araclar) araclar.insertBefore(araBtn, araclar.lastElementChild);
+araBtn.addEventListener('click', () => (panel.acikMi() ? panel.kapat() : panel.ac('ara')));
+// Telefonda arama klavyesi açıkken alt sekme çubuğu yer kaplamasın (mesaj alanındaki gibi).
+panel.el.addEventListener('focusin', (e) => {
+  if (kaba.matches && e.target.matches?.('.sh-ara-girdi')) document.body.classList.add('sh-klavye');
+});
+panel.el.addEventListener('focusout', (e) => {
+  if (e.target.matches?.('.sh-ara-girdi')) document.body.classList.remove('sh-klavye');
+});
+let panelKare = 0;
+const panelTazele = () => {
+  if (!panel.acikMi() || panelKare) return;
+  panelKare = requestAnimationFrame(() => { panelKare = 0; panel.guncelle(); });
+};
+
 // ---------- Başlat ----------
 col.on('change', ciz);
+col.on('change', panelTazele);
 okCol.on('change', ciz);
 profil?.on('change', ciz);
+profil?.on('change', panelTazele);
 
 ta.value = readStore('local', taslakAnahtar) || '';
 girisDegisti();

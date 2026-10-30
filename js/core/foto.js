@@ -1,10 +1,12 @@
 // Fotoğraf seç, küçült, yükle (SOZLESME §20). Küçültme games/yapboz/image.js'tedir (EXIF yönü, ≤ 2000 px, JPEG);
-// yükleme storage.js'tedir (Supabase 'photos' kovası ya da yerel modda IndexedDB). Burada yeni küçültme kodu yok.
+// tarayıcı WebP yazabiliyorsa sonuç burada WebP'ye (kalite 0.82) çevrilir, yazamıyorsa (Safari) JPEG kalır.
+// Yükleme storage.js'tedir (Supabase 'photos' kovası ya da yerel modda IndexedDB); yol uzantısı türe göre (.webp / .jpg).
 // Node'da içe aktarılabilir: tarayıcı nesnelerine yalnız fonksiyon içinde erişilir.
-import { normalizeImage, decodeErrorText, isHeic, PhotoError } from '../../games/yapboz/image.js';
+import { normalizeImage, decodeErrorText, isHeic, PhotoError, MAX_BYTES } from '../../games/yapboz/image.js';
 import { uploadPhoto, loadPhoto, isAllowedPhotoUrl } from './storage.js';
 
 export const EN_FAZLA = 10;
+export const WEBP_KALITE = 0.82;
 
 // ---------- Saf yardımcılar (test edilir) ----------
 
@@ -36,6 +38,68 @@ export function hataMetni(err, file) {
   return 'Fotoğraf yüklenemedi. Bağlantını kontrol edip tekrar dene.';
 }
 
+/** Kodlanan blob gerçekten WebP mi ve sınır içinde mi? WebP yazamayan tarayıcı sessizce PNG döner. */
+export function webpUygunMu(blob, sinir = MAX_BYTES) {
+  return !!blob && blob.type === 'image/webp' && blob.size > 0 && blob.size <= sinir;
+}
+
+// ---------- Küçültme (WebP / JPEG) ----------
+
+function tuval(en, boy) {
+  if (typeof OffscreenCanvas === 'function') {
+    try {
+      const c = new OffscreenCanvas(en, boy);
+      if (typeof c.convertToBlob === 'function' && c.getContext('2d')) return c;
+    } catch { /* DOM tuvaline geç */ }
+  }
+  const c = document.createElement('canvas');
+  c.width = en;
+  c.height = boy;
+  return c;
+}
+
+function kodla(c, type, quality) {
+  if (typeof c.convertToBlob === 'function') return c.convertToBlob({ type, quality });
+  return new Promise((resolve) => c.toBlob(resolve, type, quality));
+}
+
+let webpSoz = null;
+/** Tarayıcı tuvalden WebP yazabiliyor mu? 1×1 denemeyle bir kez bakılır. -> Promise<boolean> */
+export function webpDestekli() {
+  webpSoz ||= (async () => {
+    try {
+      const c = tuval(1, 1);
+      c.getContext('2d').fillRect(0, 0, 1, 1);
+      return (await kodla(c, 'image/webp', WEBP_KALITE))?.type === 'image/webp';
+    } catch {
+      return false;
+    }
+  })();
+  return webpSoz;
+}
+
+/**
+ * Dosyayı küçültür (EXIF yönü, ≤ 2000 px). -> { blob, width, height }; blob WebP (destek varsa) ya da JPEG.
+ * Hata: PhotoError (Türkçe metin).
+ */
+export async function fotoKucult(file) {
+  const n = await normalizeImage(file);
+  let blob = n.blob;
+  try {
+    if (n.image && await webpDestekli()) {
+      const c = tuval(n.width, n.height);
+      c.getContext('2d').drawImage(n.image, 0, 0, n.width, n.height);
+      const webp = await kodla(c, 'image/webp', WEBP_KALITE);
+      if (webpUygunMu(webp)) blob = webp;
+    }
+  } catch {
+    // WebP olmadı: JPEG kalır.
+  } finally {
+    try { n.image?.close?.(); } catch { /* tuval */ }
+  }
+  return { blob, width: n.width, height: n.height };
+}
+
 // ---------- Yükleme ----------
 
 /**
@@ -59,8 +123,7 @@ export async function fotoYukle(roomId, files, { enFazla = EN_FAZLA, onIlerleme,
   for (let i = 0; i < secilen.length; i++) {
     const file = secilen[i];
     try {
-      const { blob, image } = await normalizeImage(file);
-      image?.close?.(); // ImageBitmap belleğini bırak; burada yalnız JPEG gerekir
+      const { blob } = await fotoKucult(file);
       urls.push(await uploadPhoto(blob, roomId));
     } catch (e) {
       const metin = hataMetni(e, file);

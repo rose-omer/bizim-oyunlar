@@ -90,23 +90,24 @@ grant execute on function public.room_stats(text) to anon, authenticated;
 grant execute on function public.ping() to anon, authenticated;
 
 -- ---------------------------------------------------------------------------
--- 3. Fotoğraf kovası
+-- 3. Fotoğraf kovası (fotoğraf + sesli mesaj)
 -- ---------------------------------------------------------------------------
+-- Fotoğraf: JPEG ya da WebP. Sesli mesaj: audio/webm (Chrome/Android), audio/mp4 (iPhone Safari); en çok 2 MB (istemci denetler).
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-values ('photos', 'photos', true, 5242880, array['image/jpeg', 'image/webp', 'image/png'])
+values ('photos', 'photos', true, 5242880, array['image/jpeg', 'image/webp', 'image/png', 'audio/webm', 'audio/mp4'])
 on conflict (id) do update
   set public = excluded.public,
       file_size_limit = excluded.file_size_limit,
       allowed_mime_types = excluded.allowed_mime_types;
 
 -- Yalnız yükleme. SELECT politikası yok: herkese açık URL çalışır, listeleme çalışmaz.
--- Yol js/core/storage.js uploadPhoto ile aynı: `<oda>/<uuid>.jpg` (odasız yükleme yok).
+-- Yol js/core/storage.js uploadPhoto / uploadAudio ile aynı: `<oda>/<uuid>.jpg|webp|webm|m4a` (odasız yükleme yok).
 drop policy if exists "photos_insert_anon" on storage.objects;
 create policy "photos_insert_anon"
   on storage.objects
   for insert
   to anon, authenticated
-  with check (bucket_id = 'photos' and name ~ '^[a-z2-9]{10}/[0-9a-f-]{36}\.jpg$');
+  with check (bucket_id = 'photos' and name ~ '^[a-z2-9]{10}/[0-9a-f-]{36}\.(jpg|webp|webm|m4a)$');
 
 -- ---------------------------------------------------------------------------
 -- 4. Çift verisi (js/core/veri.js): oda başına belgeler

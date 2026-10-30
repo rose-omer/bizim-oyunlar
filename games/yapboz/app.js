@@ -717,7 +717,7 @@ async function main() {
           icon,
           waitText,
           retry,
-          el('button', { type: 'button', class: 'btn ghost', text: 'Odamıza dön', onclick: goLobby }))),
+          el('button', { type: 'button', class: 'btn ghost', text: 'Ana sayfaya dön', onclick: goLobby }))),
     );
     updateWaitText();
   }
@@ -786,7 +786,7 @@ async function main() {
           el('div', { class: 'yb-heart', 'aria-hidden': 'true', html: ICON.heart }),
           el('p', { class: 'subtitle', role: 'status', text: 'Sevgilin dönünce devam edeceksiniz' }),
           el('p', { class: 'muted', text: 'Parçalar yerinde bekliyor.' }),
-          el('button', { type: 'button', class: 'btn ghost', text: 'Odamıza dön', onclick: goLobby })));
+          el('button', { type: 'button', class: 'btn ghost', text: 'Ana sayfaya dön', onclick: goLobby })));
 
     const root = el('div', { class: 'yb-game' }, table, hud, veil);
     return { root, table, canvas, hud, bar, fill, pct, time, veil };
@@ -885,7 +885,7 @@ async function main() {
       });
     }
     buttons.push({ label: 'Resme bak', onClick: dismissCelebrate });
-    buttons.push({ label: 'Odamıza dön', primary: !isHost, onClick: goLobby });
+    buttons.push({ label: 'Ana sayfaya dön', primary: !isHost, onClick: goLobby });
     dismissCelebrate();
     closeCelebrate = ui.celebrate({ title: 'Tamamlandı!', lines, buttons });
   }

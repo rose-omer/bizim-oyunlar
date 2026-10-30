@@ -415,3 +415,18 @@ await fotoSecVeYukle(roomId, { coklu }) // -> [url]; games/yapboz/image.js norma
 - Telefon öncelikli (390 px). Dokunma alanı ≥ 44 px. Koyu tema çalışmalı. Hareketler kısa ve `prefers-reduced-motion`'a uyar.
 - Boş durumlar sevimli ve yol gösterici ("Henüz anı yok. İlkini ekleyelim mi?").
 - Metinler Türkçe, sıcak, kısa. Emoji ölçülü. Açık saçık içerik yok.
+
+## 23. v2 birleştirme notları (ajan raporlarından)
+- `author` = **son yazan**. İlk yazanı gösterecek sayfa, veriye kendi alanını koyar:
+  `mesaj.kimden`, `ani.ekleyen`, `mektup.kimden`, `liste.ekleyen` (clientId).
+- Ek alanlar: `mesaj.en`, `mesaj.boy` (fotoğraf boyutu); `liste.alacak` (hediye "ben alacağım", sahibine gizli); `kisi.renk` = `#RRGGBB`.
+- `oyunkayit.data` = oyunun tam durumu `{ v, kind, seq, at, players, ... }`; `seq` büyük olan yenidir; oyun bitince belge silinir.
+- gunler.js ekleri: `monthGrid(y, m)`, `milestonesBetween(baslangic, from, to, { monthly })`.
+  `supabase/functions/_shared/gunler.js` bunun birebir kopyasıdır (test eşitliği denetler).
+- `sayfalar/gunun-sorusu/kart.js`: `mountGununSorusuKart(el, { room, partnerAd? })` → kapatma fonksiyonu.
+- kilit.js ekleri: `pinDogruMu(pin)`, `cihazdanUnut(roomId)`. mobil.js eki: `mobilBaslat()` (startAppServices çağırır).
+- ui.js ekleri: `avatarEl`, `genitive`, `fotoSrc`, `removeTabBar`, `startAppServices` (tema, kilit, PWA, mobil, bildirim tazeleme).
+- `js/core/erken.js`: her sayfanın `<head>`'inde klasik betik. Temayı ilk boyamadan uygular; PIN varsa `html.kilit-bekle` ile içeriği kilit kararına dek gizler.
+- Her HTML `<head>`'i: theme-color, favicon, manifest, apple-touch-icon, apple/mobile meta, erken.js.
+- `games/hafiza/sync.js`, `rng.js`, `ekran.js` artık ortak (Çiz, Dört Taş, Amiral, Dama, Tavla). API'leri sabit kalmalı.
+- Yerel duman testi: `iki.mjs` service worker'ı varsayılan engeller; PWA testi için `{ sw: true }`.

@@ -1,0 +1,5 @@
+@import url('../_soru/soru.css');
+@import url('./secim.css');
+
+/* Kim Daha Çok?: ortak stil yeterli; burada yalnız oyuna özel ince ayar. */
+.soru-reveal .soru-face-value { font-family: var(--font-display); font-size: 1.25rem; font-weight: 600; }

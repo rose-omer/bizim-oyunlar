@@ -1,0 +1,7 @@
+node_modules/
+# Yerel Android projesi CI'da üretilir (npx cap add android); depoda tutulmaz.
+android/
+ios/
+*.p12
+*.jks
+*.keystore

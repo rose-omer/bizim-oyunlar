@@ -1,0 +1,301 @@
+/* Dört Taş + XOX. Renkler yalnız base.css değişkenlerinden.
+   Oyuncu 0: gül (kalpli taş, X). Oyuncu 1: mürekkep/inci (halkalı taş, O) — iki temada da ayrışır. */
+
+.dt {
+  --c0: var(--accent);
+  --c1: var(--text);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 10px 12px calc(10px + var(--safe-bottom, 0px));
+  overflow: hidden;
+}
+.dt .p0 { --c: var(--c0); }
+.dt .p1 { --c: var(--c1); }
+
+.dt-head { display: flex; justify-content: center; width: 100%; }
+.dt-mod > button { min-width: 112px; }
+
+/* Skor: ben solda, sevgilim sağda */
+.dt-score {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  max-width: 440px;
+}
+.dt-plate {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 48px;
+  padding: 6px 12px 6px 8px;
+  border: 1.5px solid transparent;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  transition: background-color .25s var(--ease), border-color .25s var(--ease), box-shadow .25s var(--ease);
+}
+.dt-score .dt-plate:last-child { flex-direction: row-reverse; padding: 6px 8px 6px 12px; }
+.dt-plate.is-turn {
+  background: var(--surface);
+  border-color: color-mix(in srgb, var(--c) 42%, var(--line));
+  box-shadow: var(--shadow);
+}
+.dt-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 750;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.dt-score .dt-plate:last-child .dt-name { text-align: right; }
+.dt-num {
+  font-family: var(--font-display);
+  font-variation-settings: 'SOFT' 100;
+  font-size: 1.5rem;
+  font-weight: 650;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.dt-draws { color: var(--muted); font-size: .8125rem; font-weight: 700; white-space: nowrap; text-align: center; }
+
+.dt-swatch { flex: none; width: 26px; height: 26px; display: grid; place-items: center; }
+.dt-swatch.dort {
+  border-radius: 50%;
+  background: var(--c);
+  box-shadow: inset 0 0 0 3px color-mix(in srgb, var(--c) 78%, var(--bg)), var(--shadow-sm);
+}
+.dt-swatch.xox .dt-mark { width: 26px; height: 26px; }
+
+.dt-status {
+  min-height: 1.6em;
+  font-family: var(--font-display);
+  font-variation-settings: 'SOFT' 100;
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1.3;
+  text-align: center;
+  color: var(--muted);
+}
+.dt-status[data-state='mine'],
+.dt-status[data-state='win'] { color: var(--accent-strong); }
+.dt-status[data-state='draw'] { color: var(--text); }
+.dt-status.is-nudge { animation: dt-nudge .32s ease; }
+
+.dt-stage {
+  flex: none;
+  width: 100%;
+  display: grid;
+  place-items: center;
+}
+.dt-foot { display: flex; justify-content: center; min-height: 48px; align-items: center; }
+
+/* ---------- Dört Taş tahtası ---------- */
+.dt-board.dort {
+  --cell: 44px;
+  --gap: 6px;
+  --pad: 10px;
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(var(--cols), var(--cell));
+  gap: var(--gap);
+  padding: var(--pad);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: calc(var(--radius-lg) + 2px);
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+}
+.dt-col {
+  position: relative;
+  display: grid;
+  grid-template-rows: repeat(var(--rows), var(--cell));
+  gap: var(--gap);
+  margin: calc(var(--gap) / -2);
+  padding: calc(var(--gap) / 2);
+  border: 0;
+  border-radius: calc(var(--cell) / 2 + var(--gap) / 2);
+  background: transparent;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color .15s ease;
+}
+.dt-col:focus-visible { outline: 3px solid var(--focus); outline-offset: 0; }
+.dt-col:disabled { cursor: default; }
+.dt-board.is-locked .dt-col { cursor: default; }
+@media (hover: hover) {
+  .dt-board:not(.is-locked) .dt-col:not(:disabled):hover { background: color-mix(in srgb, var(--accent-soft) 70%, transparent); }
+}
+.dt-hole {
+  position: relative;
+  width: var(--cell);
+  height: var(--cell);
+  border-radius: 50%;
+  background: var(--bg);
+  box-shadow: inset 0 2px 5px color-mix(in srgb, var(--text) 16%, transparent);
+}
+.dt-ghost {
+  position: absolute;
+  inset: 8%;
+  border-radius: 50%;
+  border: 2px dashed color-mix(in srgb, var(--c0) 60%, transparent);
+  opacity: 0;
+  transition: opacity .15s ease;
+}
+.dt-board[data-turn='1'] .dt-ghost { border-color: color-mix(in srgb, var(--c1) 50%, transparent); }
+@media (hover: hover) {
+  .dt-board:not(.is-locked) .dt-col:hover .is-next .dt-ghost { opacity: 1; }
+}
+.dt-board:not(.is-locked) .dt-col:focus-visible .is-next .dt-ghost { opacity: 1; }
+
+.dt-disc {
+  position: absolute;
+  inset: 4%;
+  border-radius: 50%;
+  background: var(--c);
+  box-shadow:
+    inset 0 0 0 calc(var(--cell) * .085) color-mix(in srgb, var(--c) 80%, var(--bg)),
+    var(--shadow-sm);
+  transition: opacity .35s ease, box-shadow .3s ease;
+  will-change: transform;
+}
+/* Gül taşın ortasında kalp; inci taşın ortasında küçük halka */
+.dt-disc::after {
+  content: '';
+  position: absolute;
+  inset: 30%;
+  border-radius: 50%;
+}
+.dt-disc.p0::after {
+  inset: 29%;
+  border-radius: 0;
+  background: color-mix(in srgb, var(--c) 62%, var(--accent-ink));
+  -webkit-mask: var(--dt-heart) center / contain no-repeat;
+  mask: var(--dt-heart) center / contain no-repeat;
+}
+.dt-disc.p1::after {
+  inset: 34%;
+  border: max(2px, calc(var(--cell) * .05)) solid color-mix(in srgb, var(--c) 72%, var(--bg));
+}
+.dt {
+  --dt-heart: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 20.7c-.27 0-.53-.09-.75-.27C6.6 16.6 3 13.5 3 9.45 3 6.68 5.13 4.5 7.8 4.5c1.68 0 3.2.83 4.2 2.15 1-1.32 2.52-2.15 4.2-2.15 2.67 0 4.8 2.18 4.8 4.95 0 4.05-3.6 7.15-8.25 10.98-.22.18-.48.27-.75.27z'/%3E%3C/svg%3E");
+}
+.dt-hole.is-last .dt-disc { box-shadow: inset 0 0 0 calc(var(--cell) * .085) color-mix(in srgb, var(--c) 80%, var(--bg)), 0 0 0 2px var(--surface), 0 0 0 4px color-mix(in srgb, var(--c) 45%, transparent); }
+.dt-board.is-over .dt-hole:not(.is-win) .dt-disc { opacity: .32; }
+.dt-hole.is-win .dt-disc {
+  box-shadow: inset 0 0 0 calc(var(--cell) * .085) color-mix(in srgb, var(--c) 80%, var(--bg)), 0 0 0 3px var(--surface), 0 0 0 6px var(--c);
+  animation: dt-glow 1.6s var(--ease) .1s 2;
+}
+
+/* ---------- XOX tahtası ---------- */
+.dt-board.xox {
+  --cell: 100px;
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, var(--cell));
+  grid-template-rows: repeat(3, var(--cell));
+  gap: 4px;
+  padding: 0;
+  border-radius: var(--radius-lg);
+  background: var(--line);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+.dt-cell {
+  position: relative;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  background: var(--surface);
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color .2s ease;
+}
+.dt-cell:disabled { cursor: default; }
+.dt-board.is-locked .dt-cell { cursor: default; }
+.dt-cell:focus-visible { outline: 3px solid var(--focus); outline-offset: -5px; z-index: 1; }
+@media (hover: hover) {
+  .dt-board:not(.is-locked) .dt-cell:not(:disabled):hover { background: var(--accent-soft); }
+}
+.dt-cell.is-win { background: color-mix(in srgb, var(--c0) 14%, var(--surface)); }
+.dt-board.is-over .dt-cell:not(.is-win) .dt-mark { opacity: .35; }
+.dt-cell .dt-mark { width: 74%; height: 74%; transition: opacity .35s ease; }
+
+.dt-mark { display: block; overflow: visible; }
+.dt-mark path,
+.dt-mark circle {
+  fill: none;
+  stroke: var(--c, currentColor);
+  stroke-width: 11;
+  stroke-linecap: round;
+}
+.dt-mark.x { --c: var(--c0); }
+.dt-mark.o { --c: var(--c1); }
+.dt-mark.is-new path,
+.dt-mark.is-new circle {
+  stroke-dasharray: 100;
+  animation: dt-draw .34s var(--ease) both;
+}
+.dt-strike {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.dt-strike line {
+  stroke: var(--c);
+  stroke-width: 9;
+  stroke-linecap: round;
+  stroke-dasharray: 100;
+  opacity: .85;
+  animation: dt-draw .45s var(--ease) .15s both;
+}
+
+/* ---------- Ev sahibi yokken ---------- */
+.dt-away {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: color-mix(in srgb, var(--bg) 84%, transparent);
+}
+.dt-away .card { max-width: 340px; }
+.dt-away-title {
+  font-family: var(--font-display);
+  font-variation-settings: 'SOFT' 100;
+  font-size: 1.375rem;
+  font-weight: 600;
+}
+
+@keyframes dt-draw { from { stroke-dashoffset: 100; } to { stroke-dashoffset: 0; } }
+@keyframes dt-glow { 0%, 100% { transform: scale(1); } 45% { transform: scale(1.09); } }
+@keyframes dt-nudge {
+  0%, 100% { translate: 0; }
+  25% { translate: -5px; }
+  75% { translate: 5px; }
+}
+
+@media (max-width: 380px) {
+  .dt-mod > button { min-width: 0; }
+  .dt-plate { gap: 6px; padding-inline: 6px 10px; }
+  .dt-num { font-size: 1.3rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dt-hole.is-win .dt-disc { animation: none; }
+  .dt-mark.is-new path, .dt-mark.is-new circle, .dt-strike line { animation: none; stroke-dasharray: none; }
+}

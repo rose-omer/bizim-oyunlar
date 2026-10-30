@@ -1,0 +1,34 @@
+{
+  "appId": "com.rose.bizikimiz",
+  "appName": "Biz İkimiz",
+  "webDir": "www",
+  "server": {
+    "url": "https://rose-omer.github.io/bizim-oyunlar/",
+    "errorPath": "index.html",
+    "allowNavigation": [
+      "rose-omer.github.io",
+      "blgtlflryxknyalutugw.supabase.co",
+      "youtube.com",
+      "*.youtube.com",
+      "*.youtube-nocookie.com"
+    ]
+  },
+  "android": {
+    "allowMixedContent": false
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 2000,
+      "launchAutoHide": true,
+      "launchFadeOutDuration": 200,
+      "showSpinner": false
+    },
+    "LocalNotifications": {
+      "smallIcon": "ic_stat_kalp",
+      "iconColor": "#C2375C"
+    },
+    "SystemBars": {
+      "initialViewportFitValueHint": "cover"
+    }
+  }
+}

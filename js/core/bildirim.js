@@ -1,10 +1,201 @@
-// Anlık bildirim (Web Push). Sahip: Sunucu ajanı. Şimdilik yer tutucu.
-/** -> 'var' | 'ana-ekran-gerek' (iPhone'da Safari sekmesi) | 'yok' */
-export function bildirimDestegi() { return 'yok'; }
+// Anlık bildirim (Web Push). Sahip: Sunucu ajanı. Sözleşme §20.
+// Abonelik: tarayıcı push adresi → RPC push_kaydet (supabase/schema.sql 5. bölüm).
+// Gönderim: Edge Function 'bildir' (supabase/functions/bildir) odadaki diğer cihazlara iletir.
+// Yerel modda ya da Supabase ayarı yoksa hiçbir şey yapmaz. Üst kısım saf (Node'da test edilir).
+import { SUPABASE_URL, SUPABASE_ANON_KEY, VAPID_PUBLIC_KEY } from '../config.js';
+import { me, isLocalMode, isValidRoomId } from './identity.js';
+import { getSupabase } from './room.js';
+import { isNative } from './mobil.js';
+import { KOK_URL, iosMu, standaloneMu, registerPwa } from './pwa.js';
+
+export const TURLER = ['dokunus', 'mesaj', 'mektup', 'ani', 'gun', 'oyun', 'soru', 'liste', 'izle'];
+const KISIT_MS = 10000; // aynı türden bildirim en çok 10 sn'de bir (ör. art arda mesajlar)
+
+// ---------- Saf yardımcılar ----------
+
+/** -> 'var' | 'ana-ekran-gerek' | 'yok' */
+export function destekKarari({ sunucu = true, native = false, ios = false, standalone = false, guvenli = true, sw = false, push = false, bildirim = false } = {}) {
+  if (!sunucu || native) return 'yok';
+  if (ios && !standalone) return 'ana-ekran-gerek'; // iPhone'da Web Push yalnız ana ekrana eklenmiş uygulamada
+  return guvenli && sw && push && bildirim ? 'var' : 'yok';
+}
+
 /** -> 'acik' | 'kapali' | 'engelli' | 'yok' */
-export async function bildirimDurumu() { return 'yok'; }
+export function durumKarari({ destek, izin, abonelik }) {
+  if (destek !== 'var') return 'yok';
+  if (izin === 'denied') return 'engelli';
+  return izin === 'granted' && abonelik ? 'acik' : 'kapali';
+}
+
+/** base64url VAPID genel anahtarı → Uint8Array (pushManager.subscribe applicationServerKey). */
+export function anahtarBaytlari(b64u) {
+  const t = String(b64u || '').replace(/-/g, '+').replace(/_/g, '/').replace(/=+$/, '');
+  const bin = atob(t + '='.repeat((4 - (t.length % 4)) % 4));
+  return Uint8Array.from(bin, (c) => c.charCodeAt(0));
+}
+
+/** Mevcut aboneliğin anahtarı bizimkiyle aynı mı? (anahtar değiştiyse yeniden abone olunur) */
+export function ayniAnahtar(mevcut, b64u) {
+  if (!mevcut) return true; // tarayıcı bilgiyi vermiyorsa dokunma
+  const a = new Uint8Array(mevcut);
+  const b = anahtarBaytlari(b64u);
+  return a.length === b.length && a.every((x, i) => x === b[i]);
+}
+
+/** PushSubscription → push_kaydet'in beklediği { endpoint, keys: { p256dh, auth } }. */
+export function aboneJson(sub) {
+  const j = typeof sub?.toJSON === 'function' ? sub.toJSON() : sub || {};
+  return { endpoint: j.endpoint, keys: { p256dh: j.keys?.p256dh, auth: j.keys?.auth } };
+}
+
+/** Edge Function gövdesi | null (tür geçersizse). Sunucu da doğrular ve kısaltır. */
+export function bildirGovdesi(roomId, from, { tur, baslik, metin, url } = {}) {
+  if (!TURLER.includes(tur)) return null;
+  const s = (v, n) => String(v ?? '').slice(0, n);
+  return { room: roomId, from, tur, baslik: s(baslik, 120), metin: s(metin, 300), url: s(url, 200) };
+}
+
+export function bildirAdresi(supabaseUrl) {
+  return `${String(supabaseUrl).replace(/\/+$/, '')}/functions/v1/bildir`;
+}
+
+/** Eski JWT anahtarı (eyJ...) Bearer olarak da gider; sb_publishable_ yalnız apikey başlığında. */
+export function istekBasliklari(anahtar) {
+  const h = { 'Content-Type': 'application/json', apikey: anahtar };
+  if (String(anahtar).startsWith('eyJ')) h.Authorization = `Bearer ${anahtar}`;
+  return h;
+}
+
+/** Aynı tür son KISIT_MS içinde gönderildiyse false. `son` = Map(tür → zaman), yerinde güncellenir. */
+export function kisitla(son, tur, simdi, ms = KISIT_MS) {
+  const t = son.get(tur);
+  if (t != null && simdi - t < ms) return false;
+  son.set(tur, simdi);
+  return true;
+}
+
+// ---------- Tarayıcı ----------
+
+function sunucuVar() {
+  return !!(SUPABASE_URL && SUPABASE_ANON_KEY) && !isLocalMode();
+}
+
+/** -> 'var' | 'ana-ekran-gerek' (iPhone'da Safari sekmesi) | 'yok' */
+export function bildirimDestegi() {
+  try {
+    const nav = globalThis.navigator || {};
+    return destekKarari({
+      sunucu: sunucuVar() && !!VAPID_PUBLIC_KEY,
+      native: isNative(),
+      ios: iosMu(nav.userAgent || '', nav.maxTouchPoints || 0),
+      standalone: standaloneMu(),
+      guvenli: !!globalThis.isSecureContext,
+      sw: 'serviceWorker' in nav,
+      push: 'PushManager' in globalThis,
+      bildirim: 'Notification' in globalThis,
+    });
+  } catch {
+    return 'yok';
+  }
+}
+
+async function aboneligiBul() {
+  const reg = await globalThis.navigator?.serviceWorker?.getRegistration(KOK_URL.href);
+  return (await reg?.pushManager?.getSubscription()) || null;
+}
+
+/** -> 'acik' | 'kapali' | 'engelli' | 'yok' */
+export async function bildirimDurumu() {
+  const destek = bildirimDestegi();
+  if (destek !== 'var') return 'yok';
+  const izin = globalThis.Notification.permission;
+  let abonelik = null;
+  if (izin === 'granted') {
+    try { abonelik = await aboneligiBul(); } catch { /* yok say */ }
+  }
+  return durumKarari({ destek, izin, abonelik: !!abonelik });
+}
+
+/** Etkin service worker kaydı (en çok 10 sn beklenir). */
+async function hazirKayit() {
+  if (!(await registerPwa())) return null;
+  return Promise.race([
+    globalThis.navigator.serviceWorker.ready,
+    new Promise((r) => setTimeout(() => r(null), 10000)),
+  ]);
+}
+
 /** Kullanıcı tıklamasıyla çağrılır: izin ister, aboneliği kaydeder. -> başarılı mı */
-export async function bildirimAc(roomId) { return false; }
-export async function bildirimKapat(roomId) {}
-/** Partnerin cihazlarına bildirim. Hata fırlatmaz. tur: 'dokunus'|'mesaj'|'mektup'|'ani'|'gun'|'oyun'|'soru'|'liste'|'izle' */
-export async function bildir(roomId, { tur, baslik, metin, url } = {}) {}
+export async function bildirimAc(roomId) {
+  if (bildirimDestegi() !== 'var' || !isValidRoomId(roomId)) return false;
+  try {
+    // İzin isteği tıklamanın hemen içinde olmalı (Safari): başka await'ten önce.
+    const N = globalThis.Notification;
+    const izin = N.permission === 'granted' ? 'granted' : await N.requestPermission();
+    if (izin !== 'granted') return false;
+    const reg = await hazirKayit();
+    if (!reg?.pushManager) return false;
+    let sub = await reg.pushManager.getSubscription();
+    if (sub && !ayniAnahtar(sub.options?.applicationServerKey, VAPID_PUBLIC_KEY)) {
+      await sub.unsubscribe().catch(() => {});
+      sub = null;
+    }
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: anahtarBaytlari(VAPID_PUBLIC_KEY) });
+    }
+    const client = await getSupabase();
+    const { error } = await client.rpc('push_kaydet', {
+      p_room: roomId, p_client: me().clientId, p_sub: aboneJson(sub),
+      p_ua: String(globalThis.navigator.userAgent || '').slice(0, 200),
+    });
+    if (error) throw new Error(error.message);
+    return true;
+  } catch (e) {
+    console.warn('[bildirim] açılamadı:', e?.message || e);
+    return false;
+  }
+}
+
+/** Bu cihazın aboneliğini kapatır ve sunucudan siler. -> başarılı mı */
+export async function bildirimKapat(roomId) {
+  try {
+    const sub = await aboneligiBul();
+    if (!sub) return true;
+    const endpoint = sub.endpoint;
+    await sub.unsubscribe().catch(() => {});
+    if (sunucuVar()) {
+      const client = await getSupabase();
+      const { error } = await client.rpc('push_sil', { p_endpoint: endpoint });
+      if (error) console.warn('[bildirim] sunucudan silinemedi:', error.message);
+    }
+    return true;
+  } catch (e) {
+    console.warn('[bildirim] kapatılamadı:', roomId, e?.message || e);
+    return false;
+  }
+}
+
+const sonGonderim = new Map();
+
+/**
+ * Partnerin cihazlarına bildirim. Hata fırlatmaz. -> gönderildi mi
+ * tur: 'dokunus'|'mesaj'|'mektup'|'ani'|'gun'|'oyun'|'soru'|'liste'|'izle'. url site köküne göre göreli ('sayfalar/sohbet/').
+ * Aynı tür 10 sn içinde ikinci kez gönderilmez (art arda mesajlar tek bildirim).
+ */
+export async function bildir(roomId, { tur, baslik, metin, url } = {}) {
+  try {
+    if (!sunucuVar() || !isValidRoomId(roomId)) return false;
+    const govde = bildirGovdesi(roomId, me().clientId, { tur, baslik, metin, url });
+    if (!govde || !kisitla(sonGonderim, `${roomId}:${tur}`, Date.now())) return false;
+    const res = await fetch(bildirAdresi(SUPABASE_URL), {
+      method: 'POST',
+      headers: istekBasliklari(SUPABASE_ANON_KEY),
+      body: JSON.stringify(govde),
+      keepalive: true, // sayfadan hemen çıkılsa da gitsin
+      credentials: 'omit',
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}

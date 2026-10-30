@@ -1,0 +1,24 @@
+{
+  "id": "./",
+  "name": "Biz İkimiz",
+  "short_name": "Biz İkimiz",
+  "description": "İkinize özel: sohbet, anılar, özel günler, günün sorusu ve birlikte oyunlar.",
+  "lang": "tr",
+  "dir": "ltr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#FBF4EE",
+  "theme_color": "#FBF4EE",
+  "categories": ["lifestyle", "social", "games"],
+  "icons": [
+    { "src": "assets/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Sohbet", "url": "sayfalar/sohbet/", "icons": [{ "src": "assets/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }] },
+    { "name": "Özel Günler", "url": "sayfalar/gunler/", "icons": [{ "src": "assets/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }] },
+    { "name": "Günün Sorusu", "url": "sayfalar/gunun-sorusu/", "icons": [{ "src": "assets/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }] }
+  ]
+}

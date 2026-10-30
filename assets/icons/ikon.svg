@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="zemin" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#DB4D72"/>
+      <stop offset="0.55" stop-color="#C2375C"/>
+      <stop offset="1" stop-color="#9E2347"/>
+    </linearGradient>
+    <radialGradient id="isik" cx="0.28" cy="0.2" r="0.75">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="golge" x="-30%" y="-30%" width="160%" height="170%">
+      <feDropShadow dx="0" dy="9.8" stdDeviation="12.6" flood-color="#4A1230" flood-opacity="0.32"/>
+    </filter>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#zemin)"/>
+  <rect width="512" height="512" rx="112" fill="url(#isik)"/>
+  <g filter="url(#golge)">
+    <path fill="#FFFFFF" transform="translate(69.33 79.60) scale(15.5556)" d="M12 20.7c-.27 0-.53-.09-.75-.27C6.6 16.6 3 13.5 3 9.45 3 6.68 5.13 4.5 7.8 4.5c1.68 0 3.2.83 4.2 2.15 1-1.32 2.52-2.15 4.2-2.15 2.67 0 4.8 2.18 4.8 4.95 0 4.05-3.6 7.15-8.25 10.98-.22.18-.48.27-.75.27z"/>
+    <path fill="#FBE3E9" stroke="#C2375C" stroke-width="1.60" transform="translate(257.24 89.93) scale(5.6000)" d="M12 20.7c-.27 0-.53-.09-.75-.27C6.6 16.6 3 13.5 3 9.45 3 6.68 5.13 4.5 7.8 4.5c1.68 0 3.2.83 4.2 2.15 1-1.32 2.52-2.15 4.2-2.15 2.67 0 4.8 2.18 4.8 4.95 0 4.05-3.6 7.15-8.25 10.98-.22.18-.48.27-.75.27z"/>
+  </g>
+</svg>

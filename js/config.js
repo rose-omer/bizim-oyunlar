@@ -14,3 +14,4 @@
 export const SUPABASE_URL = 'https://blgtlflryxknyalutugw.supabase.co'; // örn. https://abcd.supabase.co
 export const SUPABASE_ANON_KEY = 'sb_publishable_AzTJ8fQKYOAdjhrbnNoEoA_8FjjqelZ'; // anon / publishable anahtar (gizli değildir)
 export const PHOTO_BUCKET = 'photos';
+export const VAPID_PUBLIC_KEY = 'BCnQ9D_-QCXTTAznN8Fu4CvzMo50bIRHQfvQp3DpsTHK3xYgqUug_D3LONZFheqVZp-j7CprzmPUT7oGY8kE7ZQ'; // Web Push genel anahtarı (gizli değildir)

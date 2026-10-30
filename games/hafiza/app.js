@@ -337,7 +337,7 @@ function celebrateEnd(s) {
     lines,
     buttons: [
       { label: 'Tekrar', primary: true, onClick: () => { closeCelebrate?.(); closeCelebrate = null; sync.dispatch({ type: 'again' }); } },
-      { label: 'Odamıza dön', onClick: () => { location.href = lobbyUrl(); } },
+      { label: 'Ana sayfaya dön', onClick: () => { location.href = lobbyUrl(); } },
     ],
   });
 }

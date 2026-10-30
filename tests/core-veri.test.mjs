@@ -123,3 +123,19 @@ test('openCollection: çok uzun veri reddedilir ve geri alınır', async () => {
   assert.equal(c.all().length, 0);
   c.close();
 });
+
+test('openCollection: önbellekteki "bekleyen" belge sunucu sürümünü engellemez; giden kutusu kişiye özel', async () => {
+  const room = 'testodajk5';
+  await putDoc(room, 'gun', 'g1', { baslik: 'Sunucu' }, 'ali');
+  writeStore('local', `bizim.veri.${room}.gun`, JSON.stringify({
+    since: null,
+    docs: [{ id: 'g1', data: { baslik: 'Eski bekleyen' }, pending: true, created_at: '2026-01-01T00:00:00Z', updated_at: '2999-01-01T00:00:00Z' }],
+  }));
+  writeStore('local', `bizim.veri.giden.${room}.baskasi`, JSON.stringify([{ kind: 'gun', id: 'g9', data: { baslik: 'Onun' }, deleted: false, at: '2026-01-01T00:00:00Z' }]));
+  const [A] = fakePair(room);
+  const c = await openCollection(A, 'gun');
+  await c.refresh();
+  assert.equal(c.get('g1').data.baslik, 'Sunucu');
+  assert.equal(c.get('g9'), null); // başkasının giden kutusu gönderilmez
+  c.close();
+});

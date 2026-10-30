@@ -1,0 +1,130 @@
+# Biz İkimiz Android APK'sı (Capacitor). Uygulama canlı siteyi açar (mobil/capacitor.config.json server.url);
+# site güncellenince APK'yı yeniden kurmak gerekmez. Bu iş yalnız kabuk (mobil/) değişince ya da elle çalışır.
+# android/ klasörü depoda tutulmaz: her derlemede sabit Capacitor sürümünden üretilir, sonra
+# mobil/scripts/android-hazirla.mjs ayarları uygular (izin, sürüm, imza, bildirim ikonu).
+# İmza: ANDROID_KEYSTORE_B64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD secret'ları
+# varsa release imzası; yoksa debug APK (uyarıyla). Çıktı: Release "android-latest" → BizIkimiz.apk
+#   https://github.com/rose-omer/bizim-oyunlar/releases/download/android-latest/BizIkimiz.apk
+name: Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'mobil/**'
+      - '.github/workflows/android.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-apk
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: mobil
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: mobil/package-lock.json
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Bağımlılıklar
+        run: npm ci --no-audit --no-fund
+
+      - name: Android projesini üret
+        run: npx cap add android
+
+      - name: İkon ve açılış ekranı (assets/*.svg)
+        run: npx capacitor-assets generate --android --assetPath assets
+
+      - name: Proje ayarları (izin, sürüm, imza, bildirim ikonu)
+        env:
+          BIZ_SURUM_KODU: ${{ github.run_number }}
+        run: node scripts/android-hazirla.mjs
+
+      - name: Eşitle
+        run: npx cap sync android
+
+      - name: Derle
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          BIZ_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          BIZ_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          BIZ_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          cd android
+          chmod +x gradlew
+          if [ -n "$KS_B64" ]; then
+            if [ -z "$BIZ_KEYSTORE_PASSWORD" ] || [ -z "$BIZ_KEY_ALIAS" ] || [ -z "$BIZ_KEY_PASSWORD" ]; then
+              echo "::error::ANDROID_KEYSTORE_B64 var ama parola ya da alias secret'ı eksik."
+              exit 1
+            fi
+            export BIZ_KEYSTORE_PATH="$RUNNER_TEMP/bizikimiz.p12"
+            printf '%s' "$KS_B64" | base64 -d > "$BIZ_KEYSTORE_PATH"
+            keytool -list -storetype PKCS12 -keystore "$BIZ_KEYSTORE_PATH" \
+              -storepass:env BIZ_KEYSTORE_PASSWORD -alias "$BIZ_KEY_ALIAS" > /dev/null
+            ./gradlew --no-daemon assembleRelease
+            cp app/build/outputs/apk/release/app-release.apk ../BizIkimiz.apk
+            rm -f "$BIZ_KEYSTORE_PATH"
+            echo "IMZA=release" >> "$GITHUB_ENV"
+          else
+            echo "::warning::İmza secret'ları yok; debug APK üretiliyor. Debug APK her derlemede başka anahtarla imzalanır, telefonda güncelleme olarak kurulmaz."
+            ./gradlew --no-daemon assembleDebug
+            cp app/build/outputs/apk/debug/app-debug.apk ../BizIkimiz.apk
+            echo "IMZA=debug" >> "$GITHUB_ENV"
+          fi
+
+      - name: İmzayı doğrula
+        run: |
+          set -euo pipefail
+          tools=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)
+          "${tools}apksigner" verify --print-certs BizIkimiz.apk | grep -E 'certificate (DN|SHA-256 digest)'
+          ls -l BizIkimiz.apk
+
+      - name: Sürüme yükle (android-latest)
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag=android-latest
+          cat > "$RUNNER_TEMP/not.md" <<EOF
+          **Biz İkimiz** Android uygulaması · sürüm 1.0.${GITHUB_RUN_NUMBER} · ${GITHUB_SHA::7} · imza: ${IMZA}
+
+          Kurulum: telefonda **BizIkimiz.apk** dosyasını aç → istenirse "bu kaynaktan yüklemeye izin ver" → Yükle.
+          Uygulama her açılışta canlı siteyi yükler; site güncellemeleri için APK'yı yeniden kurmak gerekmez.
+          EOF
+          if [ "$IMZA" = debug ]; then
+            echo "> Uyarı: debug imzalı derleme. Önceki sürümün üstüne kurulmaz; önce eskisini kaldır." >> "$RUNNER_TEMP/not.md"
+          fi
+          git push --force origin "$GITHUB_SHA:refs/tags/$tag"
+          if gh release view "$tag" > /dev/null 2>&1; then
+            gh release edit "$tag" --title "Biz İkimiz (Android)" --notes-file "$RUNNER_TEMP/not.md" --prerelease=false --latest
+          else
+            gh release create "$tag" --verify-tag --title "Biz İkimiz (Android)" --notes-file "$RUNNER_TEMP/not.md" --latest
+          fi
+          gh release upload "$tag" BizIkimiz.apk --clobber
+
+      - name: Yapıt (main dışı elle çalıştırma)
+        if: github.ref != 'refs/heads/main'
+        uses: actions/upload-artifact@v7
+        with:
+          name: BizIkimiz-apk
+          path: mobil/BizIkimiz.apk
+          retention-days: 7

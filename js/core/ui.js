@@ -1,5 +1,5 @@
-// Ortak arayüz: üst şerit, bildirim, kutlama, partner bekleme, onay, davet paylaşımı.
-// Sözleşme §9. Ek dışa aktarımlar (h, icon, pairEl, muteButton, copyInvite, …) ana sayfa içindir;
+// Ortak arayüz: üst şerit, alt sekmeler, tema, dokunuş, bildirim, kutlama, partner bekleme, onay, davet.
+// Sözleşme §9, §19–§20. Ek dışa aktarımlar (h, icon, pairEl, muteButton, copyInvite, …) ana sayfa içindir;
 // oyunlar da kullanabilir ama sözleşmenin parçası değildir.
 import { me, currentRoom, inviteUrl, lobbyUrl, gameUrl, readGameParams, pageUrl } from './identity.js';
 import { gameById, SAYFALAR, SEKMELER, sayfaById } from './games.js';
@@ -46,7 +46,21 @@ export const ICONS = {
   copy: `<svg viewBox="0 0 24 24" ${STROKE} aria-hidden="true" focusable="false"><rect x="8.5" y="8.5" width="11" height="11" rx="2.5"/><path d="M15.5 8.5V6.2A1.7 1.7 0 0 0 13.8 4.5H6.2A1.7 1.7 0 0 0 4.5 6.2v7.6a1.7 1.7 0 0 0 1.7 1.7h2.3"/></svg>`,
   settings: `<svg viewBox="0 0 24 24" ${STROKE} aria-hidden="true" focusable="false"><path d="M4 7h9m4 0h3M4 17h3m4 0h9"/><circle cx="15" cy="7" r="2.2"/><circle cx="9" cy="17" r="2.2"/></svg>`,
   close: `<svg viewBox="0 0 24 24" ${STROKE} aria-hidden="true" focusable="false"><path d="M6.5 6.5l11 11m0-11-11 11"/></svg>`,
+  chevron: `<svg viewBox="0 0 24 24" ${STROKE} aria-hidden="true" focusable="false"><path d="m9.5 5.5 6.5 6.5-6.5 6.5"/></svg>`,
+  pin: `<svg viewBox="0 0 24 24" ${STROKE} aria-hidden="true" focusable="false"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/></svg>`,
 };
+
+// Alt sekme simgeleri: tek çizgi ailesi (1.75). Etkin sekmede .f parçaları dolar.
+const TAB_STROKE = 'fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"';
+const TAB_ICONS = {
+  biz: `<svg viewBox="0 0 24 24" ${TAB_STROKE} aria-hidden="true" focusable="false"><path class="f" d="${HEART_D}"/></svg>`,
+  sohbet: `<svg viewBox="0 0 24 24" ${TAB_STROKE} aria-hidden="true" focusable="false"><path class="f" d="M4.5 7A2.5 2.5 0 0 1 7 4.5h10A2.5 2.5 0 0 1 19.5 7v7a2.5 2.5 0 0 1-2.5 2.5h-6l-4.5 3.5v-3.5H7A2.5 2.5 0 0 1 4.5 14z"/><path d="M8.5 9.5h7M8.5 12.5h4.5"/></svg>`,
+  anilar: `<svg viewBox="0 0 24 24" ${TAB_STROKE} aria-hidden="true" focusable="false"><rect class="f" x="3.5" y="5" width="17" height="14" rx="2.8"/><circle cx="9" cy="10" r="1.7"/><path d="m4 17 4.6-4.2 3.4 3 2.6-2.2L20 18"/></svg>`,
+  gunler: `<svg viewBox="0 0 24 24" ${TAB_STROKE} aria-hidden="true" focusable="false"><rect class="f" x="3.8" y="5.3" width="16.4" height="14.7" rx="2.8"/><path d="M3.8 10h16.4M8.3 3.5v3.6M15.7 3.5v3.6"/><path d="M12 17.2c-.1 0-.2 0-.3-.1-1.5-1.2-2.4-2-2.4-3a1.4 1.4 0 0 1 2.7-.6 1.4 1.4 0 0 1 2.7.6c0 1-.9 1.8-2.4 3-.1.1-.2.1-.3.1z"/></svg>`,
+  daha: `<svg viewBox="0 0 24 24" ${TAB_STROKE} aria-hidden="true" focusable="false"><rect class="f" x="4" y="4" width="6.6" height="6.6" rx="2"/><rect class="f" x="13.4" y="4" width="6.6" height="6.6" rx="2"/><rect class="f" x="4" y="13.4" width="6.6" height="6.6" rx="2"/><rect class="f" x="13.4" y="13.4" width="6.6" height="6.6" rx="2"/></svg>`,
+};
+// Alt çubukta kısa adlar (sayfa başlığı uzun olabilir).
+const TAB_LABELS = { anilar: 'Anılar', gunler: 'Günler' };
 
 export function icon(name) {
   const t = document.createElement('template');
@@ -82,6 +96,23 @@ export function locative(title) {
   else c = 'fstkçşhp'.includes(end) ? 't' : 'd';
   return `${t}'${c}${front ? 'e' : 'a'}`;
 }
+
+/** Türkçe tamlayan eki: "Ömer" → "Ömer'in", "Gül" → "Gül'ün", "Ayşe" → "Ayşe'nin". */
+export function genitive(name) {
+  const t = String(name || '').trim();
+  if (!t) return '';
+  const low = t.toLocaleLowerCase('tr');
+  const vowels = low.match(/[aeıioöuü]/g);
+  const v = vowels ? vowels[vowels.length - 1] : 'e';
+  const suf = { a: 'ın', ı: 'ın', e: 'in', i: 'in', o: 'un', u: 'un', ö: 'ün', ü: 'ün' }[v];
+  return `${t}'${'aeıioöuü'.includes(low[low.length - 1]) ? 'n' : ''}${suf}`;
+}
+
+// Sayfalarda "nerede" metni; yoksa başlığın bulunma eki (locative) kullanılır.
+const SAYFA_YER = {
+  biz: 'ana sayfada', anilar: 'Anılarda', mektup: 'Mektuplarda', listeler: 'Listelerde',
+  sevgidili: "Sevgi Dili Testi'nde", daha: 'menüde',
+};
 
 /** Türkçe gün: "bugün", "dün", "3 gün önce", "12 Ekim", "12 Ekim 2025". */
 export function formatDay(value, now = new Date()) {
@@ -139,28 +170,146 @@ export function rememberPartner(roomId, p) {
   } catch { /* gizli sekme */ }
 }
 
-/** Partner nerede? -> { kind: 'off'|'on'|'here'|'away', text, game? } */
+/** Uygulama sayfası (SAYFALAR) için presence adı; ana sayfanın presence adı 'lobby'dir. */
+function sayfaOf(page) {
+  return sayfaById(page === 'lobby' ? 'biz' : page);
+}
+
+/** Partner nerede? -> { kind: 'off'|'on'|'here'|'away', text, game?, sayfa? } */
 export function partnerWhere(p, ns = pageNs()) {
   if (!p) return { kind: 'off', text: 'çevrimdışı' };
   const g = gameById(p.page);
-  if (g && p.page === ns) return { kind: 'here', text: 'burada', game: g };
+  const s = g ? null : sayfaOf(p.page);
+  if (p.page && p.page === ns && (g || s)) return g ? { kind: 'here', text: 'burada', game: g } : { kind: 'here', text: 'burada', sayfa: s };
   if (g) return { kind: 'away', text: locative(g.title), game: g };
+  if (s) return { kind: 'on', text: SAYFA_YER[s.id] || locative(s.title), sayfa: s };
   return { kind: 'on', text: 'çevrimiçi' };
 }
 
-/** İki avatar ve aralarında kalp. link: 'on' | 'off' | 'wait'. */
-export function pairEl({ meName = '', partnerName = '', online = false, link = 'off', lg = false, names = false, state = null } = {}) {
-  const meAv = h('span', { class: 'avatar me', 'aria-hidden': 'true' }, initial(meName));
+// Profil fotoğrafı: https adresi doğrudan; 'local:' (yerel mod, IndexedDB) blob adresine çevrilir.
+const photoCache = new Map();
+/** -> Promise<string|null> (img src) */
+export function fotoSrc(url) {
+  if (typeof url !== 'string' || !url) return Promise.resolve(null);
+  if (!photoCache.has(url)) {
+    let p;
+    if (url.startsWith('local:')) {
+      p = import('./storage.js')
+        .then((m) => m.loadPhoto(url))
+        .then((blob) => URL.createObjectURL(blob))
+        .catch(() => null);
+    } else {
+      p = Promise.resolve(/^https:\/\//.test(url) ? url : null);
+    }
+    photoCache.set(url, p);
+  }
+  return photoCache.get(url);
+}
+
+/** Tek avatar: baş harf, varsa fotoğraf, isteğe bağlı köşe rozeti. cls: 'me' | 'partner' | 'partner away' | 'empty'. */
+export function avatarEl(name, cls, foto, badge) {
+  const av = h('span', { class: `avatar ${cls}`, 'aria-hidden': 'true' }, name ? initial(name) : '?');
+  if (foto) {
+    const img = h('img', { alt: '', decoding: 'async', draggable: 'false', hidden: true });
+    av.append(img);
+    fotoSrc(foto).then((src) => {
+      if (!src) return;
+      img.addEventListener('load', () => { img.hidden = false; av.classList.add('has-photo'); }, { once: true });
+      img.addEventListener('error', () => img.remove(), { once: true });
+      img.src = src;
+    });
+  }
+  if (badge) av.append(h('span', { class: 'avatar-badge' }, badge));
+  return av;
+}
+
+/**
+ * İki avatar ve aralarında kalp. link: 'on' | 'off' | 'wait'.
+ * İsteğe bağlı: meLabel (adlar gösterilince benim adım; varsayılan 'Sen'), meFoto/partnerFoto (profil
+ * fotoğrafı adresi), meBadge/partnerBadge (avatar köşesinde küçük emoji, ör. ruh hâli).
+ */
+export function pairEl({
+  meName = '', partnerName = '', online = false, link = 'off', lg = false, names = false, state = null,
+  meLabel = 'Sen', meFoto = null, partnerFoto = null, meBadge = null, partnerBadge = null,
+} = {}) {
+  const meAv = avatarEl(meName, 'me', meFoto, meBadge);
   const pCls = !partnerName ? 'empty' : online ? 'partner' : 'partner away';
-  const pAv = h('span', { class: `avatar ${pCls}`, 'aria-hidden': 'true' }, partnerName ? initial(partnerName) : '?');
+  const pAv = avatarEl(partnerName, pCls, partnerName ? partnerFoto : null, partnerName ? partnerBadge : null);
   const st = state
     ? h('span', { class: 'person-state', dataset: { state: state.kind } },
         h('span', { class: 'dot', 'aria-hidden': 'true' }), h('span', {}, state.text))
     : null;
   return h('div', { class: `pair${lg ? ' lg' : ''}`, dataset: { link } },
-    h('div', { class: 'person' }, meAv, names ? h('span', { class: 'person-name' }, 'Sen') : null),
+    h('div', { class: 'person' }, meAv, names ? h('span', { class: 'person-name' }, meLabel || 'Sen') : null),
     h('span', { class: 'pair-heart', 'aria-hidden': 'true', html: ICONS.heart }),
     h('div', { class: 'person' }, pAv, names ? h('span', { class: 'person-name' }, partnerName || 'Sevgilin') : null, st));
+}
+
+// ---------- Dokunuş ("Seni düşünüyorum") ----------
+/** Dokunuş türleri (veri türü 'dokunus', alan tur). cumle(ad) = alıcıya gösterilen metin. */
+export const TOUCHES = [
+  { tur: 'kalp', emoji: '💗', label: 'Kalp', cumle: (ad) => `${ad} sana 💗 gönderdi` },
+  { tur: 'opucuk', emoji: '💋', label: 'Öpücük', cumle: (ad) => `${ad} sana bir öpücük gönderdi 💋` },
+  { tur: 'sarilma', emoji: '🤗', label: 'Sarılma', cumle: (ad) => `${ad} sana sarıldı 🤗` },
+  { tur: 'ozledim', emoji: '🥺', label: 'Özledim', cumle: (ad) => `${ad} seni özledi 🥺` },
+  { tur: 'dusunuyorum', emoji: '💭', label: 'Düşünüyorum', cumle: (ad) => `${ad} seni düşünüyor 💭` },
+];
+
+export function touchByTur(tur) {
+  return TOUCHES.find((t) => t.tur === tur) || null;
+}
+
+function reducedMotion() {
+  try { return !!globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches; } catch { return false; }
+}
+
+/** Tam ekran emoji patlaması (dekoratif, tıklamayı engellemez). Hareket azaltmada sade. */
+export function touchBurst(emoji) {
+  if (typeof document === 'undefined') return;
+  document.querySelector('.touch-burst')?.remove();
+  const reduce = reducedMotion();
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const root = h('div', { class: `touch-burst${reduce ? ' calm' : ''}`, 'aria-hidden': 'true' },
+    h('span', { class: 'touch-burst-main' }, emoji));
+  if (!reduce) {
+    for (let i = 0; i < 18; i++) {
+      const heart = i % 3 === 1;
+      root.append(h('span', {
+        class: `touch-burst-bit${heart ? ' heart' : ''}`,
+        html: heart ? ICONS.heart : null,
+        style: {
+          '--x': `${rnd(4, 92).toFixed(1)}%`,
+          '--s': `${Math.round(rnd(heart ? 16 : 22, heart ? 30 : 44))}px`,
+          '--d': `${rnd(1.5, 2.3).toFixed(2)}s`,
+          '--delay': `${rnd(0, 0.45).toFixed(2)}s`,
+          '--drift': `${Math.round(rnd(-60, 60))}px`,
+          '--r': `${Math.round(rnd(-28, 28))}deg`,
+        },
+      }, heart ? null : emoji));
+    }
+  }
+  document.body.append(root);
+  setTimeout(() => root.remove(), reduce ? 1600 : 2900);
+}
+
+/** Gelen dokunuşu göster: patlama + titreşim + ses + bildirim. */
+export function showTouch(tur, name = 'Sevgilin') {
+  const t = touchByTur(tur);
+  if (!t) return;
+  touchBurst(t.emoji);
+  sfx('pop');
+  import('./mobil.js').then((m) => m.titret?.([40, 60, 40])).catch(() => {});
+  toast(t.cumle(name || 'Sevgilin'));
+}
+
+/** Odadaki { t:'dokunus', tur } mesajlarını dinler (ns '*'). -> abonelikten çık */
+export function listenTouches(room) {
+  if (!room || typeof room.on !== 'function') return () => {};
+  return room.on('message', (msg, from) => {
+    if (!msg || msg.t !== 'dokunus' || !touchByTur(msg.tur)) return;
+    const name = from?.name || knownPartner(room.roomId || activeRoomId())?.name || 'Sevgilin';
+    showTouch(msg.tur, name);
+  });
 }
 
 // Kaplamalar açıkken arka planı etkisiz kıl (sayaçlı; iç içe açılabilir).
@@ -217,7 +366,7 @@ export function mountShell({ title = '', room = null } = {}) {
   tools.append(muteButton());
 
   header.replaceChildren(h('div', { class: 'shell-bar' },
-    h('a', { class: 'shell-back', href: lobbyUrl(), 'aria-label': 'Odamıza dön' }, icon('back'), h('span', {}, 'Odamız')),
+    h('a', { class: 'shell-back', href: lobbyUrl(), 'aria-label': 'Ana sayfaya dön' }, icon('back'), h('span', {}, 'Biz')),
     h('h1', { class: 'shell-title' }, title),
     tools));
 
@@ -259,8 +408,10 @@ export function mountShell({ title = '', room = null } = {}) {
     }));
     subs.push(room.on('status', (s) => { status = s; paint(); }));
     subs.push(room.on('message', onMessage));
+    subs.push(listenTouches(room));
   }
   paint();
+  syncShellBack();
   const untrack = trackShellHeight(header);
   startAppServices();
 
@@ -272,17 +423,129 @@ export function mountShell({ title = '', room = null } = {}) {
   return shellCleanup;
 }
 
-// ---------- Uygulama servisleri (kilit, PWA) ----------
+// ---------- Tema ----------
+// localStorage 'bizim.tema' = { renk, mod } (Ayarlar yazar) → <html data-renk data-mod>. Renkler css/base.css'te.
+const TEMA_KEY = 'bizim.tema';
+export const TEMA_RENKLER = ['pembe', 'mor', 'kirmizi', 'mercan', 'mavi'];
+export const TEMA_MODLAR = ['otomatik', 'acik', 'koyu'];
+
+/** Saf: metin (JSON) ya da nesne → { renk, mod }. Bilinmeyen değer varsayılana düşer. */
+export function parseTema(raw) {
+  let v = raw;
+  if (typeof v === 'string') {
+    try { v = JSON.parse(v); } catch { v = null; }
+  }
+  if (!v || typeof v !== 'object') v = {};
+  return {
+    renk: TEMA_RENKLER.includes(v.renk) ? v.renk : 'pembe',
+    mod: TEMA_MODLAR.includes(v.mod) ? v.mod : 'otomatik',
+  };
+}
+
+function readTemaRaw() {
+  try {
+    const v = JSON.parse(globalThis.localStorage?.getItem(TEMA_KEY) || 'null');
+    return v && typeof v === 'object' ? v : {};
+  } catch {
+    return {};
+  }
+}
+
+export function readTema() {
+  return parseTema(readTemaRaw());
+}
+
+/** Temayı <html>'e uygular; adres çubuğu rengini (theme-color) zorunlu modda arka plana eşitler. -> tema */
+export function applyTheme(tema = readTema()) {
+  const t = parseTema(tema);
+  if (typeof document === 'undefined') return t;
+  const root = document.documentElement;
+  root.dataset.renk = t.renk;
+  root.dataset.mod = t.mod;
+  const metas = document.querySelectorAll('meta[name="theme-color"]');
+  if (metas.length) {
+    const bg = t.mod === 'otomatik' ? '' : getComputedStyle(root).getPropertyValue('--bg').trim();
+    for (const m of metas) {
+      if (m.dataset.orig == null) m.dataset.orig = m.getAttribute('content') || '';
+      m.setAttribute('content', bg || m.dataset.orig);
+    }
+  }
+  return t;
+}
+
+// Sayfa ilk çizilmeden önce (modül yüklenince) uygula; renk sıçraması olmasın.
+if (typeof document !== 'undefined') {
+  try { applyTheme(); } catch { /* tema kritik değil */ }
+}
+
+// ---------- Uygulama servisleri (tema, kilit, PWA, mobil) ----------
 let servicesStarted = false;
-/** Her sayfada bir kez: PIN kilidi ve service worker. mountShell çağırır; ana sayfa da çağırmalı. */
+/** Her sayfada bir kez: tema, PIN kilidi, service worker, Android köprüsü. mountShell çağırır; ana sayfa da çağırır. */
+// Bildirim açıksa aboneliği oturumda bir kez sunucuya yeniden yaz (oda değişimi, tarayıcının yenilediği abonelik).
+// İzin zaten verilmiş olduğundan kullanıcıya soru çıkmaz.
+function tazeleBildirim() {
+  const roomId = currentRoom();
+  if (!roomId) return;
+  try {
+    if (sessionStorage.getItem('bizim.bildirim.tazelendi') === roomId) return;
+    sessionStorage.setItem('bizim.bildirim.tazelendi', roomId);
+  } catch { /* gizli sekme */ }
+  import('./bildirim.js')
+    .then(async (m) => { if ((await m.bildirimDurumu()) === 'acik') await m.bildirimAc(roomId); })
+    .catch((e) => console.warn('[bildirim]', e));
+}
+
 export function startAppServices() {
   if (servicesStarted || typeof document === 'undefined') return;
   servicesStarted = true;
+  applyTheme();
+  // Ayarlar temayı yazınca 'bizim:tema' yayar (detail = { renk?, mod? } olabilir); başka sekme 'storage' ile.
+  window.addEventListener('bizim:tema', (e) => {
+    const d = e?.detail && typeof e.detail === 'object' ? e.detail : {};
+    applyTheme({ ...readTemaRaw(), ...d });
+  });
+  window.addEventListener('storage', (e) => { if (e.key === TEMA_KEY) applyTheme(); });
   import('./kilit.js').then((m) => m.kilitKontrol()).catch((e) => console.warn('[kilit]', e));
   import('./pwa.js').then((m) => m.registerPwa()).catch((e) => console.warn('[pwa]', e));
+  import('./mobil.js').then((m) => m.mobilBaslat()).catch((e) => console.warn('[mobil]', e));
+  tazeleBildirim();
 }
 
 // ---------- Alt sekme çubuğu ----------
+let tabActive = null;
+
+function samePage(a, b) {
+  const norm = (u) => new URL(u, location.href).pathname.replace(/index\.html$/, '').replace(/\/?$/, '/');
+  try { return norm(a) === norm(b); } catch { return false; }
+}
+
+function tabHref(s) {
+  return s.path ? pageUrl(s.path) : lobbyUrl();
+}
+
+/**
+ * Sekme sayfasında (ör. Sohbet) üst şeritteki geri bağlantısı gereksiz: gizlenir.
+ * Sekmenin alt sayfasında (ör. Ayarlar, sekme 'daha') geri bağlantısı o sekmeye döner.
+ */
+function syncShellBack() {
+  if (typeof document === 'undefined') return;
+  const back = document.querySelector('#shell .shell-back');
+  const s = tabActive ? sayfaById(tabActive) : null;
+  if (!back || !s) return;
+  const href = tabHref(s);
+  if (samePage(href, location.href)) {
+    back.hidden = true;
+    return;
+  }
+  back.hidden = false;
+  if (s.id !== 'biz') {
+    const label = TAB_LABELS[s.id] || s.title;
+    back.href = href;
+    back.setAttribute('aria-label', `${label} sayfasına dön`);
+    back.replaceChildren(icon('back'), h('span', {}, label));
+  }
+}
+
 /** Altta sabit sekme çubuğu (SEKMELER). active = sayfa id'si ya da null. -> nav öğesi */
 export function mountTabBar(active = null) {
   let nav = document.getElementById('tabbar');
@@ -291,15 +554,29 @@ export function mountTabBar(active = null) {
     document.body.append(nav);
   }
   document.body.classList.add('has-tabbar');
+  tabActive = active;
   nav.replaceChildren(...SEKMELER.map((id) => {
     const s = sayfaById(id);
+    if (!s) return null;
     const on = id === active;
+    const ic = TAB_ICONS[id]
+      ? h('span', { class: 'tab-icon', 'aria-hidden': 'true', html: TAB_ICONS[id] })
+      : h('span', { class: 'tab-icon', 'aria-hidden': 'true' }, s.icon);
     return h('a', {
-      class: 'tab', href: s.path ? pageUrl(s.path) : lobbyUrl(),
+      class: 'tab', href: tabHref(s), dataset: { tab: id },
       'aria-current': on ? 'page' : null,
-    }, h('span', { class: 'tab-icon', 'aria-hidden': 'true' }, s.icon), h('span', { class: 'tab-label' }, s.title));
-  }));
+    }, ic, h('span', { class: 'tab-label' }, TAB_LABELS[id] || s.title));
+  }).filter(Boolean));
+  syncShellBack();
   return nav;
+}
+
+/** Sekme çubuğunu kaldırır (ana sayfada ilk açılış ekranları için). */
+export function removeTabBar() {
+  if (typeof document === 'undefined') return;
+  document.getElementById('tabbar')?.remove();
+  document.body.classList.remove('has-tabbar');
+  tabActive = null;
 }
 
 /** Üst şeridin gerçek yüksekliğini :root --shell-h'ye yazar ve izler. -> durdur() */
@@ -493,7 +770,7 @@ export async function shareInvite(roomId) {
   }
   if (typeof navigator.share === 'function') {
     try {
-      await navigator.share({ title: 'Bizim Oyunlar', text: 'Odamıza gel, birlikte oynayalım.', url: inviteUrl(id) });
+      await navigator.share({ title: 'Biz İkimiz', text: "Biz İkimiz'de odamıza gel; günlerimizi sayalım, birlikte oynayalım.", url: inviteUrl(id) });
       return 'shared';
     } catch (e) {
       if (e?.name === 'AbortError') return 'cancelled';
@@ -527,10 +804,10 @@ function needsRoomOverlay() {
     pairEl({ meName: myName(), link: 'wait', lg: true }),
     h('h2', { class: 'title', id }, 'Bu oyun iki kişilik'),
     h('p', { class: 'subtitle' }, currentRoom()
-      ? 'Oyunu odanızdan aç; sevgilin de seninle gelsin.'
+      ? 'Oyunu ana sayfadan aç; sevgilin de seninle gelsin.'
       : 'Önce odanızı kur ve linki sevgiline gönder. O gelince birlikte oynarsınız.'),
     h('div', { class: 'waiting-actions' },
-      h('a', { class: 'btn primary', href: lobbyUrl() }, currentRoom() ? 'Odamıza git' : 'Odamızı kur')));
+      h('a', { class: 'btn primary', href: lobbyUrl() }, currentRoom() ? 'Ana sayfaya git' : 'Odamızı kur')));
   const o = overlay(card);
   o.root.setAttribute('aria-labelledby', id);
   return o;
@@ -581,7 +858,8 @@ export function waitForPartner(room, { text, allowSolo = false, ns } = {}) {
         pairBox.replaceChildren(pairEl({ meName: myName(), partnerName: name, online: !!p, link: 'wait', lg: true }));
         const g = p ? gameById(p.page) : null;
         if (p) {
-          const where = g ? `şu an ${locative(g.title)}` : p.page === 'lobby' ? 'odanızda, lobide' : 'çevrimiçi';
+          const w = partnerWhere(p, page);
+          const where = g ? `şu an ${locative(g.title)}` : w.sayfa ? `şu an ${w.text}` : 'çevrimiçi';
           status.textContent = `${name || 'Sevgilin'} ${where}. Çağırırsan bu oyuna gelir.`;
         } else if (name) {
           status.textContent = `${name} şu an çevrimdışı. Gelince oyun başlar; istersen linki yeniden gönder.`;

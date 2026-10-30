@@ -1,0 +1,97 @@
+/* Gizli seçim oyunları ortak stili (Kim Daha Çok?, Hiç … Yaptın mı?).
+   Renkler yalnız css/base.css değişkenlerinden. */
+
+/* Kurulum: kategori seçici (birden çok) */
+.s2-field { align-items: stretch; }
+.s2-cats {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  width: 100%;
+}
+@media (min-width: 520px) {
+  .s2-cats { grid-template-columns: 1fr 1fr; }
+}
+.s2-cat {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-areas: 'emoji name' 'emoji desc';
+  align-items: center;
+  column-gap: 12px;
+  min-height: 60px;
+  padding: 10px 14px;
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  text-align: left;
+  transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.s2-cat[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.s2-cat:disabled { opacity: 0.5; cursor: not-allowed; }
+.s2-cat-emoji { grid-area: emoji; font-size: 1.5rem; line-height: 1; }
+.s2-cat-name { grid-area: name; font-weight: 800; }
+.s2-cat-desc { grid-area: desc; color: var(--muted); font-size: 0.8125rem; font-weight: 650; }
+@media (hover: hover) {
+  .s2-cat:hover:not(:disabled):not([aria-pressed='true']) { border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
+}
+
+/* Soru kartı biraz daha nefesli */
+.s2-qcard {
+  padding-block: clamp(22px, 6vw, 32px);
+}
+
+/* İki büyük seçenek */
+.s2-choices {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.btn.s2-choice {
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  min-height: 120px;
+  padding: 14px 10px;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  white-space: normal;
+}
+.s2-choice-big {
+  font-family: var(--font-display);
+  font-variation-settings: 'SOFT' 100;
+  font-size: clamp(1.5rem, 1.2rem + 1.6vw, 2rem);
+  font-weight: 600;
+  line-height: 1.1;
+}
+.s2-choice-sub {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.875rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.btn.s2-choice[aria-pressed='true'],
+.btn.s2-choice.is-picked {
+  --btn-bg: var(--accent);
+  --btn-ink: var(--accent-ink);
+  --btn-line: var(--accent);
+  opacity: 1;
+}
+.btn.s2-choice[aria-pressed='true'] .s2-choice-sub,
+.btn.s2-choice.is-picked .s2-choice-sub {
+  color: inherit;
+  opacity: 0.85;
+}
+
+.btn.s2-finish { align-self: center; }
+
+/* Bitiş: ifade listeleri tek sütun, uzun metin sarar */
+.s2-list li { justify-content: flex-start; }
+.s2-list li span { overflow-wrap: anywhere; }

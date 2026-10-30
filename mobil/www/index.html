@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <title>Bağlantı yok · Biz İkimiz</title>
+  <!-- Uygulamanın çevrimdışı / hata sayfası (capacitor.config.json server.errorPath).
+       Bu sayfa https://localhost/index.html adresinden açılır; başka dosya yüklenemez,
+       bu yüzden her şey satır içi. Capacitor eklentileri burada yoktur. -->
+  <style>
+    :root {
+      --bg: #FBF4EE; --surface: #FFFFFF; --line: #EADAD1; --text: #3B1F2B; --muted: #7D6070;
+      --accent: #C2375C; --accent-hover: #AB2B4F; --accent-ink: #FFFFFF; --accent-soft: #FBE3E9; --focus: #C2375C;
+      --font-display: 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
+      --font-body: ui-rounded, 'SF Pro Rounded', 'Segoe UI', system-ui, sans-serif;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #1C1120; --surface: #281A2D; --line: #46314E; --text: #F7E9EF; --muted: #BBA2B2;
+        --accent: #F08DA8; --accent-hover: #F6A6BB; --accent-ink: #2B0E1B; --accent-soft: #4A2139; --focus: #F6A6BB;
+      }
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; }
+    body {
+      display: grid; place-items: center;
+      min-height: 100dvh;
+      padding: calc(24px + env(safe-area-inset-top, 0px)) 24px calc(24px + env(safe-area-inset-bottom, 0px));
+      background: var(--bg); color: var(--text);
+      font-family: var(--font-body); font-size: 1rem; line-height: 1.55;
+      -webkit-font-smoothing: antialiased; -webkit-tap-highlight-color: transparent;
+    }
+    main { width: min(100%, 360px); display: grid; justify-items: center; gap: 14px; text-align: center; }
+    .mark { width: 88px; height: 88px; margin-bottom: 6px; }
+    .mark .bg { fill: var(--accent-soft); }
+    .mark .ht { fill: var(--accent); transform-origin: 16px 16px; animation: atis 2.4s ease-in-out infinite; }
+    @keyframes atis { 0%, 100% { transform: scale(1); } 12% { transform: scale(1.08); } 24% { transform: scale(1); } }
+    h1 { margin: 0; font-family: var(--font-display); font-size: 1.6rem; font-weight: 600; letter-spacing: -0.01em; }
+    p { margin: 0; color: var(--muted); }
+    button {
+      margin-top: 10px; min-height: 48px; min-width: 180px; padding: 0 1.4rem;
+      border: 1.5px solid var(--accent); border-radius: 999px;
+      background: var(--accent); color: var(--accent-ink);
+      font: inherit; font-weight: 750; cursor: pointer; touch-action: manipulation;
+      transition: background-color .15s ease, transform .12s ease;
+    }
+    button:hover { background: var(--accent-hover); }
+    button:active { transform: scale(0.97); }
+    button:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+    button[aria-busy='true'] { opacity: .7; }
+    @media (prefers-reduced-motion: reduce) {
+      .mark .ht { animation: none; }
+      button { transition: none; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <svg class="mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+      <rect class="bg" width="32" height="32" rx="10"/>
+      <path class="ht" transform="translate(5 5.2) scale(.92)" d="M12 20.7c-.27 0-.53-.09-.75-.27C6.6 16.6 3 13.5 3 9.45 3 6.68 5.13 4.5 7.8 4.5c1.68 0 3.2.83 4.2 2.15 1-1.32 2.52-2.15 4.2-2.15 2.67 0 4.8 2.18 4.8 4.95 0 4.05-3.6 7.15-8.25 10.98-.22.18-.48.27-.75.27z"/>
+    </svg>
+    <h1>Bağlantı yok</h1>
+    <p id="durum" role="status">İnternete bağlanınca kaldığımız yerden devam ederiz.</p>
+    <button type="button" id="tekrar">Tekrar dene</button>
+  </main>
+  <script>
+    (function () {
+      var SITE = 'https://rose-omer.github.io/bizim-oyunlar/';
+      var btn = document.getElementById('tekrar');
+      var durum = document.getElementById('durum');
+      var deneniyor = false;
+      function tekrar() {
+        if (deneniyor) return;
+        if (navigator.onLine === false) {
+          durum.textContent = 'Telefon hâlâ çevrimdışı görünüyor. Wi-Fi ya da mobil veriyi açıp yeniden dene.';
+          return;
+        }
+        deneniyor = true;
+        btn.setAttribute('aria-busy', 'true');
+        btn.textContent = 'Bağlanıyor…';
+        location.replace(SITE);
+      }
+      btn.addEventListener('click', tekrar);
+      window.addEventListener('online', tekrar);
+    })();
+  </script>
+</body>
+</html>

@@ -9,6 +9,8 @@
 --   2. RPC: log_game, room_stats, ping (security definer; anon çağırabilir)
 --   3. Depolama: herkese açık 'photos' kovası; anon yalnız yükleyebilir (listeleme yok)
 --   4. Çift verisi: room_doc tablosu + RPC doc_put, doc_list, doc_page (js/core/veri.js)
+--   5. Anlık bildirim: push_sub + RPC push_kaydet, push_sil (Edge Function'lar için sunucu RPC'leri)
+--   6. Zamanlanmış hatırlatmalar: pg_cron + pg_net → functions/hatirlat
 
 -- ---------------------------------------------------------------------------
 -- 1. Oyun kaydı
@@ -247,3 +249,306 @@ grant execute on function public.doc_page(text, text, timestamptz, integer) to a
 
 -- PostgREST şema önbelleğini tazele (yeni fonksiyonlar hemen görünsün).
 notify pgrst, 'reload schema';
+
+-- ---------------------------------------------------------------------------
+-- 5. Anlık bildirim (Web Push): push_sub tablosu + RPC (js/core/bildirim.js, functions/bildir, functions/hatirlat)
+-- ---------------------------------------------------------------------------
+-- Abonelik = tarayıcının push adresi (endpoint) + şifreleme anahtarları. Bir cihaz (client) odada tek abonelik tutar.
+create table if not exists public.push_sub (
+  endpoint text primary key,
+  room text not null,
+  client text not null,
+  p256dh text not null,
+  auth text not null,
+  ua text,
+  created_at timestamptz not null default now(),
+  last_ok_at timestamptz,
+  fail_count integer not null default 0
+);
+
+create index if not exists push_sub_room_idx on public.push_sub (room);
+
+alter table public.push_sub enable row level security;
+revoke all on table public.push_sub from anon, authenticated;
+
+-- Bildirim hız sayacı (dakikalık): oda başına ve genel ('*'). Yalnız push_hedef yazar.
+create table if not exists public.push_rate (
+  room text not null,
+  bucket timestamptz not null,
+  n integer not null default 0,
+  primary key (room, bucket)
+);
+
+alter table public.push_rate enable row level security;
+revoke all on table public.push_rate from anon, authenticated;
+
+-- Günlük hatırlatma kaydı: bir oda aynı gün aynı vakitte (sabah/akşam) iki kez hatırlatma almaz.
+create table if not exists public.push_gonderim (
+  room text not null,
+  gun date not null,
+  slot text not null,
+  created_at timestamptz not null default now(),
+  primary key (room, gun, slot)
+);
+
+alter table public.push_gonderim enable row level security;
+revoke all on table public.push_gonderim from anon, authenticated;
+
+-- Aboneliği kaydet ya da güncelle. p_sub = PushSubscription.toJSON(): { endpoint, keys: { p256dh, auth } }.
+-- Yalnız bilinen push servislerinin https adresleri kabul edilir (Edge Function başka adrese istek atmasın).
+create or replace function public.push_kaydet(p_room text, p_client text, p_sub jsonb, p_ua text default null)
+returns boolean
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_endpoint text;
+  v_p256dh text;
+  v_auth text;
+begin
+  if p_room is null or p_room !~ '^[a-z2-9]{10}$' then
+    raise exception 'push_kaydet: gecersiz oda' using errcode = '22023';
+  end if;
+  if p_client is null or p_client !~ '^[A-Za-z0-9_-]{1,64}$' then
+    raise exception 'push_kaydet: gecersiz istemci' using errcode = '22023';
+  end if;
+  if p_sub is null or pg_catalog.jsonb_typeof(p_sub) <> 'object' then
+    raise exception 'push_kaydet: gecersiz abonelik' using errcode = '22023';
+  end if;
+  v_endpoint := p_sub ->> 'endpoint';
+  v_p256dh := p_sub #>> '{keys,p256dh}';
+  v_auth := p_sub #>> '{keys,auth}';
+  if v_endpoint is null or pg_catalog.length(v_endpoint) > 1024
+     or v_endpoint !~ '^https://(fcm\.googleapis\.com|android\.googleapis\.com|updates\.push\.services\.mozilla\.com|[a-z0-9-]+\.push\.services\.mozilla\.com|web\.push\.apple\.com|[a-z0-9.-]+\.push\.apple\.com|[a-z0-9.-]+\.notify\.windows\.com)/[^[:space:]]+$' then
+    raise exception 'push_kaydet: gecersiz adres' using errcode = '22023';
+  end if;
+  if v_p256dh is null or v_p256dh !~ '^[A-Za-z0-9_+/-]{86,88}={0,2}$' then
+    raise exception 'push_kaydet: gecersiz anahtar' using errcode = '22023';
+  end if;
+  if v_auth is null or v_auth !~ '^[A-Za-z0-9_+/-]{22,24}={0,2}$' then
+    raise exception 'push_kaydet: gecersiz anahtar' using errcode = '22023';
+  end if;
+
+  insert into public.push_sub as s (endpoint, room, client, p256dh, auth, ua, created_at)
+  values (v_endpoint, p_room, p_client, v_p256dh, v_auth, pg_catalog.left(p_ua, 200), pg_catalog.clock_timestamp())
+  on conflict (endpoint) do update
+    set room = excluded.room,
+        client = excluded.client,
+        p256dh = excluded.p256dh,
+        auth = excluded.auth,
+        ua = excluded.ua,
+        last_ok_at = pg_catalog.clock_timestamp(),
+        fail_count = 0;
+
+  -- Aynı cihazın eski aboneliği: tarayıcı yeni adres verdiyse eskisi artık çalışmaz.
+  delete from public.push_sub as s
+  where s.room = p_room and s.client = p_client and s.endpoint <> v_endpoint;
+
+  -- Oda başına en çok 10 abonelik: fazlası en uzun süredir sessiz olanlardan silinir.
+  delete from public.push_sub as s
+  where s.endpoint in (
+    select x.endpoint from public.push_sub as x
+    where x.room = p_room
+    order by x.endpoint = v_endpoint desc, coalesce(x.last_ok_at, x.created_at) desc, x.created_at desc
+    offset 10);
+  return true;
+end;
+$$;
+
+create or replace function public.push_sil(p_endpoint text)
+returns boolean
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if p_endpoint is null or pg_catalog.length(p_endpoint) > 1024 or p_endpoint !~ '^https://' then
+    raise exception 'push_sil: gecersiz adres' using errcode = '22023';
+  end if;
+  delete from public.push_sub as s where s.endpoint = p_endpoint;
+  return found;
+end;
+$$;
+
+-- Edge Function 'bildir': hız sınırını sayar, odadaki diğer cihazların aboneliklerini döner.
+-- Sınır: oda başına dakikada 20, toplam dakikada 600 bildirim isteği.
+create or replace function public.push_hedef(p_room text, p_from text)
+returns table (endpoint text, p256dh text, auth text)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+#variable_conflict use_column
+declare
+  v_dk timestamptz := pg_catalog.date_trunc('minute', pg_catalog.now());
+  v_n integer;
+  v_all integer;
+begin
+  if p_room is null or p_room !~ '^[a-z2-9]{10}$' then
+    raise exception 'push_hedef: gecersiz oda' using errcode = '22023';
+  end if;
+  if p_from is not null and p_from !~ '^[A-Za-z0-9_-]{1,64}$' then
+    raise exception 'push_hedef: gecersiz gonderen' using errcode = '22023';
+  end if;
+
+  insert into public.push_rate as r (room, bucket, n) values (p_room, v_dk, 1)
+    on conflict (room, bucket) do update set n = r.n + 1
+    returning r.n into v_n;
+  if v_n > 20 then
+    raise exception 'push_hedef: cok fazla bildirim' using errcode = '54000';
+  end if;
+  insert into public.push_rate as r (room, bucket, n) values ('*', v_dk, 1)
+    on conflict (room, bucket) do update set n = r.n + 1
+    returning r.n into v_all;
+  if v_all > 600 then
+    raise exception 'push_hedef: cok fazla bildirim' using errcode = '54000';
+  end if;
+  if v_all = 1 then
+    delete from public.push_rate as r where r.bucket < v_dk - interval '1 hour';
+  end if;
+
+  return query
+  select s.endpoint, s.p256dh, s.auth
+  from public.push_sub as s
+  where s.room = p_room and (p_from is null or s.client <> p_from);
+end;
+$$;
+
+-- Gönderim sonucu: başarılılar tazelenir, 404/410 dönenler silinir, 20 kez üst üste düşen silinir.
+create or replace function public.push_sonuc(p_ok text[], p_gone text[], p_fail text[])
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  update public.push_sub as s set last_ok_at = pg_catalog.now(), fail_count = 0
+  where s.endpoint = any (coalesce(p_ok, '{}'::text[]));
+  delete from public.push_sub as s
+  where s.endpoint = any (coalesce(p_gone, '{}'::text[]));
+  update public.push_sub as s set fail_count = s.fail_count + 1
+  where s.endpoint = any (coalesce(p_fail, '{}'::text[]));
+  delete from public.push_sub as s
+  where s.endpoint = any (coalesce(p_fail, '{}'::text[])) and s.fail_count >= 20;
+end;
+$$;
+
+-- Edge Function 'hatirlat': tüm abonelikler.
+create or replace function public.push_abonelikler()
+returns table (room text, client text, endpoint text, p256dh text, auth text)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select s.room, s.client, s.endpoint, s.p256dh, s.auth
+  from public.push_sub as s
+  order by s.room;
+$$;
+
+-- Edge Function 'hatirlat': aboneliği olan odaların belgeleri. 'gs' yalnız p_gs_gun gününün cevapları.
+create or replace function public.hatirlat_belgeler(p_kinds text[], p_gs_gun integer default null)
+returns table (room text, kind text, id text, data jsonb)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select d.room, d.kind, d.id, d.data
+  from public.room_doc as d
+  where d.kind = any (p_kinds)
+    and not d.deleted
+    and d.room in (select s.room from public.push_sub as s)
+    and (d.kind <> 'gs' or (p_gs_gun is not null and d.id like (p_gs_gun::text || '-%')));
+$$;
+
+-- Edge Function 'hatirlat': odayı bugün için işaretler. İlk kez işaretlendiyse true (gönder), yoksa false.
+create or replace function public.hatirlat_isaretle(p_room text, p_gun date, p_slot text)
+returns boolean
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if p_room is null or p_room !~ '^[a-z2-9]{10}$' or p_gun is null or p_slot is null
+     or p_slot not in ('sabah', 'aksam') then
+    raise exception 'hatirlat_isaretle: gecersiz girdi' using errcode = '22023';
+  end if;
+  insert into public.push_gonderim (room, gun, slot) values (p_room, p_gun, p_slot)
+    on conflict do nothing;
+  if not found then
+    return false;
+  end if;
+  delete from public.push_gonderim as g where g.gun < p_gun - 40;
+  return true;
+end;
+$$;
+
+revoke execute on function public.push_kaydet(text, text, jsonb, text) from public;
+revoke execute on function public.push_sil(text) from public;
+grant execute on function public.push_kaydet(text, text, jsonb, text) to anon, authenticated;
+grant execute on function public.push_sil(text) to anon, authenticated;
+
+-- Aşağıdakiler yalnız Edge Function'lar içindir (service_role). Supabase varsayılan olarak anon'a da
+-- execute verir; bu yüzden anon ve authenticated'dan açıkça geri alınır.
+revoke execute on function public.push_hedef(text, text) from public, anon, authenticated;
+revoke execute on function public.push_sonuc(text[], text[], text[]) from public, anon, authenticated;
+revoke execute on function public.push_abonelikler() from public, anon, authenticated;
+revoke execute on function public.hatirlat_belgeler(text[], integer) from public, anon, authenticated;
+revoke execute on function public.hatirlat_isaretle(text, date, text) from public, anon, authenticated;
+grant execute on function public.push_hedef(text, text) to service_role;
+grant execute on function public.push_sonuc(text[], text[], text[]) to service_role;
+grant execute on function public.push_abonelikler() to service_role;
+grant execute on function public.hatirlat_belgeler(text[], integer) to service_role;
+grant execute on function public.hatirlat_isaretle(text, date, text) to service_role;
+
+notify pgrst, 'reload schema';
+
+-- ---------------------------------------------------------------------------
+-- 6. Zamanlanmış hatırlatmalar: pg_cron + pg_net → Edge Function 'hatirlat'
+-- ---------------------------------------------------------------------------
+-- Her gün 09:00 (özel günler, doğum günleri, kilometre taşları) ve 20:00 (günün sorusu) Türkiye saati.
+-- pg_cron saati UTC'dir. Türkiye yıl boyu UTC+3: 09:00 → 06:00 UTC, 20:00 → 17:00 UTC.
+-- Bu işler Supabase'i her gün iki kez çalıştırır (hareketsizlikten durmaya karşı da yardımcı olur).
+--
+-- Bir kez, elle (değeri depoya YAZMA): SQL Editor'de
+--   select vault.create_secret('<uzun rastgele anahtar>', 'hatirlat_anahtar');
+-- Aynı değer Edge Function secret'ı olarak: npx supabase secrets set HATIRLAT_ANAHTAR=<aynı değer>
+-- İsteğe bağlı: select vault.create_secret('https://<ref>.supabase.co', 'project_url');
+create extension if not exists pg_cron with schema pg_catalog;
+create extension if not exists pg_net with schema extensions;
+
+-- Edge Function'ı çağırır. Yalnız postgres (cron işi) çalıştırır; anon çağıramaz.
+create or replace function public.hatirlat_cagir(p_slot text)
+returns bigint
+language plpgsql
+set search_path = ''
+as $$
+declare
+  v_url text;
+  v_anahtar text;
+begin
+  if p_slot is null or p_slot not in ('sabah', 'aksam') then
+    raise exception 'hatirlat_cagir: gecersiz vakit' using errcode = '22023';
+  end if;
+  select s.decrypted_secret into v_url from vault.decrypted_secrets as s where s.name = 'project_url';
+  select s.decrypted_secret into v_anahtar from vault.decrypted_secrets as s where s.name = 'hatirlat_anahtar';
+  if v_anahtar is null or v_anahtar = '' then
+    raise warning 'hatirlat_cagir: vault icinde hatirlat_anahtar yok';
+    return null;
+  end if;
+  return net.http_post(
+    url := coalesce(v_url, 'https://blgtlflryxknyalutugw.supabase.co') || '/functions/v1/hatirlat',
+    body := pg_catalog.jsonb_build_object('slot', p_slot),
+    headers := pg_catalog.jsonb_build_object('Content-Type', 'application/json', 'x-hatirlat-anahtar', v_anahtar),
+    timeout_milliseconds := 60000
+  );
+end;
+$$;
+
+revoke execute on function public.hatirlat_cagir(text) from public, anon, authenticated;
+
+-- Adlı işler: aynı adla yeniden zamanlamak işi günceller, çoğaltmaz (dosya tekrar çalıştırılabilir).
+select cron.schedule('biz-hatirlat-sabah', '0 6 * * *', $cron$select public.hatirlat_cagir('sabah')$cron$);
+select cron.schedule('biz-hatirlat-aksam', '0 17 * * *', $cron$select public.hatirlat_cagir('aksam')$cron$);

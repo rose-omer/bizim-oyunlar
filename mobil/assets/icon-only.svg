@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Eski Android ikonu: gül zemin, beyaz kalp (assets/favicon.svg teması). -->
+  <rect width="1024" height="1024" fill="#C2375C"/>
+  <path fill="#FFFFFF" transform="translate(512 512) scale(31.85) translate(-12 -12.6)" d="M12 20.7c-.27 0-.53-.09-.75-.27C6.6 16.6 3 13.5 3 9.45 3 6.68 5.13 4.5 7.8 4.5c1.68 0 3.2.83 4.2 2.15 1-1.32 2.52-2.15 4.2-2.15 2.67 0 4.8 2.18 4.8 4.95 0 4.05-3.6 7.15-8.25 10.98-.22.18-.48.27-.75.27z"/>
+</svg>

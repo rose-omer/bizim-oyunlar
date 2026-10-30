@@ -141,7 +141,7 @@ export function createEnding() {
         lines,
         buttons: [
           { label: 'Tekrar', primary: true, onClick: onAgain },
-          { label: 'Odamıza dön', onClick: goLobby },
+          { label: 'Ana sayfaya dön', onClick: goLobby },
         ],
       });
       close = typeof c === 'function' ? c : () => {};
@@ -159,5 +159,5 @@ export function createEnding() {
 export function endActions(onAgain) {
   return h('div', { class: 'soru-actions' },
     h('button', { type: 'button', class: 'btn primary', dataset: { k: 'again' }, onclick: () => { sfx('tap'); onAgain(); } }, 'Tekrar oynayalım'),
-    h('button', { type: 'button', class: 'btn', dataset: { k: 'lobby' }, onclick: goLobby }, 'Odamıza dön'));
+    h('button', { type: 'button', class: 'btn', dataset: { k: 'lobby' }, onclick: goLobby }, 'Ana sayfaya dön'));
 }

@@ -221,7 +221,8 @@ export async function pageDocs(roomId, kind, { before = null, limit = 50 } = {})
 // ---------- Koleksiyon (sayfalar bunu kullanır) ----------
 
 const cacheKey = (roomId, kind) => `bizim.veri.${roomId}.${kind}`;
-const outboxKey = (roomId) => `bizim.veri.giden.${roomId}`;
+// Giden kutusu kişiye özel: yerel modda iki sekme (iki kişi) aynı localStorage'ı paylaşır.
+const outboxKey = (roomId, clientId) => `bizim.veri.giden.${roomId}.${clientId || '-'}`;
 
 function readJson(key, fallback) {
   try {
@@ -251,22 +252,24 @@ export async function openCollection(room, kind, { recent = 0 } = {}) {
   const changed = () => { saveCache(); emit('change', liveDocs(map)); };
 
   // Önbellek: açılışta anında gösterim ve çevrimdışı okuma.
+  // Önbellekte yalnız sunucuda onaylı belgeler durur; bekleyenler giden kutusundan kurulur.
   const cached = readJson(cacheKey(roomId, kind), null);
-  if (cached && Array.isArray(cached.docs)) {
-    mergeDocs(map, cached.docs);
+  const hadCache = !!(cached && Array.isArray(cached.docs));
+  if (hadCache) {
+    mergeDocs(map, cached.docs.filter((d) => d && !d.pending));
     since = cached.since || null;
   }
   function saveCache() {
-    let docs = [...map.values()];
-    if (recent > 0) docs = liveDocs(map).slice(-CACHE_RECENT);
+    let docs = [...map.values()].filter((d) => !d.pending);
+    if (recent > 0) docs = docs.filter((d) => !d.deleted).sort((a, b) => timeOf(a.created_at) - timeOf(b.created_at)).slice(-CACHE_RECENT);
     try {
       writeStore('local', cacheKey(roomId, kind), JSON.stringify({ since, docs }));
     } catch { /* kota */ }
   }
 
   // Giden kutusu: çevrimdışıyken yapılan yazmalar sırayla tekrar denenir.
-  const outbox = () => readJson(outboxKey(roomId), []);
-  const setOutbox = (list) => writeStore('local', outboxKey(roomId), list.length ? JSON.stringify(list) : null);
+  const outbox = () => readJson(outboxKey(roomId, meId), []);
+  const setOutbox = (list) => writeStore('local', outboxKey(roomId, meId), list.length ? JSON.stringify(list) : null);
   for (const o of outbox()) {
     if (o.kind !== kind) continue;
     const cur = map.get(o.id);
@@ -355,7 +358,7 @@ export async function openCollection(room, kind, { recent = 0 } = {}) {
     return docs.length;
   }
 
-  // İlk yükleme.
+  // İlk yükleme. Önbellek varsa hemen döner, sunucudan tazeleme arkada sürer (değişince 'change' gelir).
   try {
     if (recent > 0 && !since) {
       const docs = await pageDocs(roomId, kind, { limit: recent });
@@ -363,6 +366,8 @@ export async function openCollection(room, kind, { recent = 0 } = {}) {
       mergeDocs(map, docs);
       since = maxUpdated(docs, since) || new Date(Date.now() - OVERLAP_MS).toISOString();
       saveCache();
+    } else if (hadCache) {
+      refresh();
     } else {
       await refresh();
     }

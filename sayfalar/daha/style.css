@@ -1,0 +1,193 @@
+/* Daha: özellik kutucukları + uygulama satırları. Renkler yalnız base.css değişkenleri. */
+
+.daha {
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 8px var(--gutter) 32px;
+}
+.daha-bolum { display: flex; flex-direction: column; gap: 12px; }
+.daha-bolum + .daha-bolum { margin-top: 30px; }
+.daha-baslik {
+  padding-top: 12px;
+  font-size: 1.375rem;
+  letter-spacing: -0.015em;
+}
+
+/* ---------- Özellik kutucukları ---------- */
+.daha-izgara {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+@media (min-width: 640px) { .daha-izgara { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+.daha-kutu {
+  --tile: var(--tint-1);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+  min-height: 156px;
+  padding: 14px 14px 16px;
+  border: 1px solid color-mix(in srgb, var(--tile) 55%, var(--line));
+  border-radius: var(--radius-lg);
+  background: linear-gradient(160deg, color-mix(in srgb, var(--tile) 78%, var(--surface)) 0%, var(--surface) 72%);
+  box-shadow: var(--shadow-sm);
+  color: var(--text);
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.14s var(--ease), border-color 0.15s ease, box-shadow 0.2s ease;
+}
+.daha-kutu[data-tint='2'] { --tile: var(--tint-2); }
+.daha-kutu[data-tint='3'] { --tile: var(--tint-3); }
+.daha-kutu[data-tint='4'] { --tile: var(--tint-4); }
+.daha-kutu[data-tint='5'] { --tile: var(--tint-5); }
+.daha-kutu[data-tint='6'] { --tile: var(--tint-6); }
+.daha-kutu:active { transform: scale(0.97); }
+@media (hover: hover) {
+  .daha-kutu:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); box-shadow: var(--shadow); }
+}
+
+.daha-ikon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  margin-bottom: 10px;
+  border-radius: 15px;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm), inset 0 0 0 1px color-mix(in srgb, var(--tile) 60%, transparent);
+  font-size: 26px;
+  line-height: 1;
+}
+.daha-ad {
+  font-family: var(--font-display);
+  font-variation-settings: 'SOFT' 100;
+  font-size: 1.0625rem;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.005em;
+}
+.daha-aciklama {
+  color: var(--muted);
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+/* ---------- Oyunlar ---------- */
+.daha-oyunlar {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  min-height: 84px;
+  padding: 16px 14px 16px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  color: var(--text);
+  text-decoration: none;
+  transition: transform 0.14s var(--ease), border-color 0.15s ease;
+}
+.daha-oyunlar:active { transform: scale(0.98); }
+@media (hover: hover) { .daha-oyunlar:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); } }
+.daha-oyun-yigin { display: flex; padding-left: 10px; }
+.daha-oyun-pul {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  margin-left: -12px;
+  border-radius: 50%;
+  background: var(--tint-1);
+  box-shadow: 0 0 0 3px var(--surface);
+  font-size: 19px;
+  line-height: 1;
+}
+.daha-oyun-pul[data-tint='2'] { background: var(--tint-2); }
+.daha-oyun-pul[data-tint='3'] { background: var(--tint-3); }
+.daha-oyun-pul[data-tint='4'] { background: var(--tint-4); }
+.daha-oyun-pul[data-tint='5'] { background: var(--tint-5); }
+.daha-oyun-metin { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+@media (max-width: 380px) { .daha-oyun-pul:nth-child(n + 4) { display: none; } }
+
+/* ---------- Uygulama satırları ---------- */
+.daha-liste {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+.daha-liste > li + li { border-top: 1px solid var(--line); }
+.daha-satir {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 64px;
+  padding: 12px 14px 12px 16px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+}
+.daha-satir.tiklanir { transition: background-color 0.15s ease; }
+.daha-satir.tiklanir:active { background: var(--surface-2); }
+@media (hover: hover) { .daha-satir.tiklanir:hover { background: color-mix(in srgb, var(--surface-2) 60%, transparent); } }
+.daha-satir:disabled { opacity: 0.6; cursor: progress; }
+.daha-satir:focus-visible { outline-offset: -3px; }
+.daha-satir-ikon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+.daha-satir-ikon svg { width: 22px; height: 22px; }
+.daha-satir-metin { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.daha-satir-baslik { font-weight: 750; line-height: 1.3; }
+.daha-satir-aciklama { color: var(--muted); font-size: 0.875rem; line-height: 1.4; }
+.daha-svg { display: grid; place-items: center; color: var(--muted); }
+.daha-svg svg { width: 20px; height: 20px; }
+.daha-satir-ikon .daha-svg { color: inherit; }
+.daha-satir-ikon .daha-svg svg { width: 22px; height: 22px; }
+.daha-sag { pointer-events: none; }
+
+ol.daha-adimlar {
+  list-style: decimal;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0 16px 16px 70px;
+  color: var(--text);
+  font-size: 0.9375rem;
+  line-height: 1.45;
+}
+.daha-adimlar li::marker { color: var(--accent-strong); font-weight: 800; }
+.daha-adim-ikon {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  vertical-align: -6px;
+  border-radius: 7px;
+  background: var(--surface-2);
+  color: var(--accent-strong);
+}
+.daha-adim-ikon svg { width: 16px; height: 16px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .daha-kutu, .daha-oyunlar { transition: none; }
+  .daha-kutu:active, .daha-oyunlar:active { transform: none; }
+}

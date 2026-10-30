@@ -1,0 +1,257 @@
+@import url('../_soru/soru.css');
+
+/* Derin Sohbet: mum ışığı. Sıcak, sakin; renkler yalnız base.css değişkenlerinden.
+   Alev çekirdeği açık temada yüzey beyazı, koyu temada metin rengi (ikisi de en açık ton).
+   Koyu tema seçicileri base.css ile aynı: sistem koyu (data-mod="acik" değilse) ya da data-mod="koyu". */
+:root {
+  --dr-core: var(--surface);
+  --dr-flame: color-mix(in srgb, var(--accent) 70%, var(--tint-3));
+  --dr-halo: color-mix(in srgb, var(--accent) 22%, transparent);
+  --dr-wax: var(--tint-3);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-mod="acik"]) {
+    --dr-core: var(--text);
+    --dr-flame: var(--accent);
+    --dr-halo: color-mix(in srgb, var(--accent) 18%, transparent);
+    --dr-wax: var(--surface-2);
+  }
+}
+:root[data-mod="koyu"] {
+  --dr-core: var(--text);
+  --dr-flame: var(--accent);
+  --dr-halo: color-mix(in srgb, var(--accent) 18%, transparent);
+  --dr-wax: var(--surface-2);
+}
+
+/* Sayfanın üstünde yumuşak bir mum ışığı */
+body {
+  background-image:
+    radial-gradient(120% 55% at 50% -8%, var(--dr-halo), transparent 62%),
+    var(--grain);
+}
+
+.dr-screen { gap: 18px; }
+
+/* ---- Mum ---- */
+.dr-candle {
+  --h: 92px;
+  position: relative;
+  width: 64px;
+  height: var(--h);
+  margin: 4px auto 0;
+}
+.dr-candle-big { --h: 118px; width: 80px; }
+.dr-glow {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--dr-halo) 0%, transparent 68%);
+  transform: translate(-50%, -38%);
+  animation: dr-breathe 5s ease-in-out infinite;
+}
+.dr-flame {
+  position: absolute;
+  left: 50%;
+  top: 6px;
+  width: 20px;
+  height: 34px;
+  margin-left: -10px;
+  border-radius: 50% 50% 46% 46% / 64% 64% 36% 36%;
+  background: radial-gradient(ellipse 60% 55% at 50% 72%, var(--dr-core) 0 34%, var(--dr-flame) 78%);
+  box-shadow: 0 -2px 16px 2px var(--dr-halo), 0 6px 22px 6px var(--dr-halo);
+  transform-origin: 50% 92%;
+  animation: dr-flicker 3.4s ease-in-out infinite;
+}
+.dr-candle-big .dr-flame { width: 24px; height: 40px; margin-left: -12px; }
+.dr-wick {
+  position: absolute;
+  left: 50%;
+  top: 38px;
+  width: 2px;
+  height: 8px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--text);
+  opacity: 0.7;
+}
+.dr-candle-big .dr-wick { top: 44px; }
+.dr-wax {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 36px;
+  height: calc(var(--h) - 44px);
+  margin-left: -18px;
+  border: 1px solid var(--line);
+  border-radius: 10px 10px 7px 7px;
+  background:
+    linear-gradient(90deg, transparent 0 55%, color-mix(in srgb, var(--surface) 55%, transparent) 70%, transparent 85%),
+    var(--dr-wax);
+  box-shadow: var(--shadow);
+}
+.dr-candle-big .dr-wax { width: 44px; margin-left: -22px; height: calc(var(--h) - 50px); }
+
+@keyframes dr-flicker {
+  0%, 100% { transform: rotate(-1deg) scale(1, 1); }
+  22% { transform: rotate(1.5deg) scale(1.03, 0.97); }
+  47% { transform: rotate(-0.6deg) scale(0.97, 1.04); }
+  71% { transform: rotate(1deg) scale(1.02, 0.99); }
+}
+@keyframes dr-breathe {
+  0%, 100% { opacity: 0.75; transform: translate(-50%, -38%) scale(0.96); }
+  50% { opacity: 1; transform: translate(-50%, -38%) scale(1.04); }
+}
+
+/* ---- Kurulum: üç aşama yolu ---- */
+.dr-path {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.dr-path-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 10px 12px;
+  border-top: 2px solid var(--accent);
+  transition: opacity 0.2s ease;
+}
+.dr-path-item[data-on='false'] { opacity: 0.4; border-top-color: var(--line); }
+.dr-path-name {
+  font-family: var(--font-display);
+  font-variation-settings: 'SOFT' 100;
+  font-size: 1.0625rem;
+  font-weight: 600;
+}
+.dr-path-desc {
+  color: var(--muted);
+  font-size: 0.8125rem;
+  font-weight: 650;
+  line-height: 1.35;
+}
+.dr-note { font-size: 0.875rem; }
+
+/* ---- Oyun: aşama göstergesi ---- */
+.dr-stages {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.dr-stage {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.8125rem;
+  font-weight: 750;
+}
+.dr-stage + .dr-stage::before {
+  content: '';
+  width: 18px;
+  height: 1.5px;
+  margin-right: 2px;
+  background: var(--line);
+}
+.dr-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--line);
+}
+.dr-stage[data-state='done'] .dr-dot { background: var(--accent); }
+.dr-stage[data-state='now'] { color: var(--text); }
+.dr-stage[data-state='now'] .dr-dot {
+  background: var(--accent);
+  box-shadow: 0 0 0 4px var(--dr-halo);
+}
+.dr-stage[data-state='off'] { opacity: 0.45; }
+
+.dr-count {
+  color: var(--muted);
+  font-size: 0.875rem;
+  font-weight: 700;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Soru kartı ---- */
+.dr-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 248px;
+  padding: clamp(22px, 6vw, 34px) clamp(18px, 5vw, 30px);
+  text-align: center;
+  border-color: color-mix(in srgb, var(--accent) 26%, var(--line));
+  box-shadow: var(--shadow), 0 18px 40px -26px var(--dr-halo);
+}
+.dr-who {
+  color: var(--accent-strong);
+  font-size: 0.9375rem;
+  font-weight: 800;
+}
+.dr-q {
+  margin: auto 0;
+  font-family: var(--font-display);
+  font-variation-settings: 'SOFT' 100;
+  font-size: clamp(1.5rem, 1.15rem + 1.8vw, 2.125rem);
+  font-weight: 500;
+  line-height: 1.28;
+  text-wrap: balance;
+}
+.dr-how {
+  color: var(--muted);
+  font-size: 0.9375rem;
+  font-weight: 650;
+  line-height: 1.45;
+}
+
+.dr-turn[data-state='speak'] {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+.dr-turn[data-state='done'] { color: var(--text); }
+
+.dr-listen { font-size: 1rem; }
+
+.dr-quiet {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 12px;
+}
+
+/* ---- Ara ---- */
+.dr-task {
+  margin: 0;
+  font-family: var(--font-display);
+  font-variation-settings: 'SOFT' 100;
+  font-size: clamp(1.25rem, 1.05rem + 1.2vw, 1.625rem);
+  font-weight: 500;
+  line-height: 1.35;
+  text-align: center;
+  text-wrap: balance;
+  background: color-mix(in srgb, var(--accent-soft) 55%, var(--surface));
+}
+
+.dr-closing {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  text-align: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dr-flame, .dr-glow { animation: none; }
+  .dr-path-item { transition: none; }
+}

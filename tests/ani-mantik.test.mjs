@@ -1,0 +1,154 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import {
+  AY_ADLARI, gunYazi, aramaMetni, filtrele, zamanCizelgesi, buGunGecmisYillar, buGunBasligi,
+  tumEtiketler, yillar, albumFotolari, etiketTemizle, etiketEkle, aniDogrula, aniVerisi,
+  fotoTasi, fotoKaldir, formParametreleri, begeniDegistir, begeniSayisi, MAX_FOTO,
+} from '../sayfalar/anilar/mantik.js';
+
+let seq = 0;
+const ani = (data, extra = {}) => ({
+  id: `a${++seq}`,
+  author: 'omer',
+  created_at: `2026-01-01T00:00:${String(seq).padStart(2, '0')}Z`,
+  updated_at: '2026-01-01T00:00:00Z',
+  data: { fotolar: [], ...data },
+  ...extra,
+});
+
+test('gunYazi Türkçe ay adıyla yazar; geçersizde boş', () => {
+  assert.equal(AY_ADLARI.length, 12);
+  assert.equal(gunYazi('2025-10-12'), '12 Ekim 2025');
+  assert.equal(gunYazi('2026-02-01', { yil: false }), '1 Şubat');
+  assert.equal(gunYazi('2026-13-01'), '');
+  assert.equal(gunYazi(undefined), '');
+});
+
+test('aramaMetni Türkçe küçük harfe çevirir (İ → i, I → ı)', () => {
+  assert.equal(aramaMetni('  İZMİR Işıkları '), 'izmir ışıkları');
+});
+
+test('filtrele: etiket, yıl ve arama birlikte çalışır', () => {
+  const a = ani({ baslik: 'İzmir gezisi', tarih: '2025-07-04', yer: 'Alsancak', etiketler: ['Tatil', 'deniz'] });
+  const b = ani({ baslik: 'İlk sinema', tarih: '2024-02-14', not: 'Patlamış mısır', etiketler: ['ilk'] });
+  const c = ani({ baslik: 'Kahvaltı', tarih: '2025-03-01', etiketler: ['tatil'] });
+  const docs = [a, b, c];
+  assert.deepEqual(filtrele(docs, {}).map((d) => d.id), [a.id, b.id, c.id]);
+  assert.deepEqual(filtrele(docs, { etiket: 'TATİL' }).map((d) => d.id), [a.id, c.id]);
+  assert.deepEqual(filtrele(docs, { yil: 2025 }).map((d) => d.id), [a.id, c.id]);
+  assert.deepEqual(filtrele(docs, { yil: '2024' }).map((d) => d.id), [b.id]);
+  assert.deepEqual(filtrele(docs, { ara: 'izmir' }).map((d) => d.id), [a.id]);
+  assert.deepEqual(filtrele(docs, { ara: 'alsancak' }).map((d) => d.id), [a.id]);
+  assert.deepEqual(filtrele(docs, { ara: 'mısır' }).map((d) => d.id), [b.id]);
+  assert.deepEqual(filtrele(docs, { ara: 'deniz' }).map((d) => d.id), [a.id]);
+  assert.deepEqual(filtrele(docs, { etiket: 'tatil', yil: 2025, ara: 'kahv' }).map((d) => d.id), [c.id]);
+});
+
+test('zamanCizelgesi: yıl → ay, yeniden eskiye; aynı günde son eklenen önce', () => {
+  const a = ani({ baslik: 'A', tarih: '2025-07-04' });
+  const b = ani({ baslik: 'B', tarih: '2024-02-14' });
+  const c = ani({ baslik: 'C', tarih: '2025-07-20' });
+  const d = ani({ baslik: 'D', tarih: '2025-01-02' });
+  const e = ani({ baslik: 'E', tarih: '2025-07-20' }); // c'den sonra eklendi
+  const bozuk = ani({ baslik: 'Tarihsiz' });
+  const out = zamanCizelgesi([a, b, c, d, e, bozuk]);
+  assert.deepEqual(out.map((y) => y.yil), [2025, 2024]);
+  assert.deepEqual(out[0].aylar.map((m) => [m.ay, m.ad]), [[7, 'Temmuz'], [1, 'Ocak']]);
+  assert.deepEqual(out[0].aylar[0].anilar.map((x) => x.data.baslik), ['E', 'C', 'A']);
+  assert.equal(out[0].sayi, 4);
+  assert.deepEqual(out[1].aylar[0].anilar.map((x) => x.data.baslik), ['B']);
+  assert.deepEqual(zamanCizelgesi([]), []);
+});
+
+test('buGunGecmisYillar: aynı gün-ay, geçmiş yıllar; yakın yıl önce', () => {
+  const a = ani({ baslik: 'Geçen yıl', tarih: '2025-10-30' });
+  const b = ani({ baslik: 'Üç yıl', tarih: '2023-10-30' });
+  const bugunEklenen = ani({ baslik: 'Bugün', tarih: '2026-10-30' });
+  const baskaGun = ani({ baslik: 'Dün', tarih: '2025-10-29' });
+  const out = buGunGecmisYillar([b, a, bugunEklenen, baskaGun], '2026-10-30');
+  assert.deepEqual(out.map((x) => [x.yilOnce, x.ani.data.baslik]), [[1, 'Geçen yıl'], [3, 'Üç yıl']]);
+  assert.equal(buGunBasligi(1), 'Geçen yıl bugün');
+  assert.equal(buGunBasligi(4), '4 yıl önce bugün');
+});
+
+test('buGunGecmisYillar: 29 Şubat anısı artık olmayan yılda 28 Şubat günü gelir', () => {
+  const a = ani({ baslik: 'Artık gün', tarih: '2024-02-29' });
+  assert.equal(buGunGecmisYillar([a], '2025-02-28').length, 1);
+  assert.equal(buGunGecmisYillar([a], '2025-03-01').length, 0);
+  assert.equal(buGunGecmisYillar([a], '2028-02-28').length, 0); // 2028 artık: 29'unda gelir
+  assert.equal(buGunGecmisYillar([a], '2028-02-29')[0].yilOnce, 4);
+  assert.deepEqual(buGunGecmisYillar([a], 'bozuk'), []);
+});
+
+test('tumEtiketler ve yillar', () => {
+  const docs = [
+    ani({ tarih: '2025-01-01', etiketler: ['Tatil', 'deniz'] }),
+    ani({ tarih: '2023-05-01', etiketler: ['tatil'] }),
+    ani({ tarih: '2025-06-01' }),
+  ];
+  assert.deepEqual(tumEtiketler(docs), [{ etiket: 'Tatil', sayi: 2 }, { etiket: 'deniz', sayi: 1 }]);
+  assert.deepEqual(yillar(docs), [2025, 2023]);
+});
+
+test('albumFotolari: yeni anı önce, anı içi sıra korunur', () => {
+  const eski = ani({ baslik: 'Eski', tarih: '2024-01-01', fotolar: ['u1', 'u2'] });
+  const yeni = ani({ baslik: 'Yeni', tarih: '2025-01-01', fotolar: ['u3'] });
+  const out = albumFotolari([eski, yeni]);
+  assert.deepEqual(out.map((f) => [f.url, f.aniId, f.sira]), [['u3', yeni.id, 0], ['u1', eski.id, 0], ['u2', eski.id, 1]]);
+  assert.equal(out[0].baslik, 'Yeni');
+});
+
+test('etiketTemizle ve etiketEkle', () => {
+  assert.equal(etiketTemizle('  #Yaz   tatili '), 'Yaz tatili');
+  assert.equal(etiketTemizle('#'), '');
+  assert.equal(etiketTemizle('a'.repeat(40)).length, 24);
+  assert.deepEqual(etiketEkle(['Tatil'], 'TATİL'), ['Tatil']);
+  assert.deepEqual(etiketEkle(['Tatil'], ' deniz, '), ['Tatil', 'deniz']);
+  assert.deepEqual(etiketEkle([], ''), []);
+  const dolu = Array.from({ length: 12 }, (_, i) => `e${i}`);
+  assert.equal(etiketEkle(dolu, 'fazla').length, 12);
+});
+
+test('aniDogrula: başlık, tarih, fotoğraf sınırı', () => {
+  assert.equal(aniDogrula({ baslik: 'Sahil', tarih: '2025-07-04', fotolar: [] }), null);
+  assert.match(aniDogrula({ baslik: '  ', tarih: '2025-07-04' }), /başlık/i);
+  assert.match(aniDogrula({ baslik: 'x'.repeat(81), tarih: '2025-07-04' }), /başlık/i);
+  assert.match(aniDogrula({ baslik: 'Sahil', tarih: '2025-02-30' }), /tarih/i);
+  assert.match(aniDogrula({ baslik: 'Sahil', tarih: '2025-07-04', fotolar: Array(MAX_FOTO + 1).fill('u') }), /10/);
+  assert.match(aniDogrula({ baslik: 'Sahil', tarih: '2025-07-04', not: 'n'.repeat(2001) }), /not/i);
+});
+
+test('aniVerisi: boş alanları atar, beğeniyi ve ilk ekleyeni korur', () => {
+  const v = aniVerisi({ baslik: ' Sahil ', tarih: '2025-07-04', yer: ' ', not: ' güzel ', fotolar: ['u'], etiketler: [] }, { begeni: { gul: true } });
+  assert.deepEqual(v, { baslik: 'Sahil', tarih: '2025-07-04', not: 'güzel', fotolar: ['u'], begeni: { gul: true } });
+  assert.equal(aniVerisi({ baslik: 'a', tarih: '2025-07-04' }, {}, 'omer').ekleyen, 'omer');
+  assert.equal(aniVerisi({ baslik: 'a', tarih: '2025-07-04' }, { ekleyen: 'omer' }, 'gul').ekleyen, 'omer');
+});
+
+test('fotoTasi ve fotoKaldir yeni dizi döner', () => {
+  const l = ['a', 'b', 'c'];
+  assert.deepEqual(fotoTasi(l, 0, 1), ['b', 'a', 'c']);
+  assert.deepEqual(fotoTasi(l, 2, -1), ['a', 'c', 'b']);
+  assert.deepEqual(fotoTasi(l, 0, -1), ['a', 'b', 'c']);
+  assert.deepEqual(fotoTasi(l, 2, 1), ['a', 'b', 'c']);
+  assert.deepEqual(fotoKaldir(l, 1), ['a', 'c']);
+  assert.deepEqual(l, ['a', 'b', 'c']);
+});
+
+test('formParametreleri: ?yeni=1&baslik=..&tarih=..', () => {
+  assert.deepEqual(formParametreleri('?yeni=1&baslik=Paris%27e%20gittik&tarih=2026-05-01', '2026-10-30'),
+    { yeni: true, baslik: "Paris'e gittik", tarih: '2026-05-01' });
+  assert.deepEqual(formParametreleri('?yeni=1&tarih=bozuk', '2026-10-30'), { yeni: true, baslik: '', tarih: '2026-10-30' });
+  assert.equal(formParametreleri('?yerel=1', '2026-10-30').yeni, false);
+  assert.equal(formParametreleri(`?yeni=1&baslik=${'x'.repeat(200)}`, '2026-10-30').baslik.length, 80);
+});
+
+test('begeniDegistir aç/kapa; begeniSayisi', () => {
+  const a = begeniDegistir(undefined, 'omer');
+  assert.deepEqual(a, { omer: true });
+  const b = begeniDegistir(a, 'gul');
+  assert.equal(begeniSayisi(b), 2);
+  assert.deepEqual(begeniDegistir(b, 'omer'), { gul: true });
+  assert.deepEqual(a, { omer: true }); // değişmez
+  assert.equal(begeniSayisi(null), 0);
+});

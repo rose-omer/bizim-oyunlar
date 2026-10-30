@@ -56,9 +56,56 @@ test('formatDay: bugün, dün, gün önce, tarih', () => {
 
 test('partnerWhere: çevrimdışı, çevrimiçi, başka oyunda, burada', () => {
   assert.deepEqual(ui.partnerWhere(null, 'yapboz'), { kind: 'off', text: 'çevrimdışı' });
-  assert.deepEqual(ui.partnerWhere({ clientId: 'a', name: 'A', page: 'lobby' }, 'yapboz'), { kind: 'on', text: 'çevrimiçi' });
+  assert.deepEqual(ui.partnerWhere({ clientId: 'a', name: 'A', page: 'bilinmeyen' }, 'yapboz'), { kind: 'on', text: 'çevrimiçi' });
   const away = ui.partnerWhere({ clientId: 'a', name: 'A', page: 'hafiza' }, 'yapboz');
   assert.equal(away.kind, 'away');
   assert.equal(away.text, "Hafıza Kartları'nda");
   assert.equal(ui.partnerWhere({ clientId: 'a', name: 'A', page: 'yapboz' }, 'yapboz').kind, 'here');
+});
+
+test('partnerWhere: uygulama sayfaları (SAYFALAR) ve ana sayfa', () => {
+  const at = (page, ns = 'yapboz') => ui.partnerWhere({ clientId: 'a', name: 'A', page }, ns);
+  assert.equal(at('lobby').text, 'ana sayfada');
+  assert.equal(at('lobby').kind, 'on');
+  assert.equal(at('sohbet').text, "Sohbet'te");
+  assert.equal(at('anilar').text, 'Anılarda');
+  assert.equal(at('gunler').text, "Özel Günler'de");
+  assert.equal(at('gunsorusu').text, "Günün Sorusu'nda");
+  assert.equal(at('randevu').text, "Randevu Fikirleri'nde");
+  assert.equal(at('ayarlar').text, "Ayarlar'da");
+  assert.equal(at('sohbet').sayfa.id, 'sohbet');
+  assert.equal(at('sohbet', 'sohbet').kind, 'here');
+  assert.equal(at('lobby', 'lobby').kind, 'here');
+});
+
+test('genitive: Türkçe tamlayan eki', () => {
+  assert.equal(ui.genitive('Ömer'), "Ömer'in");
+  assert.equal(ui.genitive('Gül'), "Gül'ün");
+  assert.equal(ui.genitive('Ayşe'), "Ayşe'nin");
+  assert.equal(ui.genitive('Can'), "Can'ın");
+  assert.equal(ui.genitive('Umut'), "Umut'un");
+  assert.equal(ui.genitive('Duygu'), "Duygu'nun");
+  assert.equal(ui.genitive(''), '');
+});
+
+test('parseTema: geçerli değerler, varsayılanlar', () => {
+  assert.deepEqual(ui.parseTema(null), { renk: 'pembe', mod: 'otomatik' });
+  assert.deepEqual(ui.parseTema('{"renk":"mor","mod":"koyu"}'), { renk: 'mor', mod: 'koyu' });
+  assert.deepEqual(ui.parseTema({ renk: 'mavi' }), { renk: 'mavi', mod: 'otomatik' });
+  assert.deepEqual(ui.parseTema({ renk: 'yesil', mod: 'gece' }), { renk: 'pembe', mod: 'otomatik' });
+  assert.deepEqual(ui.parseTema('bozuk{'), { renk: 'pembe', mod: 'otomatik' });
+  for (const r of ui.TEMA_RENKLER) assert.equal(ui.parseTema({ renk: r }).renk, r);
+  for (const m of ui.TEMA_MODLAR) assert.equal(ui.parseTema({ mod: m }).mod, m);
+  assert.deepEqual(ui.readTema(), { renk: 'pembe', mod: 'otomatik' }); // Node: depo yok
+});
+
+test('TOUCHES: sözleşmedeki 5 tür, cümleler', () => {
+  assert.deepEqual(ui.TOUCHES.map((t) => t.tur), ['kalp', 'opucuk', 'sarilma', 'ozledim', 'dusunuyorum']);
+  assert.equal(ui.touchByTur('kalp').cumle('Gül'), 'Gül sana 💗 gönderdi');
+  assert.equal(ui.touchByTur('ozledim').cumle('Ömer'), 'Ömer seni özledi 🥺');
+  assert.equal(ui.touchByTur('yok'), null);
+  for (const name of ['listenTouches', 'showTouch', 'touchBurst', 'mountTabBar', 'removeTabBar', 'startAppServices', 'applyTheme', 'fotoSrc']) {
+    assert.equal(typeof ui[name], 'function', name);
+  }
+  assert.doesNotThrow(() => ui.touchBurst('💗')); // Node: sessizce geçer
 });

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2732" height="2732" viewBox="0 0 2732 2732">
+  <!-- Açılış ekranı, açık tema: kâğıt zemin, ortada favicon işareti. -->
+  <rect width="2732" height="2732" fill="#FBF4EE"/>
+  <g transform="translate(1093 1093) scale(17.0625)">
+    <rect width="32" height="32" rx="10" fill="#C2375C"/>
+    <path fill="#FFFFFF" transform="translate(5 5.2) scale(.92)" d="M12 20.7c-.27 0-.53-.09-.75-.27C6.6 16.6 3 13.5 3 9.45 3 6.68 5.13 4.5 7.8 4.5c1.68 0 3.2.83 4.2 2.15 1-1.32 2.52-2.15 4.2-2.15 2.67 0 4.8 2.18 4.8 4.95 0 4.05-3.6 7.15-8.25 10.98-.22.18-.48.27-.75.27z"/>
+  </g>
+</svg>

@@ -186,3 +186,55 @@ export function leftText(daysLeft) {
   if (daysLeft === 1) return 'Yarın';
   return `${daysLeft} gün kaldı`;
 }
+
+// ---- Günler ajanı eklemeleri (takvim ve geçmiş kilometre taşları) ----
+
+/**
+ * Ay takvimi ızgarası, Pazartesi başlar, her zaman 6 hafta (42 gün; yükseklik ay değişince oynamaz).
+ * m: 1–12. -> [{ day: 'YYYY-MM-DD', inMonth }] | [] (geçersiz ay)
+ */
+export function monthGrid(y, m) {
+  if (!Number.isInteger(y) || !Number.isInteger(m) || m < 1 || m > 12) return [];
+  const first = toDay({ y, m, d: 1 });
+  const lead = (new Date(Date.UTC(y, m - 1, 1)).getUTCDay() + 6) % 7; // 0 = Pazartesi
+  const start = addDays(first, -lead);
+  const ym = first.slice(0, 7);
+  return Array.from({ length: 42 }, (_, i) => {
+    const day = addDays(start, i);
+    return { day, inMonth: day.slice(0, 7) === ym };
+  });
+}
+
+/**
+ * [from, to] aralığındaki kilometre taşları (geçmiş dahil). Gün sayıları milestones() ile aynı listeden.
+ * monthly: ay dönümleri de (yıl dönümüne denk gelenler hariç).
+ * -> [{ date, baslik, tur: 'gun'|'yil'|'ay', n }] tarihe göre; aynı güne düşenlerden biri (yıl > gün > ay).
+ */
+export function milestonesBetween(startDay, from, to, { monthly = false } = {}) {
+  const s = parseDay(startDay);
+  const f = parseDay(typeof from === 'string' ? from : toDay(from));
+  const t = parseDay(typeof to === 'string' ? to : toDay(to));
+  if (!s || !f || !t || utc(t) < utc(f)) return [];
+  const inRange = (day) => { const x = utc(parseDay(day)); return x >= utc(f) && x <= utc(t); };
+  const out = [];
+  for (const n of DAY_MARKS) {
+    const date = addDays(startDay, n - 1);
+    if (inRange(date)) out.push({ date, baslik: `${n}. günümüz`, tur: 'gun', n });
+  }
+  for (let y = Math.max(1, f.y - s.y); y <= t.y - s.y; y++) {
+    const date = toDay(clampDay(s.y + y, s.m, s.d));
+    if (inRange(date)) out.push({ date, baslik: `${y}. yıl dönümümüz`, tur: 'yil', n: y });
+  }
+  if (monthly) {
+    for (let n = Math.max(1, (f.y - s.y) * 12 + (f.m - s.m)); ; n++) {
+      const date = toDay(clampDay(s.y + Math.floor((s.m - 1 + n) / 12), ((s.m - 1 + n) % 12) + 1, s.d));
+      if (utc(parseDay(date)) > utc(t)) break;
+      if (n % 12 !== 0 && inRange(date)) out.push({ date, baslik: `${n}. ayımız`, tur: 'ay', n });
+    }
+  }
+  const rank = { yil: 0, gun: 1, ay: 2 };
+  const seen = new Set();
+  return out
+    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : rank[a.tur] - rank[b.tur]))
+    .filter((m) => (seen.has(m.date) ? false : seen.add(m.date)));
+}

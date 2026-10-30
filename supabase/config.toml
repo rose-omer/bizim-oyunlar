@@ -1,0 +1,9 @@
+# Supabase CLI ayarı (yalnız Edge Function'lar için gerekli kısım).
+# Yeni sb_publishable_ anahtarları JWT değildir: ağ geçidi JWT doğrulamasın; anahtarı fonksiyon kendisi denetler.
+project_id = "blgtlflryxknyalutugw"
+
+[functions.bildir]
+verify_jwt = false
+
+[functions.hatirlat]
+verify_jwt = false

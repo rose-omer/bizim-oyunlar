@@ -141,7 +141,7 @@ function soloView() {
     h('div', { class: 'soru-hero', 'aria-hidden': 'true' }, '🎲'),
     h('h1', { class: 'title' }, `${pn} tek başına oynuyor`),
     h('p', { class: 'subtitle' }, 'Bitince birlikte oynayın 💞 Burada beklersen oyun birlikte açılır.'),
-    h('button', { type: 'button', class: 'btn primary', dataset: { k: 'lobby' }, onclick: goLobby }, 'Odamıza dön'));
+    h('button', { type: 'button', class: 'btn primary', dataset: { k: 'lobby' }, onclick: goLobby }, 'Ana sayfaya dön'));
 }
 
 function nameField(i, value) {

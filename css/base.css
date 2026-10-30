@@ -1566,7 +1566,6 @@ html.kapi-acik { overflow: hidden; }
   padding: calc(28px + var(--safe-top)) calc(var(--gutter) + var(--safe-right)) calc(28px + var(--safe-bottom)) calc(var(--gutter) + var(--safe-left));
   background-color: var(--bg);
   background-image: radial-gradient(130% 55% at 50% -8%, color-mix(in srgb, var(--accent-soft) 85%, transparent), transparent 72%), var(--grain);
-  animation: fade-in 0.25s ease both;
 }
 .kapi-kart {
   display: flex;
@@ -1576,7 +1575,9 @@ html.kapi-acik { overflow: hidden; }
   width: 100%;
   max-width: 380px;
   text-align: center;
+  animation: kapi-gir 0.35s var(--ease) both; /* zemin hemen opak: arkadaki sayfa görünmez */
 }
+@keyframes kapi-gir { from { opacity: 0; transform: translateY(8px); } }
 .kapi-marka svg { display: block; width: 34px; height: 34px; }
 .kapi-simge {
   display: grid;
@@ -1667,16 +1668,15 @@ html.kapi-acik { overflow: hidden; }
   text-align: left;
 }
 .kapi-etiket { font-weight: 750; font-size: 0.9375rem; }
-.kapi-form-satir { display: flex; gap: 8px; }
-.kapi-form-satir .input { flex: 1 1 auto; min-width: 0; }
-.kapi-form-satir .btn { flex: none; padding-inline: 1rem; }
-.kapi-kod { font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; font-variant-numeric: tabular-nums; }
+.kapi-form-kap { width: 100%; }
+.kapi-form-satir { display: flex; flex-direction: column; gap: 8px; }
+.kapi-form-satir .btn { width: 100%; }
+.kapi-kod { font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; font-variant-numeric: tabular-nums; text-align: center; }
 .kapi-kod::placeholder { text-transform: none; letter-spacing: 0.04em; }
 .kapi-hata { color: var(--bad); font-size: 0.875rem; font-weight: 700; line-height: 1.4; }
 .kapi-hata:empty { display: none; }
 @media (prefers-reduced-motion: reduce) {
-  .kapi { animation: none; }
-  .kapi-kalp, .kapi-nokta { animation: none; }
+  .kapi-kart, .kapi-kalp, .kapi-nokta { animation: none; }
 }
 
 /* ---------- Ana sayfa: yeni cihaz isteği kartı ---------- */

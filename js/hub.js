@@ -536,17 +536,23 @@ function gameCard(g, onOpen) {
   return { card, badge };
 }
 
-function linkBox(roomId) {
+/**
+ * Davet linki alanı. Tek kullanımlık kod gelince alan kodlu linki gösterir (paylaş/kopyala aynı kodu kullanır).
+ * hemen = false: kod yalnız kopyalayınca üretilir (sık boyanan kartta her açılışta yeni davet açılmasın).
+ */
+function linkBox(roomId, { hemen = true } = {}) {
   const select = (e) => e.currentTarget.select();
   const input = h('input', {
     class: 'input', type: 'text', readonly: true, value: inviteUrl(roomId),
     'aria-label': 'Davet linki', onfocus: select, onclick: select,
   });
-  // Tek kullanımlık davet kodu gelince alan kodlu linki gösterir (paylaş/kopyala da aynı kodu kullanır).
-  davetLinki(roomId).then((u) => { input.value = u; });
+  const kodla = () => davetLinki(roomId).then((u) => { input.value = u; });
+  if (hemen) kodla();
   return h('div', { class: 'linkbox' },
     input,
-    h('button', { type: 'button', class: 'btn small', onclick: () => copyInvite(roomId) }, icon('copy'), 'Kopyala'));
+    h('button', {
+      type: 'button', class: 'btn small', onclick: async () => { await copyInvite(roomId); kodla(); },
+    }, icon('copy'), 'Kopyala'));
 }
 
 function shareButton(roomId, cls = 'btn primary') {
@@ -1119,7 +1125,7 @@ function coupleNote(roomId, p, pname, g, broken) {
   return [h('div', { class: 'card invite-card stack' },
     h('h2', {}, 'Sevgilin henüz gelmedi'),
     h('p', { class: 'muted' }, 'Bu linki gönder. Açınca burada belirir; link bir kez yeter.'),
-    linkBox(roomId),
+    linkBox(roomId, { hemen: false }),
     h('div', { class: 'row' }, shareButton(roomId)))];
 }
 

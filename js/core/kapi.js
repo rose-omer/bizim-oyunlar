@@ -16,7 +16,7 @@ const ICERIK = {
   yukleniyor: { baslik: 'Bir saniye…', metin: 'Odanıza bağlanıyoruz.', eylemler: [], yokla: 0 },
   bekliyor: {
     baslik: 'Onay bekleniyor',
-    metin: "Bu cihaz odaya katılmak için onay bekliyor. Sevgilin kendi telefonunda Ayarlar › Cihazlar'dan onaylasın.",
+    metin: "Bu cihaz odaya katılmak için onay bekliyor. Sevgilin kendi telefonunda Ayarlar › Cihazlar'dan onaylasın.",
     not: 'Onay gelince bu sayfa kendiliğinden açılır.',
     eylemler: ['kurtarma', 'cik'],
     yokla: YOKLA_MS,
@@ -30,7 +30,7 @@ const ICERIK = {
   cakisma: {
     baslik: 'Bu cihaz tanınmadı',
     metin: 'Bu cihaz başka bir anahtarla kayıtlı. Odadan çıkıp davet linkiyle yeniden katıl.',
-    not: "Olmazsa sevgilin Ayarlar › Cihazlar'dan bu cihazın eski kaydını çıkarsın.",
+    not: "Olmazsa sevgilin Ayarlar › Cihazlar'dan bu cihazın eski kaydını çıkarsın.",
     eylemler: ['cik'],
     yokla: YOKLA_MS, // eski kayıt çıkarılınca 'yok' olur
   },
@@ -62,6 +62,12 @@ export function davetSakla(roomId, kod) {
   if (roomId) writeStore('session', davetKey(roomId), kod || null);
 }
 
+/** Yoklama aralığı. Çevrimdışında artan bekleme (5, 10, 20, 40 sn, en çok 60): sunucu hız sınırını zorlamasın. */
+export function yoklaMs(durum, deneme = 0) {
+  const ms = kapiIcerigi(durum).yokla;
+  return durum === 'cevrimdisi' ? Math.min(60000, ms * 2 ** Math.max(0, deneme)) : ms;
+}
+
 // ---------- Akış ----------
 
 const gecildi = new Set(); // bu sayfada kapıdan geçilen odalar
@@ -69,6 +75,7 @@ const izlenen = new Set();
 let aktif = null; // { roomId, durum } — kapı açıkken
 let kok = null;
 let yoklaTimer = 0;
+let deneme = 0; // art arda çevrimdışı yoklama sayısı
 
 /**
  * Odaya giriş izni. Onaylıysa (ya da eski sunucu) sonucu döndürür; önbellekte onay varsa anında döner ve
@@ -135,13 +142,17 @@ async function yenidenDene(roomId, ek = {}) {
 
 function yoklamaKur(roomId, durum) {
   clearTimeout(yoklaTimer);
-  const ms = kapiIcerigi(durum).yokla;
+  const ms = yoklaMs(durum, durum === 'cevrimdisi' ? deneme : 0);
   if (!ms) return;
   yoklaTimer = setTimeout(async () => {
     if (!aktif || aktif.roomId !== roomId) return;
     if (document.visibilityState === 'visible') {
-      if (aktif.durum === 'cevrimdisi') await yenidenDene(roomId);
-      else await durumTazele(roomId); // değişirse 'bizim:uyelik' olayı ekranı günceller ya da sayfayı yeniler
+      if (aktif.durum === 'cevrimdisi') {
+        deneme++;
+        await yenidenDene(roomId);
+      } else {
+        await durumTazele(roomId); // değişirse 'bizim:uyelik' olayı ekranı günceller ya da sayfayı yeniler
+      }
     }
     if (aktif && aktif.roomId === roomId) yoklamaKur(roomId, aktif.durum);
   }, ms);
@@ -238,6 +249,7 @@ export function kapiGoster(roomId, s) {
   if (typeof document === 'undefined') return;
   const durum = ICERIK[s?.durum] ? s.durum : 'cevrimdisi';
   if (aktif && aktif.roomId === roomId && aktif.durum === durum && kok) return;
+  if (durum !== 'cevrimdisi') deneme = 0;
   aktif = { roomId, durum };
   const ic = kapiIcerigi(durum);
 
@@ -252,15 +264,15 @@ export function kapiGoster(roomId, s) {
   let form = null;
   for (const e of ic.eylemler) {
     if (e === 'kurtarma') {
-      const ac = h('button', { type: 'button', class: 'btn ghost', 'aria-expanded': 'false', 'aria-controls': 'kapi-kurtarma-alan' }, 'Kurtarma kodum var');
-      form = h('div', { id: 'kapi-kurtarma-alan', hidden: true }, kurtarmaFormu(roomId));
+      const ac = h('button', { type: 'button', class: 'btn', 'aria-expanded': 'false', 'aria-controls': 'kapi-kurtarma-alan' }, 'Kurtarma kodum var');
+      form = h('div', { class: 'kapi-form-kap', id: 'kapi-kurtarma-alan', hidden: true }, kurtarmaFormu(roomId));
       ac.addEventListener('click', () => {
         const acik = form.hidden;
         form.hidden = !acik;
         ac.setAttribute('aria-expanded', String(acik));
         if (acik) form.querySelector('input')?.focus();
       });
-      eylemler.append(ac);
+      eylemler.append(ac, form); // form düğmenin hemen altında açılır
     } else if (e === 'yeniden') {
       eylemler.append(dugme('Yeniden katılma isteği gönder', 'btn primary', () => yenidenDene(roomId)));
     } else if (e === 'tekrar') {
@@ -279,8 +291,7 @@ export function kapiGoster(roomId, s) {
     h('p', { class: 'kapi-metin', role: durum === 'yukleniyor' ? 'status' : null }, ic.metin),
     durum === 'yukleniyor' ? null : h('p', { class: 'kapi-cihaz' }, 'Bu cihaz: ', h('strong', {}, benAd)),
     ic.not ? h('p', { class: 'kapi-not', role: 'status' }, durum === 'bekliyor' ? h('span', { class: 'kapi-nokta', 'aria-hidden': 'true' }) : null, ic.not) : null,
-    ic.eylemler.length ? eylemler : null,
-    form));
+    ic.eylemler.length ? eylemler : null));
   kok.querySelector('.kapi-baslik')?.focus({ preventScroll: true });
   yoklamaKur(roomId, durum);
 }

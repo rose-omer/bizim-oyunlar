@@ -6,7 +6,8 @@ import { kapiIcerigi, bekleyenDavet, davetSakla } from '../js/core/kapi.js';
 test('kapiIcerigi: her durumun metni, eylemleri ve yoklama aralığı', () => {
   const b = kapiIcerigi('bekliyor');
   assert.equal(b.baslik, 'Onay bekleniyor');
-  assert.equal(b.metin, "Bu cihaz odaya katılmak için onay bekliyor. Sevgilin kendi telefonunda Ayarlar › Cihazlar'dan onaylasın.");
+  // "Ayarlar › Cihazlar" satır sonunda bölünmesin: › iki yanında bölünmez boşluk.
+  assert.equal(b.metin, "Bu cihaz odaya katılmak için onay bekliyor. Sevgilin kendi telefonunda Ayarlar › Cihazlar'dan onaylasın.");
   assert.deepEqual(b.eylemler, ['kurtarma', 'cik']);
   assert.equal(b.yokla, 5000);
 
@@ -29,4 +30,12 @@ test('bekleyen davet: oda başına saklanır, silinir', () => {
   assert.equal(bekleyenDavet('baskaoda22'), null);
   davetSakla('abcdefghij', null);
   assert.equal(bekleyenDavet('abcdefghij'), null);
+});
+
+test('yoklaMs: çevrimdışında artan bekleme (en çok 60 sn), diğerlerinde sabit', async () => {
+  const { yoklaMs } = await import('../js/core/kapi.js');
+  assert.equal(typeof yoklaMs, 'function');
+  assert.deepEqual([0, 1, 2, 3, 4, 10].map((n) => yoklaMs('cevrimdisi', n)), [5000, 10000, 20000, 40000, 60000, 60000]);
+  assert.equal(yoklaMs('bekliyor', 7), 5000);
+  assert.equal(yoklaMs('yok', 0), 0);
 });

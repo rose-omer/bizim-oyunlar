@@ -1,8 +1,61 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { aggregateLog, logGame, roomStats, ping } from '../js/core/db.js';
-import { uploadPhoto, loadPhoto } from '../js/core/storage.js';
+import { uploadPhoto, loadPhoto, isAllowedPhotoUrl } from '../js/core/storage.js';
+import { writeStore } from '../js/core/identity.js';
 import { SUPABASE_URL } from '../js/config.js';
+
+test('isAllowedPhotoUrl: yalnız local: ve bizim kovanın herkese açık adresi', () => {
+  const base = 'https://abcd.supabase.co';
+  const pub = `${base}/storage/v1/object/public/photos/`;
+  const ok = (u, b = base) => isAllowedPhotoUrl(u, b, 'photos');
+  assert.equal(ok('local:1234'), true);
+  assert.equal(ok('local:1234', ''), true); // yerel modda da
+  assert.equal(ok(pub + 'abcdefghij/0f8e2a1c-1b2d-4c3e-8f9a-0123456789ab.jpg'), true);
+  assert.equal(ok(pub + 'abcdefghij/x.jpg', base + '/'), true); // sondaki / fark etmez
+  // başka sunucu, kova ya da yol
+  assert.equal(ok('https://evil.example/x.jpg'), false);
+  assert.equal(ok('https://abcd.supabase.co.evil.example/storage/v1/object/public/photos/a.jpg'), false);
+  assert.equal(ok('https://abcd.supabase.co@evil.example/storage/v1/object/public/photos/a.jpg'), false);
+  assert.equal(ok(`${base}/storage/v1/object/public/diger/a.jpg`), false);
+  assert.equal(ok(`${base}/rest/v1/game_log`), false);
+  assert.equal(ok('http://abcd.supabase.co/storage/v1/object/public/photos/a.jpg'), false);
+  // kovadan çıkma denemeleri
+  assert.equal(ok(pub + '../diger/a.jpg'), false);
+  assert.equal(ok(pub + 'a/../../diger/a.jpg'), false);
+  assert.equal(ok(pub + '%2e%2e/diger/a.jpg'), false);
+  assert.equal(ok(pub + '..%2fdiger'), false);
+  assert.equal(ok(pub + 'a\\..\\b.jpg'), false);
+  assert.equal(ok(pub + 'a.jpg?x=1'), false);
+  assert.equal(ok(pub), false); // yol boş
+  // bozuk girdi
+  assert.equal(ok(''), false);
+  assert.equal(ok(null), false);
+  assert.equal(ok(pub + 'a.jpg', ''), false); // ayar yoksa yalnız local:
+  assert.equal(ok('data:image/png;base64,AAAA'), false);
+  assert.equal(ok('javascript:alert(1)'), false);
+});
+
+test('loadPhoto: izin verilmeyen adres ağa çıkmadan reddedilir', async () => {
+  const orig = globalThis.fetch;
+  let called = false;
+  globalThis.fetch = async () => { called = true; throw new Error('çağrılmamalı'); };
+  try {
+    await assert.rejects(loadPhoto('https://evil.example/x.jpg'), /izin verilmiyor/);
+    await assert.rejects(loadPhoto(`${SUPABASE_URL}/storage/v1/object/public/photos/../x`), /izin verilmiyor/);
+    assert.equal(called, false);
+  } finally {
+    globalThis.fetch = orig;
+  }
+});
+
+test('uploadPhoto (Supabase): geçerli oda yoksa ağa çıkmadan hata', { skip: !SUPABASE_URL }, async () => {
+  writeStore('session', 'bizim.yerel', null); // önceki yerel mod bayrağını temizle
+  const blob = new Blob(['x'], { type: 'image/jpeg' });
+  await assert.rejects(uploadPhoto(blob, null), /geçerli bir oda/);
+  await assert.rejects(uploadPhoto(blob, 'solo'), /geçerli bir oda/);
+  await assert.rejects(uploadPhoto(blob, '../abcdefgh'), /geçerli bir oda/);
+});
 
 const quiet = async (fn) => {
   const warn = console.warn;

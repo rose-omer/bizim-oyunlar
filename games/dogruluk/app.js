@@ -6,7 +6,7 @@ import { createSync } from '../_soru/sync.js';
 import { NAME_MAX } from '../_soru/common.js';
 import {
   boot, h, createView, nameOf, partnerName, absenceText,
-  loadingScreen, createEnding, endActions,
+  loadingScreen, createEnding, endActions, goLobby,
 } from '../_soru/view.js';
 import { reduce, initialState, LEVELS, cardById, winner } from './logic.js';
 
@@ -24,7 +24,7 @@ const KIND_INFO = {
 const view = createView(document.getElementById('app'));
 view.show(loadingScreen('Bağlanıyor…'), 'boot');
 
-const { room, roomId, isHost, solo } = await boot({
+const { room, roomId, hostId, isHost, solo } = await boot({
   ns: NS,
   allowSolo: true,
   waitText: 'Sevgilini bekliyoruz 🎲',
@@ -37,6 +37,7 @@ const sync = createSync({
   room,
   ns: NS,
   roomId,
+  hostId,
   isHost,
   solo,
   reduce,
@@ -46,6 +47,18 @@ const sync = createSync({
   }),
   onChange: render,
 });
+
+// "Tek başıma" oynarken sevgilin gelirse haber ver (hafıza ile aynı).
+if (solo && roomId) {
+  let seen = false;
+  room.on('presence', (p) => {
+    const here = !!p && p.page === NS;
+    if (here && !seen) {
+      toast(`${p.name || 'Sevgilin'} geldi!`, { action: { label: 'Birlikte oyna', onClick: () => location.reload() }, ms: 8000 });
+    }
+    seen = here;
+  });
+}
 
 function act(a, sound = 'tap') {
   if (sound) sfx(sound);
@@ -58,6 +71,11 @@ function act(a, sound = 'tap') {
 }
 
 function render(s, c) {
+  if (c.partnerSolo) {
+    view.banner('');
+    view.show(soloView(), 'partner-solo');
+    return;
+  }
   if (!s) {
     view.show(loadingScreen('Oyun yükleniyor…'), 'load');
     return;
@@ -114,6 +132,17 @@ function showEnding(s, c, live) {
 }
 
 // ---- Ekranlar ----
+
+// Misafir: ev sahibi "Tek başıma" seçti. Bu sayfada kalırsa, o "Birlikte oyna" deyince oyun açılır.
+function soloView() {
+  const pn = room.partner()?.name || 'Sevgilin';
+  view.say(`${pn} şu an tek başına oynuyor.`);
+  return h('section', { class: 'soru-screen soru-center' },
+    h('div', { class: 'soru-hero', 'aria-hidden': 'true' }, '🎲'),
+    h('h1', { class: 'title' }, `${pn} tek başına oynuyor`),
+    h('p', { class: 'subtitle' }, 'Bitince birlikte oynayın 💞 Burada beklersen oyun birlikte açılır.'),
+    h('button', { type: 'button', class: 'btn primary', dataset: { k: 'lobby' }, onclick: goLobby }, 'Odamıza dön'));
+}
 
 function nameField(i, value) {
   const id = `dg-name-${i}`;

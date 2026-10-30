@@ -11,6 +11,8 @@ import {
   progressFromState,
   readHello,
   isBoardState,
+  acceptSender,
+  roleConflict,
 } from '../games/yapboz/app.js';
 import { fitSize, isHeic, decodeErrorText, MAX_SIDE } from '../games/yapboz/image.js';
 import { storeKey } from '../games/yapboz/store.js';
@@ -29,15 +31,18 @@ function fakeTime() {
       const i = timers.indexOf(id);
       if (i >= 0) timers.splice(i, 1);
     },
+    // Zamanlayıcılar kendi vaktinde çalışır (zincirlenen zamanlayıcılar da).
     advance(ms) {
-      t += ms;
+      const end = t + ms;
       for (;;) {
         timers.sort((a, b) => a.at - b.at);
         const next = timers[0];
-        if (!next || next.at > t) break;
+        if (!next || next.at > end) break;
         timers.shift();
+        t = Math.max(t, next.at);
         next.fn();
       }
+      t = end;
     },
     pending: () => timers.length,
   };
@@ -133,46 +138,124 @@ test('sender: yalnız imleç varsa 100 ms kısılır', () => {
   ]);
 });
 
-test('sender: drop önce bekleyen move\'u gönderir, sonra drop; sonra eski move gelmez', () => {
+test('sender: grab → son move → drop sırası korunur; turda bir mesaj; sonra eski move gelmez', () => {
   const { s, sent, time } = sender();
   s.act({ type: 'grab', g: 7 });
   s.act({ type: 'move', g: 7, x: 1, y: 1 });
   s.act({ type: 'move', g: 7, x: 2, y: 2 });
   s.act({ type: 'drop', g: 7, x: 3, y: 3, pieces: [7, 8] });
+  assert.equal(sent.length, 1); // grab hemen; gerisi sırada
+  time.advance(100);
+  assert.equal(sent.length, 2);
+  time.advance(1000);
   assert.deepEqual(
     sent.map((m) => m.a.type + ':' + (m.a.x ?? '')),
-    ['grab:', 'move:1', 'move:2', 'drop:3'],
+    ['grab:', 'move:2', 'drop:3'],
   );
-  time.advance(1000);
-  assert.equal(sent.length, 4);
 });
 
-test('sender: drop, pieces içindeki eski grup id\'sinin bekleyen move\'unu da boşaltır', () => {
+test('sender: drop, pieces içindeki eski grup id\'sinin bekleyen move\'unu önce gönderir', () => {
   const { s, sent, time } = sender();
   s.act({ type: 'move', g: 12, x: 1, y: 1 });
   s.act({ type: 'move', g: 12, x: 2, y: 2 });
   s.act({ type: 'drop', g: 4, x: 0, y: 0, pieces: [4, 12, 13] });
-  assert.deepEqual(sent.map((m) => m.a.type), ['move', 'move', 'drop']);
   time.advance(1000);
-  assert.equal(sent.length, 3);
+  assert.deepEqual(sent.map((m) => m.a.type + ':' + m.a.g), ['move:12', 'move:12', 'drop:4']);
 });
 
-test('sender: grab ve scatter hemen gider; clear bekleyeni atar; forget grubu atar', () => {
+test('sender: drop sonrası aynı grubun yeni move\'u drop\'un önüne birleşmez', () => {
+  const { s, sent, time } = sender();
+  s.act({ type: 'grab', g: 3 }); // hemen
+  s.act({ type: 'move', g: 3, x: 1, y: 1 });
+  s.act({ type: 'drop', g: 3, x: 1, y: 1, pieces: [3] });
+  s.act({ type: 'grab', g: 3 });
+  s.act({ type: 'move', g: 3, x: 9, y: 9 });
+  time.advance(1000);
+  assert.deepEqual(
+    sent.map((m) => m.a.type + ':' + (m.a.x ?? '')),
+    ['grab:', 'move:1', 'drop:1', 'grab:', 'move:9'],
+  );
+});
+
+test('sender: grab, scatter ve push sıraya girer; clear bekleyeni atar; forget grubun grab ve move\'unu atar', () => {
   const { s, sent, time } = sender();
   s.act({ type: 'move', g: 1, x: 0, y: 0 });
   s.act({ type: 'move', g: 1, x: 1, y: 1 });
   s.act({ type: 'grab', g: 2 });
   s.act({ type: 'scatter', moves: [] });
-  assert.deepEqual(sent.map((m) => m.a.type), ['move', 'grab', 'scatter']);
+  s.push({ t: 'deny', g: 9 });
+  assert.equal(sent.length, 1);
+  time.advance(300);
+  assert.deepEqual(sent.map((m) => m.a?.type ?? m.t), ['move', 'move', 'grab', 'scatter']);
   s.clear();
   time.advance(1000);
-  assert.equal(sent.length, 3);
+  assert.equal(sent.length, 4);
   assert.equal(time.pending(), 0);
-  s.act({ type: 'move', g: 5, x: 0, y: 0 });
+  s.act({ type: 'move', g: 4, x: 0, y: 0 }); // hemen
+  s.act({ type: 'grab', g: 5 });
   s.act({ type: 'move', g: 5, x: 1, y: 1 });
+  s.act({ type: 'move', g: 6, x: 1, y: 1 });
   s.forget(5);
   time.advance(1000);
-  assert.equal(sent.length, 4);
+  assert.deepEqual(sent.slice(4).map((m) => m.a.type + ':' + m.a.g), ['move:4', 'move:6']);
+});
+
+test('sender: hızlı oyunda her 1 sn\'lik pencerede en fazla 10 mesaj; sıra korunur', () => {
+  const time = fakeTime();
+  const sent = [];
+  const at = [];
+  const s = createSender((m) => { sent.push(m); at.push(time.now()); }, { interval: 100, ...time });
+  // ~3 sn boyunca her 16 ms bir olay (30 tam tur): sık grab/drop, araya move, imleç ve deny.
+  let g = 0;
+  for (let i = 0; i < 6 * 30; i++) {
+    const t = i * 16;
+    const k = i % 6;
+    if (k === 0) s.act({ type: 'grab', g: ++g });
+    else if (k < 4) s.act({ type: 'move', g, x: t, y: t });
+    else if (k === 4) s.act({ type: 'drop', g, x: t, y: t, pieces: [g] });
+    else s.act({ type: 'cursor', x: t, y: t });
+    if (k === 2) s.push({ t: 'deny', g: 0 });
+    time.advance(16);
+  }
+  time.advance(60_000);
+  assert.equal(time.pending(), 0); // sıra boşaldı
+  for (let i = 0; i < at.length; i++) {
+    const inWindow = at.filter((x) => x >= at[i] && x < at[i] + 1000).length;
+    assert.ok(inWindow <= 10, `${at[i]} ms'den başlayan pencerede ${inWindow} mesaj`);
+  }
+  // Her grup için grab < move < drop.
+  const acts = sent.filter((m) => m.t === 'act').map((m) => m.a);
+  for (let id = 1; id <= g; id++) {
+    const kinds = acts.filter((a) => a.g === id).map((a) => a.type);
+    assert.deepEqual(kinds, ['grab', 'move', 'drop'], `grup ${id}`);
+  }
+});
+
+test('acceptSender: misafir yalnız ev sahibini, ev sahibi yalnız şimdiki partneri dinler', () => {
+  assert.equal(acceptSender({ isHost: false, hostId: 'h', partnerId: 'h', fromId: 'h' }), true);
+  assert.equal(acceptSender({ isHost: false, hostId: 'h', partnerId: 'x', fromId: 'x' }), false);
+  assert.equal(acceptSender({ isHost: true, hostId: 'h', partnerId: 'g', fromId: 'g' }), true);
+  assert.equal(acceptSender({ isHost: true, hostId: 'h', partnerId: 'g', fromId: 'x' }), false);
+  assert.equal(acceptSender({ isHost: true, hostId: null, partnerId: null, fromId: 'g' }), false);
+  assert.equal(acceptSender({ isHost: false, hostId: 'h', partnerId: 'h', fromId: null }), false);
+});
+
+test('roleConflict: küçük clientId ev sahibi olur', () => {
+  // İki ev sahibi: büyük olan, karşıdan ev sahibi mesajı alınca misafir olarak açılır.
+  for (const t of ['hello', 'state', 'setup', 'hash', 'deny']) {
+    assert.equal(roleConflict({ isHost: true, myId: 'b', hostId: 'b', t, fromId: 'a' }), 'a', t);
+    assert.equal(roleConflict({ isHost: true, myId: 'a', hostId: 'a', t, fromId: 'b' }), null, t);
+  }
+  assert.equal(roleConflict({ isHost: true, myId: 'b', hostId: 'b', t: 'join', fromId: 'a' }), null);
+  assert.equal(roleConflict({ isHost: true, myId: 'b', hostId: 'b', t: 'act', fromId: 'a' }), null);
+  // İki misafir: ev sahibi sandığından join alan küçük olan ev sahibi olur; büyük bekler.
+  assert.equal(roleConflict({ isHost: false, myId: 'a', hostId: 'b', t: 'join', fromId: 'b' }), 'a');
+  assert.equal(roleConflict({ isHost: false, myId: 'b', hostId: 'a', t: 'join', fromId: 'a' }), null);
+  // Ev sahibi sanılmayan birinden gelen join rolü değiştirmez.
+  assert.equal(roleConflict({ isHost: false, myId: 'a', hostId: 'c', t: 'join', fromId: 'b' }), null);
+  assert.equal(roleConflict({ isHost: false, myId: 'a', hostId: 'b', t: 'state', fromId: 'b' }), null);
+  assert.equal(roleConflict({ isHost: true, myId: 'b', hostId: 'b', t: 'state', fromId: null }), null);
+  assert.equal(roleConflict({ isHost: true, myId: 'b', hostId: 'b', t: 'state', fromId: 'b' }), null);
 });
 
 test('gate (ev sahibi): kendi tuttuğu grubu isteyen grab reddedilir, ardından move/drop yok sayılır', () => {

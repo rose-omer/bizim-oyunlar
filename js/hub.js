@@ -12,6 +12,7 @@ import { sfx } from './core/sound.js';
 const NAME_MAX = 24;
 const GO_DELAY_MS = 1500; // partner oyun açınca otomatik geçiş süresi
 const SEND_GRACE_MS = 160; // 'go' mesajı yola çıksın diye sayfadan çıkmadan önce bekleme
+const PRESENCE_WAIT_MS = 2500; // partnerin yeri belli olana dek kartlar kapalı (en fazla bu kadar)
 
 const shell = document.getElementById('shell');
 const app = document.getElementById('app');
@@ -28,6 +29,8 @@ const state = {
   goTimer: 0,
   goToastClose: null,
   leaving: false, // sayfadan çıkılıyor: ikinci tıklamayı yok say
+  waiting: false, // partnerin hangi oyunda olduğu henüz bilinmiyor: kart açma ikinci ev sahibi yaratabilir
+  waitTimer: 0,
   view: null, // lobi ekranının boyanacak parçaları
   settingsBtn: null,
 };
@@ -58,6 +61,7 @@ function takeHashRoom() {
 // ---------- Oda bağlantısı ----------
 function leaveRoom() {
   clearGo();
+  endWait();
   for (const off of state.subs) if (typeof off === 'function') off();
   state.subs = [];
   try { state.room?.leave?.(); } catch { /* zaten kopuk */ }
@@ -73,6 +77,7 @@ async function ensureRoom(roomId) {
   if (state.roomId === roomId && (state.room || state.joining)) return;
   leaveRoom();
   state.roomId = roomId;
+  state.waiting = true;
   const pending = joinRoom({ roomId, ns: 'lobby' });
   state.joining = pending;
   let room;
@@ -81,6 +86,7 @@ async function ensureRoom(roomId) {
   } catch {
     if (state.joining !== pending) return;
     state.joining = null;
+    endWait();
     state.status = 'error';
     state.statusDetail = 'Odaya bağlanılamadı. Sayfayı yenileyip yeniden dene.';
     paintCouple();
@@ -93,6 +99,11 @@ async function ensureRoom(roomId) {
   state.joining = null;
   state.room = room;
   state.status = 'online';
+  // İlk presence (partner görünür) ya da 2,5 sn: hangisi önce gelirse kartlar açılır.
+  state.waitTimer = setTimeout(() => {
+    endWait();
+    paintCouple();
+  }, PRESENCE_WAIT_MS);
   state.subs = [
     room.on('status', onStatus),
     room.on('message', onMessage),
@@ -107,11 +118,18 @@ function onStatus(status, detail) {
   paintCouple();
 }
 
+function endWait() {
+  clearTimeout(state.waitTimer);
+  state.waitTimer = 0;
+  state.waiting = false;
+}
+
 function onPresence(p) {
   const roomId = state.roomId;
   const before = knownPartner(roomId);
   state.partner = p || null;
   if (p) {
+    endWait(); // partnerin yeri belli
     rememberPartner(roomId, p);
     if (!before) {
       sfx('match');
@@ -171,14 +189,14 @@ function openSolo(g) {
 function openGame(g) {
   const roomId = currentRoom();
   if (!roomId) return openSolo(g);
-  if (state.leaving) return;
+  if (state.leaving || state.waiting) return;
   state.leaving = true;
   clearGo();
   sfx('tap');
   const p = state.partner;
   if (p && p.page === g.id) {
-    // Sevgilin zaten o oyunda: onun odasına misafir olarak katıl.
-    location.href = gameUrl(g.id, { roomId, host: p.clientId });
+    // Sevgilin zaten o oyunda: o oyunun ev sahibine katıl (sevgilin misafirse ev sahibi başkası, belki sensin).
+    location.href = gameUrl(g.id, { roomId, host: p.host || p.clientId });
     return;
   }
   const host = me().clientId;
@@ -191,7 +209,7 @@ function joinPartner(p) {
   if (!roomId || !p || !gameById(p.page) || state.leaving) return;
   state.leaving = true;
   sfx('tap');
-  location.href = gameUrl(p.page, { roomId, host: p.clientId });
+  location.href = gameUrl(p.page, { roomId, host: p.host || p.clientId });
 }
 
 // ---------- Parçalar ----------
@@ -337,15 +355,17 @@ function lobbyScreen(roomId) {
   const pairBox = h('div');
   const noteBox = h('div', { class: 'couple-note stack' });
   const statsSec = h('section', { class: 'hub-section stack', 'aria-labelledby': 'stats-h', hidden: true });
+  const waitChip = h('span', { class: 'chip', hidden: true }, 'Bağlanıyor…');
+  const grid = h('div', { class: 'game-grid' }, cards.map((c) => c.card));
 
   const el = h('div', { class: 'hub-wrap' },
     h('section', { class: 'couple stack' }, heading, pairBox, noteBox),
     h('section', { class: 'hub-section stack', 'aria-labelledby': 'games-h' },
-      h('h2', { id: 'games-h' }, 'Ne oynayalım?'),
-      h('div', { class: 'game-grid' }, cards.map((c) => c.card))),
+      h('div', { class: 'hub-section-head' }, h('h2', { id: 'games-h' }, 'Ne oynayalım?'), waitChip),
+      grid),
     statsSec);
 
-  const view = { roomId, heading, pairBox, noteBox, cards, noteKey: '' };
+  const view = { roomId, heading, pairBox, noteBox, cards, grid, waitChip, noteKey: '' };
   loadStats(roomId, statsSec);
   return { el, view };
 }
@@ -379,7 +399,13 @@ function paintCouple(view = state.view) {
     view.noteBox.replaceChildren(...coupleNote(view.roomId, p, pname, g, broken));
   }
 
+  // Partnerin yeri belli olana dek kartlar kapalı: hızlı dokunuş ikinci ev sahibi yaratmasın.
+  const wait = state.waiting;
+  view.waitChip.hidden = !wait;
+  view.grid.setAttribute('aria-busy', String(wait));
   for (const { card, badge } of view.cards) {
+    card.disabled = wait;
+    card.style.opacity = wait ? '0.6' : '';
     const here = !!p && p.page === card.dataset.game;
     card.dataset.partner = String(here);
     badge.hidden = !here;

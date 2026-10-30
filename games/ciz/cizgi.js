@@ -7,7 +7,8 @@
 //   { t:'s1', id, p? }            çizgi sonu
 //   { t:'undo', id }, { t:'clear' }
 //   { t:'ops', list:[...] }       aynı 100 ms'de birden çok işlem
-//   { t:'strokes', part, total, b, list }  ev sahibi → katılan misafir, her biri < 60 KB
+//   { t:'strokes', part, total, b, cg, list }  ev sahibi → katılan misafir, her biri < 60 KB
+//                                 (cg = ev sahibinin 'clear' sayacı; durumda da gider)
 
 export const Q = 10_000;
 export const PAPER = '#ffffff';
@@ -185,5 +186,42 @@ export class Outbox {
   }
   reset() {
     this.ops = [];
+  }
+}
+
+// 100 ms'lik dilimde en çok bir mesaj: önce kuyruk, sonra giden kutusu.
+// Gönderilemezse (bağlantı yok) mesaj sıranın başına döner; sonraki dilimde yeniden denenir.
+export function flushOne(queue, outbox, send) {
+  const m = queue.length ? queue.shift() : outbox.flush();
+  if (!m) return null;
+  if (send(m)) return m;
+  queue.unshift(m);
+  return null;
+}
+
+// Misafir: anlık görüntü parçalarını sırayla toplar.
+// add(m) döner: { b, cg, list } (tamam) | null (sürüyor) | 'lost' (parça 0 ya da aradaki parça kaçtı; set atıldı).
+export class PartsIn {
+  constructor() {
+    this.cur = null;
+  }
+  get busy() {
+    return !!this.cur;
+  }
+  add(m) {
+    if (m.part === 0) this.cur = { b: m.b, cg: m.cg, total: m.total, next: 0, list: [] };
+    const cur = this.cur;
+    if (!cur || m.part !== cur.next || m.total !== cur.total) {
+      this.cur = null;
+      return 'lost';
+    }
+    cur.next++;
+    cur.list.push(...(m.list || []));
+    if (cur.next < cur.total) return null;
+    this.cur = null;
+    return { b: cur.b, cg: cur.cg, list: cur.list };
+  }
+  reset() {
+    this.cur = null;
   }
 }

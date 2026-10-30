@@ -1,10 +1,13 @@
 // Oda: iki kişi arasında gerçek zamanlı mesaj ve "kim burada" (presence).
 // Arka uçlar: 'supabase' (Realtime kanalı), 'local' (BroadcastChannel, aynı tarayıcı), 'solo' (no-op).
 // Node'da içe aktarılabilir: tarayıcı nesnelerine yalnız fonksiyon içinde, korumalı erişilir.
+// Presence yükü: { clientId, name, page: ns, host }. host = oyun sayfasının ev sahibi (URL'deki host);
+// lobide ya da URL'de yoksa null. Lobi, partnerin oyununa doğru ev sahibiyle katılmak için kullanır.
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../config.js';
-import { me as whoAmI, isLocalMode, uuid } from './identity.js';
+import { me as whoAmI, isLocalMode, uuid, readGameParams } from './identity.js';
 
 const VENDOR_URL = new URL('../../vendor/supabase.js', import.meta.url).href;
+const WAKE_BEAT_MS = 4000; // uyanınca ikinci kalp atışı: ilki yanıtsızsa kütüphane soketi yeniler
 
 // ---- Saf yardımcılar (test edilir) ----
 
@@ -15,14 +18,19 @@ export function pickPartner(state, myClientId) {
     const meta = metas[metas.length - 1] || {};
     const clientId = String(meta.clientId || key);
     if (clientId === myClientId) continue;
-    return { clientId, name: String(meta.name || ''), page: String(meta.page || '') };
+    return {
+      clientId,
+      name: String(meta.name || ''),
+      page: String(meta.page || ''),
+      host: meta.host ? String(meta.host) : null,
+    };
   }
   return null;
 }
 
 export function samePartner(a, b) {
   if (!a || !b) return a === b;
-  return a.clientId === b.clientId && a.name === b.name && a.page === b.page;
+  return a.clientId === b.clientId && a.name === b.name && a.page === b.page && a.host === b.host;
 }
 
 /** Zarf { ns, from, m } bu sayfaya mı? Aynı ns ya da '*'; kendi mesajım değil. */
@@ -34,8 +42,8 @@ export function acceptEnvelope(env, ns, myClientId) {
 }
 
 /**
- * Yerel presence mesajını işler: { _p:'here'|'bye', clientId, name, page, inst }.
- * peers: Map<clientId, { clientId, name, page, inst, seen }>. reply = yeni eş: hemen "buradayım" de.
+ * Yerel presence mesajını işler: { _p:'here'|'bye', clientId, name, page, host, inst }.
+ * peers: Map<clientId, { clientId, name, page, host, inst, seen }>. reply = yeni eş: hemen "buradayım" de.
  */
 export function applyLocalPresence(peers, d, myClientId, now) {
   const none = { changed: false, reply: false };
@@ -52,12 +60,14 @@ export function applyLocalPresence(peers, d, myClientId, now) {
     clientId: d.clientId,
     name: String(d.name || ''),
     page: String(d.page || ''),
+    host: d.host ? String(d.host) : null,
     inst: String(d.inst || ''),
     seen: now,
   };
   peers.set(d.clientId, next);
   const isNew = !prev || prev.inst !== next.inst;
-  return { changed: isNew || prev.name !== next.name || prev.page !== next.page, reply: isNew };
+  const changed = isNew || prev.name !== next.name || prev.page !== next.page || prev.host !== next.host;
+  return { changed, reply: isNew };
 }
 
 /** ttl'den uzun sessiz kalan eşleri siler. Değişiklik olduysa true. */
@@ -158,7 +168,7 @@ function openSoloRoom({ ns, me }) {
 // ---- Yerel arka uç (BroadcastChannel) ----
 
 /** Testte doğrudan kullanılır; sayfalar joinRoom çağırır. */
-export function openLocalRoom({ roomId, ns, me, heartbeatMs = 3000, ttlMs = 8000 }) {
+export function openLocalRoom({ roomId, ns, me, host = null, heartbeatMs = 3000, ttlMs = 8000 }) {
   const base = createBase({ roomId, ns, me, backend: 'local' });
   const { room } = base;
   if (typeof globalThis.BroadcastChannel !== 'function') {
@@ -181,7 +191,7 @@ export function openLocalRoom({ roomId, ns, me, heartbeatMs = 3000, ttlMs = 8000
       return false;
     }
   };
-  const hello = () => post({ _p: 'here', clientId: me.clientId, name: me.name, page: ns, inst });
+  const hello = () => post({ _p: 'here', clientId: me.clientId, name: me.name, page: ns, host: host || null, inst });
   const bye = () => post({ _p: 'bye', clientId: me.clientId, inst });
   const recompute = () => {
     const state = Object.fromEntries([...peers].map(([id, p]) => [id, [p]]));
@@ -286,7 +296,8 @@ export function getSupabase() {
     clientPromise = loadLibrary()
       .then((lib) => lib.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
         auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-        realtime: { params: { eventsPerSecond: 10 } },
+        // 10 sn kalp atışı (varsayılan 25 sn): ölü soket daha çabuk fark edilir.
+        realtime: { heartbeatIntervalMs: 10000, params: { eventsPerSecond: 10 } },
       }))
       .catch((e) => {
         clientPromise = null;
@@ -297,7 +308,7 @@ export function getSupabase() {
 }
 
 /** Testte sahte istemciyle kullanılır (getClient). → { room, settled } */
-export function openSupabaseRoom({ roomId, ns, me, getClient = getSupabase }) {
+export function openSupabaseRoom({ roomId, ns, me, host = null, getClient = getSupabase }) {
   const base = createBase({ roomId, ns, me, backend: 'supabase' });
   const { room } = base;
   const topic = 'oda:' + roomId;
@@ -309,6 +320,7 @@ export function openSupabaseRoom({ roomId, ns, me, getClient = getSupabase }) {
   let gen = 0; // her bağlanma denemesi yeni kuşak; eski kanalın geri çağrıları yok sayılır
   let attempt = 0;
   let retryTimer = null;
+  let beatTimer = null;
 
   const updatePresence = () => {
     base.setPartner(joined && ch ? pickPartner(ch.presenceState(), me.clientId) : null);
@@ -379,7 +391,7 @@ export function openSupabaseRoom({ roomId, ns, me, getClient = getSupabase }) {
         clearTimeout(retryTimer);
         retryTimer = null;
         base.setStatus('online');
-        Promise.resolve(channel.track({ clientId: me.clientId, name: me.name, page: ns })).catch(() => {});
+        Promise.resolve(channel.track({ clientId: me.clientId, name: me.name, page: ns, host: host || null })).catch(() => {});
         updatePresence();
       } else if (s === 'CHANNEL_ERROR') {
         lost('error', 'Bağlantıda sorun var. Yeniden deneniyor…');
@@ -391,13 +403,27 @@ export function openSupabaseRoom({ roomId, ns, me, getClient = getSupabase }) {
     });
   }
 
+  // Kütüphane: yanıt beklenirken yeni kalp atışı gelirse zaman aşımı sayar, soketi kapatıp yeniden bağlanır.
+  const heartbeat = () => {
+    const rt = client && client.realtime;
+    if (left || !rt || typeof rt.sendHeartbeat !== 'function') return;
+    try {
+      rt.sendHeartbeat();
+    } catch { /* önemsiz */ }
+  };
+
   // Sekme öne gelince / ağ dönünce durumu tazele.
   const refresh = (force) => {
     if (left) return;
     if (joined) {
-      try {
-        client?.realtime?.sendHeartbeat?.(); // ölü soketi hemen fark ettirir
-      } catch { /* önemsiz */ }
+      // Telefon uyanınca soket ölü olabilir: hemen bir kalp atışı, ~4 sn sonra bir daha.
+      // İlki yanıtsız kaldıysa ikincisi kopukluğu ortaya çıkarır (25 sn beklemeden).
+      heartbeat();
+      clearTimeout(beatTimer);
+      beatTimer = setTimeout(() => {
+        beatTimer = null;
+        heartbeat();
+      }, WAKE_BEAT_MS);
       updatePresence();
       return;
     }
@@ -429,6 +455,7 @@ export function openSupabaseRoom({ roomId, ns, me, getClient = getSupabase }) {
     left = true;
     gen++;
     clearTimeout(retryTimer);
+    clearTimeout(beatTimer);
     offs.forEach((off) => off());
     base.clear();
     joined = false;
@@ -472,8 +499,9 @@ export async function joinRoom({ roomId, ns = 'lobby' } = {}) {
   const space = String(ns);
   if (!roomId) return openSoloRoom({ ns: space, me: who });
   const id = String(roomId);
-  if (isLocalMode()) return openLocalRoom({ roomId: id, ns: space, me: who });
-  const { room, settled } = openSupabaseRoom({ roomId: id, ns: space, me: who });
+  const host = space === 'lobby' ? null : readGameParams().hostId;
+  if (isLocalMode()) return openLocalRoom({ roomId: id, ns: space, me: who, host });
+  const { room, settled } = openSupabaseRoom({ roomId: id, ns: space, me: who, host });
   await settled;
   return room;
 }

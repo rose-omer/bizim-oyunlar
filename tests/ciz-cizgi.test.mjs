@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   Q, PALETTE, ERASER, BRUSHES, MAX_STROKE_PTS, quant, toNorm, farEnough, StrokeStore, makeParts, Outbox,
+  flushOne, PartsIn,
 } from '../games/ciz/cizgi.js';
 
 test('palet 8 renk, 3 fırça, silgi ayrı indeks', () => {
@@ -165,4 +166,60 @@ test('katılım: önce bekleyen işlemler, sonra parçalar, sonra canlı işleml
   assert.deepEqual(guest.get('h1').p, [10, 10, 20, 20, 30, 30, 40, 40, 50, 50]);
   assert.equal(guest.get('h1').done, true);
   assert.equal(guest.points, host.points);
+});
+
+test('flushOne: dilim başına bir mesaj; gönderilemezse sıranın başına döner, sıra bozulmaz', () => {
+  const q = [];
+  const ob = new Outbox();
+  const got = [];
+  let online = false;
+  const send = (m) => (online ? (got.push(m), true) : false);
+  assert.equal(flushOne(q, ob, send), null, 'boşken mesaj yok');
+  ob.push({ t: 's0', id: 'a', c: 1, w: 50, b: 1, p: [1, 1] });
+  assert.equal(flushOne(q, ob, send), null, 'bağlantı yok: gitmedi');
+  assert.equal(q.length, 1, 'kuyruğa geri kondu');
+  ob.push({ t: 'clear' });
+  assert.equal(flushOne(q, ob, send), null);
+  assert.equal(q.length, 1, 'her dilimde tek deneme');
+  online = true;
+  flushOne(q, ob, send);
+  assert.deepEqual(got, [{ t: 's0', id: 'a', c: 1, w: 50, b: 1, p: [1, 1] }], 'önce bekleyen');
+  flushOne(q, ob, send);
+  assert.deepEqual(got.at(-1), { t: 'clear' }, 'clear kaybolmaz');
+  assert.equal(flushOne(q, ob, send), null);
+  assert.equal(got.length, 2);
+});
+
+test('PartsIn: sırayla gelen parçalar birleşir; parça 0 ya da aradaki parça kaçarsa set atılır', () => {
+  const st = new StrokeStore({ maxStrokes: 5000, maxPoints: 1e6 });
+  for (let i = 0; i < 40; i++) {
+    st.apply({ t: 's0', id: `s${i}`, c: 1, w: 120, p: new Array(3000).fill(5000) }, 'H');
+  }
+  const parts = makeParts(st.list, 2).map((m) => ({ ...m, cg: 4 }));
+  assert.ok(parts.length >= 3);
+  const rx = new PartsIn();
+  let out = null;
+  for (const m of parts) out = rx.add(m);
+  assert.equal(out.b, 2);
+  assert.equal(out.cg, 4);
+  assert.equal(out.list.length, 40);
+  assert.equal(rx.busy, false);
+
+  const gap = new PartsIn();
+  assert.equal(gap.add(parts[0]), null);
+  assert.equal(gap.busy, true);
+  assert.equal(gap.add(parts[2]), 'lost', 'parça 1 kaçtı');
+  assert.equal(gap.busy, false, 'yarım set atıldı');
+
+  const noStart = new PartsIn();
+  assert.equal(noStart.add(parts[1]), 'lost', 'parça 0 kaçtı');
+  assert.equal(noStart.busy, false);
+
+  const restart = new PartsIn();
+  restart.add(parts[0]);
+  restart.add(parts[1]);
+  restart.add(parts[0]); // ev sahibi yeniden başlattı
+  let r2 = null;
+  for (const m of parts.slice(1)) r2 = restart.add(m);
+  assert.equal(r2.list.length, 40, 'yeni setle baştan');
 });

@@ -42,8 +42,13 @@ begin
   if p_game is null or p_game !~ '^[a-z]{2,20}$' then
     raise exception 'log_game: gecersiz oyun' using errcode = '22023';
   end if;
-  if coalesce(pg_catalog.pg_column_size(p_result), 0) >= 4096 then
+  if coalesce(pg_catalog.pg_column_size(p_result), 0) > 1024 then
     raise exception 'log_game: sonuc cok buyuk' using errcode = '22023';
+  end if;
+  -- Hız sınırı: oda başına son bir saatte en fazla 30 kayıt (game_log_room_created_at_idx kullanılır).
+  if (select count(*) from public.game_log as g
+      where g.room = p_room and g.created_at > pg_catalog.now() - interval '1 hour') >= 30 then
+    raise exception 'log_game: cok fazla kayit' using errcode = '54000';
   end if;
   insert into public.game_log (room, game, result) values (p_room, p_game, p_result);
 end;
@@ -92,12 +97,13 @@ on conflict (id) do update
       allowed_mime_types = excluded.allowed_mime_types;
 
 -- Yalnız yükleme. SELECT politikası yok: herkese açık URL çalışır, listeleme çalışmaz.
+-- Yol js/core/storage.js uploadPhoto ile aynı: `<oda>/<uuid>.jpg` (odasız yükleme yok).
 drop policy if exists "photos_insert_anon" on storage.objects;
 create policy "photos_insert_anon"
   on storage.objects
   for insert
   to anon, authenticated
-  with check (bucket_id = 'photos');
+  with check (bucket_id = 'photos' and name ~ '^[a-z2-9]{10}/[0-9a-f-]{36}\.jpg$');
 
 -- PostgREST şema önbelleğini tazele (yeni fonksiyonlar hemen görünsün).
 notify pgrst, 'reload schema';

@@ -8,10 +8,10 @@ const flush = () => new Promise((r) => setImmediate(r));
 
 function fakeClient() {
   const all = [];
-  return {
+  const client = {
     all,
-    heartbeats: 0,
-    realtime: { sendHeartbeat() {} },
+    beats: 0,
+    realtime: { sendHeartbeat() { this.owner.beats++; } },
     getChannels: () => all.filter((c) => !c.removed),
     channel(name, opts) {
       const c = {
@@ -34,6 +34,8 @@ function fakeClient() {
       return 'ok';
     },
   };
+  client.realtime.owner = client;
+  return client;
 }
 
 test('supabase: kanal ayarı, durumlar, presence, zarf, yeniden bağlanma', async () => {
@@ -60,14 +62,14 @@ test('supabase: kanal ayarı, durumlar, presence, zarf, yeniden bağlanma', asyn
     c.cb('SUBSCRIBED');
     await settled;
     assert.deepEqual(statuses.at(-1), ['online', '']);
-    assert.deepEqual(c.tracked, { clientId: 'A', name: 'Ali', page: 'yapboz' });
+    assert.deepEqual(c.tracked, { clientId: 'A', name: 'Ali', page: 'yapboz', host: null });
 
     c.state = {
       A: [{ clientId: 'A', name: 'Ali', page: 'yapboz' }],
       B: [{ clientId: 'B', name: 'Ayşe', page: 'lobby' }],
     };
     c.fire('presence', 'sync');
-    assert.deepEqual(room.partner(), { clientId: 'B', name: 'Ayşe', page: 'lobby' });
+    assert.deepEqual(room.partner(), { clientId: 'B', name: 'Ayşe', page: 'lobby', host: null });
     c.state.B = [{ clientId: 'B', name: 'Ayşe', page: 'yapboz' }];
     c.fire('presence', 'join');
     assert.equal(room.partner().page, 'yapboz');
@@ -150,5 +152,56 @@ test('supabase: istemci yüklenemezse error ve yeniden deneme', async () => {
     await room.leave();
   } finally {
     mock.timers.reset();
+  }
+});
+
+test("supabase: presence yükünde host; partnerin host'u okunur", async () => {
+  mock.timers.enable({ apis: ['setTimeout'] });
+  const client = fakeClient();
+  const { room } = openSupabaseRoom({ roomId: 'abcdefghij', ns: 'yapboz', me: ME, host: 'B', getClient: async () => client });
+  try {
+    await flush();
+    const c = client.all[0];
+    c.cb('SUBSCRIBED');
+    assert.deepEqual(c.tracked, { clientId: 'A', name: 'Ali', page: 'yapboz', host: 'B' });
+    c.state = { B: [{ clientId: 'B', name: 'Ayşe', page: 'yapboz', host: 'A' }] };
+    c.fire('presence', 'sync');
+    assert.deepEqual(room.partner(), { clientId: 'B', name: 'Ayşe', page: 'yapboz', host: 'A' });
+    await room.leave();
+  } finally {
+    mock.timers.reset();
+  }
+});
+
+test('supabase: ağ dönünce hemen kalp atışı, 4 sn sonra bir daha', async () => {
+  mock.timers.enable({ apis: ['setTimeout'] });
+  const hadWindow = 'window' in globalThis;
+  globalThis.window = new EventTarget();
+  const client = fakeClient();
+  const { room } = openSupabaseRoom({ roomId: 'abcdefghij', ns: 'lobby', me: ME, getClient: async () => client });
+  try {
+    await flush();
+    client.all[0].cb('SUBSCRIBED');
+    assert.equal(client.beats, 0);
+    window.dispatchEvent(new Event('online'));
+    assert.equal(client.beats, 1);
+    mock.timers.tick(3999);
+    assert.equal(client.beats, 1);
+    mock.timers.tick(1);
+    assert.equal(client.beats, 2);
+    // üst üste tazeleme: bekleyen ikinci atış yenisiyle değişir, birikmez
+    window.dispatchEvent(new Event('online'));
+    window.dispatchEvent(new Event('online'));
+    assert.equal(client.beats, 4);
+    mock.timers.tick(4000);
+    assert.equal(client.beats, 5);
+    // ayrılınca bekleyen atış gitmez
+    window.dispatchEvent(new Event('online'));
+    await room.leave();
+    mock.timers.tick(4000);
+    assert.equal(client.beats, 6);
+  } finally {
+    mock.timers.reset();
+    if (!hadWindow) delete globalThis.window;
   }
 });

@@ -12,6 +12,7 @@ import { fitToViewport, esc, fmtTime } from './ekran.js';
 
 const NS = 'hafiza';
 const GAP = 8;
+const OPTIMISTIC_MS = 3000; // onaylanmayan iyimser açılış bu süre sonra geri alınır
 
 const { roomId, hostId, isHost } = readGameParams();
 const room = await joinRoom({ roomId, ns: NS });
@@ -50,7 +51,7 @@ const names = solo ? { [me]: room.me.name } : { [me]: room.me.name, [partner.cli
 
 let board = null; // { key, el, cards[], layout }
 let closeCelebrate = null;
-let optimistic = new Set();
+let optimistic = new Map(); // misafirin onaysız açtığı kart → geri alma zamanlayıcısı
 let lastAnnounce = '';
 
 const sync = createSync({
@@ -101,6 +102,7 @@ function turnText(s) {
 function render(s, prev) {
   if (!s) return;
   if (s.phase !== 'end' && closeCelebrate) { try { closeCelebrate(); } catch {} closeCelebrate = null; }
+  for (const t of optimistic.values()) clearTimeout(t);
   optimistic.clear();
   if (s.phase === 'setup') {
     board = null;
@@ -154,15 +156,15 @@ function renderBar(s) {
   if (s.players.length > 1) {
     left = s.players.map((id, k) => `
       <span class="chip hf-p${s.phase === 'play' && s.turn === k ? ' is-turn' : ''}" data-p="${k}">
-        <b>${esc(nameOf(s, id))}</b> <span aria-label="puan">${s.scores[k]}</span>
+        <b>${esc(nameOf(s, id))}</b> <span aria-label="puan">${Number(s.scores[k])}</span>
       </span>`).join('');
     if (s.phase === 'play') left += `<span class="hf-turn" aria-hidden="true">${esc(turnText(s))}</span>`;
   } else {
-    const found = s.scores[0];
+    const found = Number(s.scores[0]);
     left = `
-      <span class="chip">Hamle <b>${s.moves}</b></span>
+      <span class="chip">Hamle <b>${Number(s.moves)}</b></span>
       <span class="chip" aria-label="Süre"><span aria-hidden="true">⏱</span> <b id="hf-time">${fmtTime(elapsed(s) / 1000)}</b></span>
-      <span class="chip">Eş <b>${found}/${s.deck.length / 2}</b></span>`;
+      <span class="chip">Eş <b>${found}/${Number(s.deck.length) / 2}</b></span>`;
   }
   const tools = [];
   if (s.phase === 'end') tools.push('<button type="button" class="btn small primary" data-act="again">Tekrar</button>');
@@ -272,10 +274,19 @@ function onCardClick(e) {
   if (s.open.length + optimistic.size >= 2) return;
   sfx('flip');
   if (!authority) {
-    optimistic.add(i);
+    optimistic.set(i, setTimeout(() => unflip(i), OPTIMISTIC_MS));
     paintCard(s, i, true);
   }
-  sync.dispatch({ type: 'flip', i });
+  if (!sync.dispatch({ type: 'flip', i }) && !authority) unflip(i); // gönderilemedi (ör. yeniden bağlanıyor)
+}
+
+// İyimser açılışı geri al: kart durumdaki hâline döner.
+function unflip(i) {
+  if (!optimistic.has(i)) return;
+  clearTimeout(optimistic.get(i));
+  optimistic.delete(i);
+  const s = sync.state;
+  if (board && s && s.phase !== 'setup') paintCard(s, i);
 }
 
 // ---------- ses, duyuru, bitiş ----------

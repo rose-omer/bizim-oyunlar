@@ -7,13 +7,13 @@ import { sfx } from '../../js/core/sound.js';
 import { logGame } from '../../js/core/db.js';
 import { gameById } from '../../js/core/games.js';
 
-/** Odaya gir, üst şeridi kur, partneri bekle. -> { room, roomId, isHost, solo } */
+/** Odaya gir, üst şeridi kur, partneri bekle. -> { room, roomId, hostId, isHost, solo } */
 export async function boot({ ns, allowSolo = false, waitText }) {
-  const { roomId, isHost } = readGameParams();
+  const { roomId, hostId, isHost } = readGameParams();
   const room = await joinRoom({ roomId, ns });
   mountShell({ title: gameById(ns)?.title || '', room });
   const mode = await waitForPartner(room, { ns, text: waitText, allowSolo });
-  return { room, roomId, isHost, solo: mode === 'solo' };
+  return { room, roomId, hostId, isHost, solo: mode === 'solo' };
 }
 
 /** Eleman kurucu. Metin çocuklar textContent olur (adlar güvenle basılır). */

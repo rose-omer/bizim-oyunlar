@@ -67,38 +67,39 @@ export function createClock(now = () => Date.now()) {
   };
 }
 
-// Board eylemlerini mesaja çevirip kısar (§4 bütçe, §12 eylemler).
-// move ve cursor: en fazla interval'de bir tur; grup başına yalnız son konum bekler.
-// Bir turda move gittiyse imleç sonraki tura kalır (sürekli en fazla 10 mesaj/sn).
-// grab / scatter hemen; drop önce o grubun (ve pieces içindeki eski id'lerin) bekleyen
-// move'unu gönderir, sonra kendisi gider.
+// Oyun içi giden mesajları kısar (§4 bütçe, §12 eylemler).
+// Tek sıra: interval'de en fazla BİR mesaj gider (sürekli en fazla 10 mesaj/sn).
+// Sıra korunur: grab o grubun move'larından önce, bekleyen move drop'tan önce gider.
+// Aynı grubun art arda move'ları tek kayıtta birleşir (yalnız son konum); grab / drop / scatter
+// araya girince o gruplar için yeni kayıt açılır. İmleç yalnız sıra boşken gider, o da birleşir.
+// push(msg): deny, hash gibi ham mesajlar aynı sıraya girer.
 export function createSender(send, {
   interval = SEND_MS,
   now = () => Date.now(),
   setTimer = (fn, ms) => setTimeout(fn, ms),
   clearTimer = (id) => clearTimeout(id),
 } = {}) {
-  const pending = new Map(); // 'cur' | 'g:<id>' -> mesaj
+  const queue = []; // [{ g, msg }] gönderim sırası
+  const open = new Map(); // g -> sıradaki birleşebilir move kaydı
+  let cursor = null;
   let last = -Infinity;
   let timer = null;
 
   function tick() {
     timer = null;
-    if (!pending.size) return;
+    let msg = null;
+    const item = queue.shift();
+    if (item) {
+      if (open.get(item.g) === item) open.delete(item.g);
+      msg = item.msg;
+    } else if (cursor) {
+      msg = cursor;
+      cursor = null;
+    }
+    if (!msg) return;
     last = now();
-    let moved = false;
-    for (const [key, msg] of pending) {
-      if (key === 'cur') continue;
-      pending.delete(key);
-      send(msg);
-      moved = true;
-    }
-    if (!moved && pending.has('cur')) {
-      const msg = pending.get('cur');
-      pending.delete('cur');
-      send(msg);
-    }
-    if (pending.size) schedule();
+    send(msg);
+    if (queue.length || cursor) schedule();
   }
 
   function schedule() {
@@ -108,8 +109,11 @@ export function createSender(send, {
     else timer = setTimer(tick, wait);
   }
 
-  function queue(key, msg) {
-    pending.set(key, msg);
+  function push(msg, g = null) {
+    const item = { g, msg };
+    // Birleşebilir kayıt, hemen gidebileceği için sıraya girmeden önce işaretlenir.
+    if (g !== null) open.set(g, item);
+    queue.push(item);
     schedule();
   }
 
@@ -117,35 +121,62 @@ export function createSender(send, {
     act(a) {
       if (!a || typeof a !== 'object') return;
       if (a.type === 'cursor') {
-        queue('cur', { t: 'cur', x: a.x, y: a.y });
+        cursor = { t: 'cur', x: a.x, y: a.y };
+        schedule();
         return;
       }
       if (a.type === 'move') {
-        queue(`g:${a.g}`, { t: 'act', a });
+        const item = open.get(a.g);
+        if (item) item.msg = { t: 'act', a };
+        else push({ t: 'act', a }, a.g);
         return;
       }
-      if (a.type === 'drop') {
-        const ids = new Set(Array.isArray(a.pieces) ? a.pieces : []);
-        ids.add(a.g);
-        for (const [key, msg] of pending) {
-          if (key === 'cur' || !ids.has(msg.a.g)) continue;
-          pending.delete(key);
-          send(msg);
-        }
-      }
-      send({ t: 'act', a });
+      // grab / drop / scatter: dokunduğu grupların sonraki move'ları bunun ardına yazılır.
+      open.delete(a.g);
+      if (Array.isArray(a.pieces)) a.pieces.forEach((id) => open.delete(id));
+      if (Array.isArray(a.moves)) a.moves.forEach((m) => open.delete(m?.g));
+      push({ t: 'act', a });
     },
+    push(msg) {
+      push(msg);
+    },
+    // Yerel sürükleme iptal: o grubun henüz gitmemiş grab ve move'ları atılır
+    // (cancelLocalDrag drop yaymaz; geç giden grab karşıda tutma bırakmasın).
     forget(g) {
-      pending.delete(`g:${g}`);
+      open.delete(g);
+      for (let i = queue.length - 1; i >= 0; i--) {
+        const a = queue[i].msg.a;
+        if (a && a.g === g && (a.type === 'grab' || a.type === 'move')) queue.splice(i, 1);
+      }
     },
     clear() {
-      pending.clear();
+      queue.length = 0;
+      open.clear();
+      cursor = null;
       if (timer !== null) {
         clearTimer(timer);
         timer = null;
       }
     },
   };
+}
+
+// Gönderen kabul edilir mi? (§10) Misafir yalnız ev sahibini (hostId), ev sahibi yalnız şimdiki partneri dinler.
+export function acceptSender({ isHost, hostId, partnerId, fromId }) {
+  if (!fromId) return false;
+  return isHost ? fromId === partnerId : fromId === hostId;
+}
+
+// Yalnız ev sahibinin yolladığı mesajlar (§12).
+const HOST_MSGS = new Set(['hello', 'state', 'setup', 'hash', 'deny']);
+
+// Rol çakışması: küçük clientId ev sahibidir. Dönüş: sayfanın yeniden açılacağı host | null.
+// Ev sahibi başkasından ev sahibi mesajı alırsa ikisi de ev sahibi: büyük olan misafir olur.
+// Misafir, ev sahibi sandığı kişiden join alırsa ikisi de misafir: küçük olan ev sahibi olur.
+export function roleConflict({ isHost, myId, hostId, t, fromId }) {
+  if (!myId || !fromId || fromId === myId) return null;
+  if (isHost) return HOST_MSGS.has(t) && myId > fromId ? fromId : null;
+  return t === 'join' && fromId === hostId && myId < fromId ? myId : null;
 }
 
 // Gelen eylem için karar (§12 çakışma). dragging = yerelde sürüklenen grup id | null.
@@ -301,10 +332,11 @@ async function main() {
   let mods;
   let room;
   let roomId;
+  let hostId;
   let isHost;
   try {
     mods = await loadModules();
-    ({ roomId, isHost } = mods.identity.readGameParams());
+    ({ roomId, hostId, isHost } = mods.identity.readGameParams());
     room = await mods.room.joinRoom({ roomId, ns: NS });
     mods.ui.mountShell({ title: 'Yapboz', room });
   } catch (err) {
@@ -340,6 +372,7 @@ async function main() {
   let screenUrls = [];
   let bannerReady = false;
   let bannerDismissed = false;
+  let relaunching = false;
   const toggles = { edge: false, ghost: false };
   const now = () => performance.now();
   const clock = createClock(now);
@@ -406,6 +439,15 @@ async function main() {
 
   function goLobby() {
     location.href = identity.lobbyUrl();
+  }
+
+  // Rol çakışmasında sayfayı doğru rolle yeniden aç. Yerel kayıt silinmez; önce son hâli yazılır.
+  async function relaunch(host) {
+    if (relaunching) return;
+    relaunching = true;
+    sender.clear();
+    await saveNow();
+    location.replace(identity.gameUrl(NS, { roomId, host }));
   }
 
   // ---- ev sahibi: yarım kalan yapboz ----
@@ -683,7 +725,7 @@ async function main() {
   function updateWaitText() {
     if (screen !== 'wait' || !waitText) return;
     if (waitKind === 'photo') waitText.textContent = 'Fotoğraf indiriliyor…';
-    else if (waitKind === 'error') waitText.textContent = 'Fotoğraf indirilemedi.';
+    else if (waitKind === 'error') waitText.textContent = 'Fotoğraf indirilemedi. Tekrar dene; olmazsa sevgilin yeni bir yapboz kurabilir.';
     else waitText.textContent = partnerHere ? 'Sevgilin yapbozu hazırlıyor…' : 'Sevgilin dönünce devam edeceksiniz';
   }
 
@@ -861,8 +903,9 @@ async function main() {
   }
 
   // ---- kayıt (ev sahibi / tek kişi) ----
+  // Yazma bitince çözülen söz döner (store hata fırlatmaz).
   function saveNow() {
-    if (!isHost || !game || !board) return;
+    if (!isHost || !game || !board) return Promise.resolve(false);
     dirty = false;
     saved = {
       roomId: roomId || null,
@@ -877,7 +920,7 @@ async function main() {
       state: board.getState(),
       done: Boolean(game.done),
     };
-    store.saveGame(roomId, saved);
+    return store.saveGame(roomId, saved);
   }
 
   // ---- mesajlaşma ----
@@ -914,7 +957,8 @@ async function main() {
     lastActAt = now();
     const dragging = board.isDragging() ? board.draggingGroup() : null;
     const plan = gate.incoming(a, dragging);
-    if (plan.deny !== null) room.send({ t: 'deny', g: plan.deny });
+    // deny ve düzeltme durumu da kısılan sıradan gider (bütçe + sıra).
+    if (plan.deny !== null) sender.push({ t: 'deny', g: plan.deny });
     if (plan.cancelLocal) {
       board.cancelLocalDrag();
       sender.forget(dragging);
@@ -923,7 +967,7 @@ async function main() {
       board.applyRemote(a);
       dirty = true;
     }
-    if (plan.resync) sendState();
+    if (plan.resync) sender.push({ t: 'state', state: board.getState() });
   }
 
   function handleCur(msg, from) {
@@ -1045,7 +1089,7 @@ async function main() {
     });
     if (need) {
       lastNeedAt = t;
-      room.send({ t: 'need' });
+      sender.push({ t: 'need' });
     }
   }
 
@@ -1121,7 +1165,14 @@ async function main() {
   }
 
   room.on('message', (msg, from) => {
-    if (!msg || typeof msg !== 'object' || typeof msg.t !== 'string') return;
+    if (!msg || typeof msg !== 'object' || typeof msg.t !== 'string' || relaunching) return;
+    const fromId = from?.clientId || null;
+    const host = roleConflict({ isHost, myId: room.me?.clientId, hostId, t: msg.t, fromId });
+    if (host) {
+      relaunch(host);
+      return;
+    }
+    if (!acceptSender({ isHost, hostId, partnerId: room.partner()?.clientId, fromId })) return;
     lastHeardAt = now();
     try {
       if (isHost) onHostMessage(msg, from);
@@ -1144,7 +1195,7 @@ async function main() {
   }, SAVE_MS);
   setInterval(() => {
     if (isHost && board && peerOnline()) {
-      room.send({ t: 'hash', h: board.hash(), elapsed: Math.round(clock.value()) });
+      sender.push({ t: 'hash', h: board.hash(), elapsed: Math.round(clock.value()) });
     }
   }, HASH_MS);
   setInterval(() => {

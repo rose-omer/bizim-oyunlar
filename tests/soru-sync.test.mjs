@@ -59,9 +59,11 @@ function setup({ storage = null } = {}) {
   const seen = { host: [], guest: [] };
   const base = { ns: NS, roomId: 'oda1', reduce, initial: (players) => initialState({ players }), storage };
   const h = track(createSync({ ...base, room: host, isHost: true, onChange: (s, c) => seen.host.push([s, c]) }));
-  const g = track(createSync({ ...base, room: guest, isHost: false, onChange: (s, c) => seen.guest.push([s, c]) }));
+  const g = track(createSync({ ...base, room: guest, isHost: false, hostId: 'h', onChange: (s, c) => seen.guest.push([s, c]) }));
   return { host, guest, h, g, seen, stop: () => { h.destroy(); g.destroy(); } };
 }
+
+const plain = { ns: NS, roomId: 'oda1', reduce, initial: (players) => initialState({ players }), storage: null, onChange: () => {} };
 
 test('misafir join gönderir, ev sahibi durumu yollar; oyuncular doğru koltukta', async () => {
   const t = setup();
@@ -163,6 +165,67 @@ test('ev sahibi durumu saklar ve yenilemede geri yükler', async () => {
   assert.deepEqual(t2.h.state.qs, saved.qs);
   assert.deepEqual(t2.g.state, t2.h.state);
   t2.stop();
+});
+
+test('misafir yalnız ev sahibinden gelen durumu kabul eder', async () => {
+  const t = setup();
+  await flush();
+  const before = t.seen.guest.length;
+  t.guest.deliver({ t: 'state', s: { ...t.h.state, count: 99 }, now: Date.now() }, { clientId: 'x', name: 'Yabancı' });
+  assert.equal(t.seen.guest.length, before);
+  assert.deepEqual(t.g.state, t.h.state);
+  t.stop();
+});
+
+test('iki ev sahibi: büyük clientId misafir olarak yeniden açılır, küçük olan yok sayar', async () => {
+  const { host, guest } = fakePair(); // 'h' ve 'g' ikisi de ev sahibi sanıyor
+  const moves = { h: [], g: [] };
+  track(createSync({ ...plain, room: host, isHost: true, relaunch: (x) => moves.h.push(x) }));
+  track(createSync({ ...plain, room: guest, isHost: true, relaunch: (x) => moves.g.push(x) }));
+  await flush();
+  assert.deepEqual(moves, { h: ['g'], g: [] });
+  // Yeniden açılan taraf artık dinlemez; ikinci kez açılmaz.
+  guest.send({ t: 'state', s: initialState({ players: [] }), now: Date.now() });
+  await flush();
+  assert.deepEqual(moves, { h: ['g'], g: [] });
+});
+
+test('iki misafir: ev sahibi sandığından join alan küçük clientId ev sahibi olur, büyük bekler', async () => {
+  const { host, guest } = fakePair();
+  const moves = { h: [], g: [] };
+  track(createSync({ ...plain, room: host, isHost: false, hostId: 'g', relaunch: (x) => moves.h.push(x) }));
+  track(createSync({ ...plain, room: guest, isHost: false, hostId: 'h', relaunch: (x) => moves.g.push(x) }));
+  await flush();
+  assert.deepEqual(moves, { h: [], g: ['g'] });
+});
+
+test('misafir başka birinden gelen join ile rol değiştirmez', async () => {
+  const moves = [];
+  const { guest } = fakePair(); // 'g'; ev sahibi 'z' sanıyor
+  track(createSync({ ...plain, room: guest, isHost: false, hostId: 'z', relaunch: (x) => moves.push(x) }));
+  guest.deliver({ t: 'join' }, { clientId: 'x', name: 'Yabancı' });
+  guest.deliver({ t: 'join' }, { clientId: 'h', name: 'Ayşe' });
+  await flush();
+  assert.deepEqual(moves, []);
+});
+
+test('tek başına (odalı): gelen join\'e 5 sn\'de bir solo der; misafir görür, durum gelince düşer', async () => {
+  const { host, guest } = fakePair();
+  const solo = track(createSync({ ...plain, room: host, isHost: true, solo: true }));
+  let gc = null;
+  const g = track(createSync({ ...plain, room: guest, isHost: false, hostId: 'h', onChange: (s, c) => { gc = c; } }));
+  await flush();
+  const solos = () => host.sent.filter((m) => m.t === 'solo').length;
+  assert.equal(solos(), 1);
+  assert.equal(gc.partnerSolo, true);
+  assert.equal(g.state, null);
+  guest.send({ t: 'join' });
+  await flush();
+  assert.equal(solos(), 1);
+  // Ev sahibi birlikte oynamaya geçince durum gelir; uyarı düşer.
+  guest.deliver({ t: 'state', s: solo.state, now: Date.now() }, { clientId: 'h', name: 'Ayşe' });
+  assert.equal(gc.partnerSolo, false);
+  assert.deepEqual(g.state, solo.state);
 });
 
 test('aynı telefonda: ağ yok, by arayüzden gelir', async () => {

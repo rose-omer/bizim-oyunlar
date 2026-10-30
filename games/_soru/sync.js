@@ -1,14 +1,18 @@
 // Ev sahibi otoritesi (soru oyunları). DOM'a dokunmaz; oda nesnesi dışarıdan gelir.
 // Ev sahibi durumu tutar, reducer'ı uygular, her değişiklikte { t:'state', s, now } yayar.
 // Misafir { t:'join' } ve { t:'intent', a } yollar; gelen durumu olduğu gibi çizer.
-// Aynı telefonda (solo): ağ yok, eylemdeki `by` arayüzden gelir.
+// Misafir yalnız ev sahibinin (hostId) mesajını dinler.
+// Rol çakışması: küçük clientId ev sahibidir; yanlış roldeki taraf sayfayı doğru rolle yeniden açar.
+// Aynı telefonda (solo): oyun ağsız; odalıysa gelen join/intent'e { t:'solo' } der.
 import { randomSeed } from './rng.js';
 import { isSeat } from './common.js';
+import { gameUrl } from '../../js/core/identity.js';
 
 /** Misafirden kabul edilmeyen eylemler. */
 export const HOST_ONLY = new Set(['seat', 'timeout', 'rearm']);
 
 const KEEP_MS = 12 * 3600 * 1000;
+const SOLO_NOTE_MS = 5000; // tek başına oynayan taraf en fazla 5 sn'de bir { t:'solo' } der
 
 function defaultStorage() {
   try {
@@ -19,14 +23,17 @@ function defaultStorage() {
 }
 
 /**
- * onChange(state, ctx) her değişiklikte; ctx = { mySeat, isHost, solo, partnerHere, offset }.
+ * onChange(state, ctx) her değişiklikte; ctx = { mySeat, isHost, solo, partnerHere, partnerSolo, offset }.
  * offset = yerel saat − ev sahibi saati (misafirde geri sayım için).
+ * partnerSolo = ev sahibi "Tek başıma" oynuyor (misafirde; durum gelince düşer).
+ * relaunch(host) sayfayı bu host ile yeniden açar (testte enjekte edilir).
  * İlk çizim bir mikro görev sonra yapılır (dönen nesne o anda hazırdır).
  */
 export function createSync({
   room,
   ns,
   roomId = null,
+  hostId = null,
   isHost,
   solo = false,
   reduce,
@@ -35,6 +42,7 @@ export function createSync({
   storage = defaultStorage(),
   beatMs = 4000,
   retryMs = 2000,
+  relaunch = (host) => globalThis.location?.replace(gameUrl(ns, { roomId, host })),
 }) {
   const authority = solo || !!isHost;
   const mySeat = authority ? 0 : 1;
@@ -44,12 +52,14 @@ export function createSync({
   let pending = false; // misafir niyet yolladı, yanıt bekliyor
   let offset = 0;
   let partnerHere = solo;
+  let partnerSolo = false;
+  let lastSoloNote = -Infinity;
   let ready = false;
   let alive = true;
   const offs = [];
   const timers = [];
 
-  const ctx = () => ({ mySeat, isHost: authority, solo, partnerHere, offset });
+  const ctx = () => ({ mySeat, isHost: authority, solo, partnerHere, partnerSolo, offset });
   const emit = () => {
     if (ready && alive) onChange(state, ctx());
   };
@@ -97,14 +107,46 @@ export function createSync({
 
   const sendJoin = () => room.send({ t: 'join' });
 
+  // Sayfayı doğru rolle yeniden aç; bu senkron artık bir şey yapmaz.
+  function moveTo(host) {
+    if (!alive) return;
+    destroy();
+    relaunch(host);
+  }
+
   function onMessage(msg, from) {
     if (!msg || typeof msg !== 'object') return;
+    const myId = room.me.clientId;
+    const fromId = from?.clientId || null;
+    if (solo) {
+      if ((msg.t === 'join' || msg.t === 'intent') && Date.now() - lastSoloNote >= SOLO_NOTE_MS) {
+        lastSoloNote = Date.now();
+        room.send({ t: 'solo' });
+      }
+      return;
+    }
     if (authority) {
       if (msg.t === 'join') {
         seatPartner(from);
         broadcast();
       } else if (msg.t === 'intent' && msg.a && !HOST_ONLY.has(msg.a.type)) {
         apply(msg.a, 1);
+      } else if (msg.t === 'state' && fromId && fromId !== myId) {
+        // İki ev sahibi: küçük clientId kalır, büyük olan misafir olarak yeniden açılır.
+        if (myId > fromId) moveTo(fromId);
+      }
+      return;
+    }
+    if (!fromId || fromId !== hostId) return; // misafir yalnız ev sahibini dinler
+    if (msg.t === 'join') {
+      // İkisi de misafir: küçük clientId ev sahibi olur; büyük olan beklemeyi sürdürür.
+      if (myId < fromId) moveTo(myId);
+      return;
+    }
+    if (msg.t === 'solo') {
+      if (!partnerSolo) {
+        partnerSolo = true;
+        emit();
       }
       return;
     }
@@ -112,8 +154,9 @@ export function createSync({
       offset = Date.now() - (Number(msg.now) || Date.now());
       const json = JSON.stringify(msg.s);
       // Aynı durum yeniden çizilmez; ama niyet yollandıysa bir kez çizilir (iyimser kilit çözülsün).
-      if (json === lastJson && !pending) return;
+      if (json === lastJson && !pending && !partnerSolo) return;
       pending = false;
+      partnerSolo = false;
       lastJson = json;
       state = msg.s;
       emit();
@@ -157,6 +200,10 @@ export function createSync({
     if (!solo) state = reduce(state, { type: 'seat', idx: 0, id: room.me.clientId, name: room.me.name });
   }
 
+  if (solo && roomId) {
+    // "Tek başıma": gelen partnere tek başına oynandığını söyle.
+    offs.push(room.on('message', onMessage));
+  }
   if (!solo) {
     offs.push(room.on('message', onMessage));
     offs.push(room.on('presence', onPresence));

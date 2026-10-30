@@ -15,7 +15,7 @@ const REVEAL_MS = 2600;
 const view = createView(document.getElementById('app'));
 view.show(loadingScreen('Bağlanıyor…'), 'boot');
 
-const { room, roomId, isHost } = await boot({ ns: NS, waitText: 'Sevgilini bekliyoruz 🤝' });
+const { room, roomId, hostId, isHost } = await boot({ ns: NS, waitText: 'Sevgilini bekliyoruz 🤝' });
 const ending = createEnding();
 let prev = null;
 
@@ -23,6 +23,7 @@ const sync = createSync({
   room,
   ns: NS,
   roomId,
+  hostId,
   isHost,
   reduce,
   initial: (players) => initialState({ players }),

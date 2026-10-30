@@ -27,8 +27,11 @@ test('pickPartner: kendini atlar, ilk farklı kişiyi ve son meta\'yı alır', (
     ],
     C: [{ clientId: 'C', name: 'Üçüncü', page: 'lobby' }],
   };
-  assert.deepEqual(pickPartner(state, 'A'), { clientId: 'B', name: 'Ayşe', page: 'yapboz' });
-  assert.deepEqual(pickPartner({ K: [{ name: 'Adsız' }] }, 'A'), { clientId: 'K', name: 'Adsız', page: '' });
+  assert.deepEqual(pickPartner(state, 'A'), { clientId: 'B', name: 'Ayşe', page: 'yapboz', host: null });
+  assert.deepEqual(pickPartner({ K: [{ name: 'Adsız' }] }, 'A'), { clientId: 'K', name: 'Adsız', page: '', host: null });
+  // host: partnerin oyun sayfasındaki ev sahibi (misafirse başkası)
+  assert.deepEqual(pickPartner({ B: [{ clientId: 'B', name: 'Ayşe', page: 'yapboz', host: 'A' }] }, 'A'),
+    { clientId: 'B', name: 'Ayşe', page: 'yapboz', host: 'A' });
   assert.equal(pickPartner({ B: [] }, 'A'), null);
 });
 
@@ -38,6 +41,8 @@ test('samePartner', () => {
   assert.equal(samePartner(p, null), false);
   assert.equal(samePartner(p, { ...p }), true);
   assert.equal(samePartner(p, { ...p, page: 'ciz' }), false);
+  assert.equal(samePartner({ ...p, host: null }, { ...p, host: 'A' }), false);
+  assert.equal(samePartner({ ...p, host: 'A' }, { ...p, host: 'A' }), true);
 });
 
 test('acceptEnvelope: aynı ns ya da *, kendi mesajın değil', () => {
@@ -59,6 +64,9 @@ test('applyLocalPresence: yeni eşe hemen yanıt, bilinen eşe yanıt yok', () =
   assert.deepEqual(applyLocalPresence(peers, here, 'A', 2000), { changed: false, reply: false });
   assert.equal(peers.get('B').seen, 2000);
   assert.deepEqual(applyLocalPresence(peers, { ...here, page: 'ciz' }, 'A', 2100), { changed: true, reply: false });
+  assert.equal(peers.get('B').host, null);
+  assert.deepEqual(applyLocalPresence(peers, { ...here, page: 'ciz', host: 'A' }, 'A', 2150), { changed: true, reply: false });
+  assert.equal(peers.get('B').host, 'A');
   // aynı kişi yeni sayfada (yeni inst): yeni eş gibi
   assert.deepEqual(applyLocalPresence(peers, { ...here, inst: 'i2' }, 'A', 2200), { changed: true, reply: true });
   // eski sayfanın geç gelen 'bye'ı yeni sayfayı silmez
@@ -128,8 +136,8 @@ test('yerel arka uç: presence, ns süzme, *, kendi mesajın gelmez, ayrılma', 
   let a3 = null;
   try {
     await until(() => a.partner() && b.partner());
-    assert.deepEqual(a.partner(), { clientId: 'B', name: 'Ayşe', page: 'yapboz' });
-    assert.deepEqual(b.partner(), { clientId: 'A', name: 'Ali', page: 'yapboz' });
+    assert.deepEqual(a.partner(), { clientId: 'B', name: 'Ayşe', page: 'yapboz', host: null });
+    assert.deepEqual(b.partner(), { clientId: 'A', name: 'Ali', page: 'yapboz', host: null });
 
     const seen = [];
     b.on('presence', (p) => seen.push(p && p.clientId));
@@ -190,5 +198,39 @@ test('yerel arka uç: sessiz eş süre dolunca düşer', async () => {
   } finally {
     raw.close();
     b.leave();
+  }
+});
+
+test('yerel arka uç: presence host taşır', async () => {
+  const lobby = openLocalRoom({ roomId: ROOM + 'h', ns: 'lobby', me: { clientId: 'A', name: 'Ali' } });
+  const guest = openLocalRoom({ roomId: ROOM + 'h', ns: 'yapboz', me: { clientId: 'B', name: 'Ayşe' }, host: 'A' });
+  try {
+    await until(() => lobby.partner() && guest.partner());
+    assert.deepEqual(lobby.partner(), { clientId: 'B', name: 'Ayşe', page: 'yapboz', host: 'A' });
+    assert.equal(guest.partner().host, null); // lobide host yok
+  } finally {
+    lobby.leave();
+    guest.leave();
+  }
+});
+
+test("joinRoom: oyun sayfası URL'deki host'u yollar, lobi null yollar", async () => {
+  const id = ROOM.slice(0, 8) + 'jr';
+  const watcher = openLocalRoom({ roomId: id, ns: 'ciz', me: { clientId: 'W', name: 'İzleyen' } });
+  try {
+    globalThis.location = { search: `?yerel=1&oda=${id}&host=H1` };
+    const game = await joinRoom({ roomId: id, ns: 'yapboz' });
+    await until(() => watcher.partner()?.page === 'yapboz');
+    assert.equal(watcher.partner().host, 'H1');
+    game.leave();
+    await until(() => watcher.partner() === null);
+
+    const lobby = await joinRoom({ roomId: id, ns: 'lobby' });
+    await until(() => watcher.partner()?.page === 'lobby');
+    assert.equal(watcher.partner().host, null);
+    lobby.leave();
+  } finally {
+    delete globalThis.location;
+    watcher.leave();
   }
 });

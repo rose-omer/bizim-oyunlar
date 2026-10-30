@@ -81,7 +81,10 @@ room.leave()
 // on(...) bir "abonelikten çık" fonksiyonu döner.
 ```
 - Supabase: kanal `oda:<roomId>`, broadcast olayı `m`, yük `{ ns, from, m }`. Presence anahtarı clientId,
-  yük `{ clientId, name, page: ns }`. Partner = kendinden farklı ilk clientId.
+  yük `{ clientId, name, page: ns, host }` (host = sayfanın ev sahibi id'si; lobide null).
+  Partner = kendinden farklı ilk clientId. Lobiden partnerin oyununa katılırken `host: p.host || p.clientId`.
+- Rol çakışması: küçük clientId ev sahibidir. İki ev sahibi → büyük olan misafir olarak yeniden yüklenir.
+  İki misafir → küçük olan ev sahibi olarak yeniden yüklenir. Misafir `state`'i yalnız ev sahibinden kabul eder.
 - Yerel: BroadcastChannel `bizim:<roomId>`; presence 3 sn'de bir "buradayım", 8 sn sessizlik = yok.
 - Bağlantı kopunca kendisi yeniden bağlanır; sekme arka plandan dönünce durumu tazeler.
 

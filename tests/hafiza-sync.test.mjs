@@ -136,6 +136,76 @@ test('tek başına: ağa durum göndermez; gelen join\'e solo der; kayıttan ger
   assert.equal(c.state.n, 0, 'accept reddederse initial');
 });
 
+test('ev sahibi, karşı taraf buradayken durumu 4 sn\'de bir yeniden yollar; kayıp durum onarılır', async (t) => {
+  t.mock.timers.enable({ apis: ['setInterval'] });
+  const { h, g } = pair();
+  const gs = [];
+  const host = createSync({ room: h, ns: 'x', isHost: true, reduce, toAction, initial: { n: 0 } });
+  const guest = createSync({ room: g, ns: 'x', hostId: 'H', isHost: false, reduce, toAction, onState: (s) => gs.push(s) });
+  host.start(); guest.start();
+  await tick();
+  const send = h.send;
+  h.send = (msg) => { h.sent.push(msg); return true; }; // yolda kaybolur
+  host.dispatch({ type: 'add', k: 3 });
+  h.send = send;
+  await tick();
+  assert.equal(guest.state.n, 0);
+  t.mock.timers.tick(4000);
+  await tick();
+  assert.equal(guest.state.n, 3, 'yeniden yayın kaybı onarır');
+  const renders = gs.length;
+  t.mock.timers.tick(4000);
+  await tick();
+  assert.equal(gs.length, renders, 'aynı durum yeniden çizdirmez');
+  h.setPresence(null);
+  const states = h.sent.filter((m) => m.t === 'state').length;
+  t.mock.timers.tick(8000);
+  assert.equal(h.sent.filter((m) => m.t === 'state').length, states, 'karşı taraf yokken yayın durur');
+  host.destroy(); guest.destroy();
+});
+
+test('misafir yalnız ev sahibinden gelen durumu kabul eder', async () => {
+  const { h, g } = pair();
+  const host = createSync({ room: h, ns: 'x', isHost: true, reduce, toAction, initial: { n: 0 } });
+  const guest = createSync({ room: g, ns: 'x', hostId: 'H', isHost: false, reduce, toAction });
+  host.start(); guest.start();
+  await tick();
+  g._emit('message', { t: 'state', s: { n: 99 }, now: Date.now() }, { clientId: 'X', name: 'X' });
+  assert.equal(guest.state.n, 0);
+  g._emit('message', { t: 'state', s: { n: 7 }, now: Date.now() }, { clientId: 'H', name: 'H' });
+  assert.equal(guest.state.n, 7);
+  host.destroy(); guest.destroy();
+});
+
+function duo(aHost, bHost) {
+  const a = fakeRoom('A'), b = fakeRoom('B');
+  a.peer = b; b.peer = a;
+  a.present = { clientId: 'B', name: 'B', page: 'x' };
+  b.present = { clientId: 'A', name: 'A', page: 'x' };
+  const moves = { A: [], B: [] };
+  const sa = createSync({ room: a, ns: 'x', isHost: aHost, hostId: aHost ? null : 'B', reduce, toAction,
+    initial: { n: 0 }, relaunch: (host) => moves.A.push(host) });
+  const sb = createSync({ room: b, ns: 'x', isHost: bHost, hostId: bHost ? null : 'A', reduce, toAction,
+    initial: { n: 0 }, relaunch: (host) => moves.B.push(host) });
+  return { sa, sb, moves };
+}
+
+test('rol çakışması: iki ev sahibi → büyük clientId misafir olarak yeniden açılır', async () => {
+  const { sa, sb, moves } = duo(true, true);
+  sa.start(); sb.start();
+  await tick();
+  assert.deepEqual(moves, { A: [], B: ['A'] });
+  sa.destroy(); sb.destroy();
+});
+
+test('rol çakışması: iki misafir → küçük clientId ev sahibi olarak yeniden açılır', async () => {
+  const { sa, sb, moves } = duo(false, false);
+  sa.start(); sb.start();
+  await tick();
+  assert.deepEqual(moves, { A: ['A'], B: [] });
+  sa.destroy(); sb.destroy();
+});
+
 test('hostNow: misafir ev sahibi saatine göre düzeltir', async () => {
   const { h, g } = pair();
   let hostClock = 1_000_000;

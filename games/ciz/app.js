@@ -12,12 +12,17 @@ import {
   ROUND_OPTIONS, DEFAULT_ROUNDS, MAX_GUESS_LEN, initialState, reduce, toAction, schedule, viewFor, drawerId,
   canDraw, totalRounds, resultOf,
 } from './oyun.js';
-import { PALETTE, ERASER, BRUSHES, MAX_STROKE_PTS, toNorm, farEnough, StrokeStore, makeParts, Outbox } from './cizgi.js';
+import {
+  PALETTE, ERASER, BRUSHES, MAX_STROKE_PTS, toNorm, farEnough, StrokeStore, makeParts, Outbox, flushOne, PartsIn,
+} from './cizgi.js';
 import { Tuval, exportPng } from './tuval.js';
 
 const NS = 'ciz';
 const TICK_MS = 100;
 const STROKE_MAX_AGE = 3 * 60 * 60 * 1000;
+const PARTS_WAIT_MS = 6000; // sonraki parça bu sürede gelmezse set atılır
+const SNAP_RETRY_MS = 3000; // anlık görüntü isteği en sık bu arayla
+const CG_WAIT_MS = 6000; // 'clear' sayacı bu süreden uzun farklıysa (kaçan clear) taze görüntü istenir
 
 const ICON = {
   eraser: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 3l5 5-10 10H6l-3-3z"/><path d="M11 18h10"/><path d="M8 9l6 6"/></svg>',
@@ -111,13 +116,18 @@ const storage = sessionStore();
 const store = new StrokeStore();
 const outbox = new Outbox();
 const tuval = new Tuval(canvas);
-const sendQ = []; // katılım anlık görüntüsü; outbox'tan önce gider
+const sendQ = []; // katılım anlık görüntüsü ve gönderilemeyen mesajlar; outbox'tan önce gider
 const tool = { c: 0, b: 1, eraser: false };
 const idBase = Math.random().toString(36).slice(2, 6);
 let idN = 0;
 let board = null;
 let cur = null; // { id, pid, rect, lx, ly }
-let receiving = null; // misafir: { list, b, timer }
+const partsIn = new PartsIn(); // misafir: gelen anlık görüntü parçaları
+let partsT = 0;
+let clears = authority ? 0 : null; // uygulanan 'clear' sayısı; misafir ev sahibininkini anlık görüntüden alır
+let snapNeed = false; // misafir: anlık görüntü eksik kaldı; tam gelene dek yeniden istenir
+let snapAt = Date.now(); // misafir: son istek (ilk join'i sync yollar)
+let cgSince = 0; // misafir: sayaç farkının başladığı an
 let saveT = 0;
 let closeCelebrate = null;
 let lastAnnounce = '';
@@ -128,7 +138,7 @@ const sync = createSync({
   reduce, schedule,
   initial: initialState({ players, names }),
   toAction: (intent, by, s) => toAction(intent, by, s, { hostId: me, now: Date.now(), seed: newSeed(), players, names }),
-  view: (s) => viewFor(s, guestId),
+  view: (s) => ({ ...viewFor(s, guestId), cg: clears }),
   storage,
   storeKey: KEY,
   accept: (s) => s.v === 1 && s.players?.join() === players.join(),
@@ -193,8 +203,23 @@ function flushNet() {
     outbox.reset();
     return;
   }
-  const m = sendQ.length ? sendQ.shift() : outbox.flush();
-  if (m) room.send(m);
+  if (!authority && askSnapshot()) return; // bu dilimin mesajı join oldu
+  flushOne(sendQ, outbox, (m) => room.send(m)); // gönderilemezse sıranın başına döner
+}
+
+// Misafir: anlık görüntü eksik kaldıysa ya da 'clear' sayacı ev sahibininkinden uzun süredir farklıysa
+// join ile taze görüntü ister. Bekleyen kendi işlemleri önce gider. Döner: join gönderildi mi.
+function askSnapshot() {
+  const cg = sync.state?.cg;
+  if (cg === undefined || cg === clears) cgSince = 0;
+  else if (!cgSince) cgSince = Date.now();
+  const stale = cgSince && Date.now() - cgSince > CG_WAIT_MS;
+  if (!(snapNeed || stale) || partsIn.busy || sendQ.length || outbox.size) return false;
+  if (Date.now() - snapAt < SNAP_RETRY_MS) return false;
+  snapAt = Date.now();
+  cgSince = 0;
+  snapNeed = true;
+  return room.send({ t: 'join' });
 }
 
 // Ev sahibi: misafir katıldı → bekleyen işlemler, sonra tüm çizgiler (her parça < 60 KB, 100 ms arayla).
@@ -202,7 +227,7 @@ function sendSnapshot() {
   sendQ.length = 0;
   const pre = outbox.flush();
   if (pre) sendQ.push(pre);
-  sendQ.push(...makeParts(store.list, board));
+  sendQ.push(...makeParts(store.list, board).map((m) => ({ ...m, cg: clears })));
 }
 
 function onStrokeMessage(msg, from) {
@@ -230,7 +255,10 @@ function applyLocal(op) {
 
 function afterApply(result, op, local) {
   if (!result) return;
-  if (op.t === 'clear') cur = null;
+  if (op.t === 'clear') {
+    cur = null;
+    clears = (clears ?? 0) + 1;
+  }
   if (result === 'redraw') tuval.redraw(store.list);
   else tuval.touch(store.get(op.id), local);
   dirty();
@@ -238,20 +266,22 @@ function afterApply(result, op, local) {
 
 function onParts(m) {
   if (authority) return;
-  if (m.part === 0) {
-    clearTimeout(receiving?.timer);
-    receiving = { list: [], b: m.b, timer: setTimeout(() => { receiving = null; }, 6000) };
+  clearTimeout(partsT);
+  const got = partsIn.add(m);
+  if (got === 'lost') {
+    snapNeed = true; // yarım set atıldı; flushNet join ile yeniden ister
+    return;
   }
-  if (!receiving) return;
-  receiving.list.push(...(m.list || []));
-  if (m.part >= m.total - 1) {
-    clearTimeout(receiving.timer);
-    if (receiving.b === board) {
-      store.load(receiving.list);
-      tuval.redraw(store.list);
-      updateUndo();
-    }
-    receiving = null;
+  if (!got) {
+    partsT = setTimeout(() => { partsIn.reset(); snapNeed = true; }, PARTS_WAIT_MS);
+    return;
+  }
+  if (got.b === board) {
+    store.load(got.list);
+    tuval.redraw(store.list);
+    updateUndo();
+    clears = got.cg ?? clears;
+    snapNeed = false;
   }
 }
 
@@ -294,7 +324,7 @@ function endStroke() {
 }
 
 canvas.addEventListener('pointerdown', (e) => {
-  if (!e.isPrimary || cur || receiving) return;
+  if (!e.isPrimary || cur || partsIn.busy) return;
   if (e.pointerType === 'mouse' && e.button !== 0) return;
   if (!canDraw(viewOf(sync.state), me)) return;
   e.preventDefault();
@@ -489,7 +519,7 @@ function renderTop(s) {
   const chips = `
     <span class="chip">Tur <b>${round}/${total}</b></span>
     ${s.phase === 'turn' ? `<span class="chip cz-timer" id="cz-timer"><span aria-hidden="true">⏱</span> <b id="cz-timer-v">${secondsLeft(s)}</b><span class="cz-sr"> saniye</span></span>` : ''}
-    <span class="chip">Puan <b>${s.score}</b></span>`;
+    <span class="chip">Puan <b>${Number(s.score)}</b></span>`;
   let line = '';
   const drawer = drawerId(s);
   if (s.phase === 'turn') {
@@ -540,7 +570,7 @@ function renderBanner(s) {
     return;
   }
   banner.innerHTML = s.ok
-    ? `<p class="cz-b-big">Bildiniz! +${s.gained}</p><p>${esc(s.word)}</p>`
+    ? `<p class="cz-b-big">Bildiniz! +${Number(s.gained)}</p><p>${esc(s.word)}</p>`
     : `<p class="cz-b-big">Süre doldu</p><p>Kelime: <b>${esc(s.word)}</b></p>`;
   banner.classList.remove('hidden');
 }

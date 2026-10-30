@@ -101,8 +101,9 @@ const jsonYanit = (status, veri, basliklar = {}) => new Response(JSON.stringify(
 });
 
 /**
- * POST { room, from, tur, baslik, metin, url } → odadaki diğer cihazlara Web Push.
+ * POST { room, from, tur, baslik, metin, url, anahtar? } → odadaki diğer cihazlara Web Push.
  * Başlık `apikey` = publishable anahtar. Köken: GitHub Pages ya da localhost.
+ * `anahtar` = gönderen cihazın anahtarı (push_hedef'e p_anahtar). Yetki yoksa (42501) 403.
  */
 export function bildirIsleyici({ env, fetchFn = fetch }) {
   return async (req) => {
@@ -136,11 +137,15 @@ export function bildirIsleyici({ env, fetchFn = fetch }) {
       return yanit(500, { hata: 'sunucu ayarı eksik' });
     }
 
+    // p_anahtar yalnız verilince gider: eski şema (push_hedef iki parametreli) bozulmasın.
+    const args = { p_room: deger.room, p_from: deger.from };
+    if (deger.anahtar) args.p_anahtar = deger.anahtar;
     let hedefler;
     try {
-      hedefler = (await rpc('push_hedef', { p_room: deger.room, p_from: deger.from })) || [];
+      hedefler = (await rpc('push_hedef', args)) || [];
     } catch (e) {
       if (e.code === '54000') return yanit(429, { hata: 'çok fazla bildirim, biraz bekle' });
+      if (e.code === '42501') return yanit(403, { hata: 'yetki yok' });
       console.error('[bildir] push_hedef', e.message);
       return yanit(502, { hata: 'veritabanına ulaşılamadı' });
     }

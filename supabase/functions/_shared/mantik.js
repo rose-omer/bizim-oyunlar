@@ -3,6 +3,8 @@ import { parseDay, daysBetween, nextOccurrence, upcoming, milestones } from './g
 
 export const ROOM_RE = /^[a-z2-9]{10}$/;
 export const CLIENT_RE = /^[A-Za-z0-9_-]{1,64}$/;
+/** Cihaz anahtarı: 32 bayt, base64url, dolgusuz (schema.sql 7. bölüm). */
+export const ANAHTAR_RE = /^[A-Za-z0-9_-]{43}$/;
 export const TURLER = ['dokunus', 'mesaj', 'mektup', 'ani', 'gun', 'oyun', 'soru', 'liste', 'izle'];
 export const BASLIK_MAX = 60;
 export const METIN_MAX = 140;
@@ -32,16 +34,19 @@ export function goreliUrl(u) {
   return s;
 }
 
-/** bildir isteğinin gövdesi → { deger } | { hata } */
+/** bildir isteğinin gövdesi → { deger } | { hata }. `anahtar` isteğe bağlı (eski istemci göndermez). */
 export function istegiDogrula(govde) {
   if (!govde || typeof govde !== 'object' || Array.isArray(govde)) return { hata: 'gövde nesne olmalı' };
-  const { room, from, tur } = govde;
+  const { room, from, tur, anahtar } = govde;
   if (typeof room !== 'string' || !ROOM_RE.test(room)) return { hata: 'geçersiz oda' };
   if (typeof from !== 'string' || !CLIENT_RE.test(from)) return { hata: 'geçersiz gönderen' };
   if (!TURLER.includes(tur)) return { hata: 'geçersiz tür' };
+  if (anahtar != null && (typeof anahtar !== 'string' || !ANAHTAR_RE.test(anahtar))) return { hata: 'geçersiz anahtar' };
   const baslik = kisalt(govde.baslik, BASLIK_MAX) || 'Biz İkimiz';
   const metin = kisalt(govde.metin, METIN_MAX);
-  return { deger: { room, from, tur, baslik, metin, url: goreliUrl(govde.url) } };
+  const deger = { room, from, tur, baslik, metin, url: goreliUrl(govde.url) };
+  if (anahtar != null) deger.anahtar = anahtar;
+  return { deger };
 }
 
 /** sw.js'in okuduğu yük (JSON). */

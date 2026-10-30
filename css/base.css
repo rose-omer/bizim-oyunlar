@@ -1552,3 +1552,157 @@ body.has-tabbar .toasts { bottom: calc(var(--tabbar-h) + 12px); }
 /* ---------- Kilit perdesi (js/core/erken.js ekler, kilit.js kaldırır) ---------- */
 html.kilit-bekle body { visibility: hidden; }
 html.kilit-bekle .kilit { visibility: visible; }
+
+/* ---------- Üyelik kapısı (js/core/kapi.js): onaysız cihazın tam ekranı ---------- */
+html.kapi-acik { overflow: hidden; }
+.kapi {
+  position: fixed;
+  inset: 0;
+  z-index: 970;
+  display: grid;
+  place-items: center;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: calc(28px + var(--safe-top)) calc(var(--gutter) + var(--safe-right)) calc(28px + var(--safe-bottom)) calc(var(--gutter) + var(--safe-left));
+  background-color: var(--bg);
+  background-image: radial-gradient(130% 55% at 50% -8%, color-mix(in srgb, var(--accent-soft) 85%, transparent), transparent 72%), var(--grain);
+  animation: fade-in 0.25s ease both;
+}
+.kapi-kart {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  max-width: 380px;
+  text-align: center;
+}
+.kapi-marka svg { display: block; width: 34px; height: 34px; }
+.kapi-simge {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  margin-top: 10px;
+  padding: 18px;
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--muted);
+}
+.kapi-simge svg { width: 100%; height: 100%; }
+.kapi[data-durum='bekliyor'] .kapi-simge {
+  width: 132px;
+  height: 84px;
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--plum);
+}
+.kapi-kalp {
+  fill: var(--accent);
+  stroke: none;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: kapi-atis 1.8s var(--ease) infinite;
+}
+@keyframes kapi-atis {
+  0%, 60%, 100% { transform: scale(1); }
+  20% { transform: scale(1.18); }
+  35% { transform: scale(0.96); }
+}
+.kapi-baslik {
+  margin-top: 2px;
+  font-family: var(--font-display);
+  font-variation-settings: 'SOFT' 100;
+  font-size: clamp(1.75rem, 1.45rem + 1.4vw, 2.25rem);
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+.kapi-baslik:focus { outline: none; }
+.kapi-metin { max-width: 34ch; font-size: 1.0625rem; line-height: 1.5; text-wrap: pretty; }
+.kapi-cihaz {
+  max-width: 100%;
+  padding: 7px 14px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 0.875rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.kapi-cihaz strong { color: var(--text); font-weight: 750; }
+.kapi-not {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  max-width: 34ch;
+  color: var(--muted);
+  font-size: 0.9375rem;
+  line-height: 1.45;
+}
+.kapi-nokta {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: soft-pulse 1.8s ease-in-out infinite;
+}
+.kapi-eylemler { display: flex; flex-direction: column; gap: 8px; width: 100%; margin-top: 10px; }
+.kapi-eylemler .btn { width: 100%; }
+.kapi-eylemler .btn[aria-busy='true'] { cursor: progress; }
+.kapi-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  text-align: left;
+}
+.kapi-etiket { font-weight: 750; font-size: 0.9375rem; }
+.kapi-form-satir { display: flex; gap: 8px; }
+.kapi-form-satir .input { flex: 1 1 auto; min-width: 0; }
+.kapi-form-satir .btn { flex: none; padding-inline: 1rem; }
+.kapi-kod { font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; font-variant-numeric: tabular-nums; }
+.kapi-kod::placeholder { text-transform: none; letter-spacing: 0.04em; }
+.kapi-hata { color: var(--bad); font-size: 0.875rem; font-weight: 700; line-height: 1.4; }
+.kapi-hata:empty { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .kapi { animation: none; }
+  .kapi-kalp, .kapi-nokta { animation: none; }
+}
+
+/* ---------- Ana sayfa: yeni cihaz isteği kartı ---------- */
+.biz-istek {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 16px;
+  padding: 14px 14px 14px 16px;
+  border-radius: var(--radius-lg);
+  background: var(--accent-soft);
+  color: var(--text);
+  animation: fade-in 0.3s ease both;
+}
+.biz-istek-simge {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--accent-strong);
+  box-shadow: var(--shadow-sm);
+}
+.biz-istek-simge svg { width: 24px; height: 24px; }
+.biz-istek-metin { flex: 1 1 auto; min-width: 0; font-weight: 750; line-height: 1.35; text-wrap: pretty; }
+.biz-istek .btn { flex: none; }
+@media (prefers-reduced-motion: reduce) { .biz-istek { animation: none; } }

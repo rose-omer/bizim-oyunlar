@@ -2,7 +2,11 @@
 // Biz ekranı: çift başlığı, gün sayacı, bugün, yaklaşanlar, buluşma, günün sorusu, dokunuş, ruh hâli, oyunlar.
 // Sözleşme §11 ve v2 §14–§18. Saf yardımcılar dışa aktarılır (tests/hub-biz.test.mjs); DOM yalnız tarayıcıda kurulur.
 import { GAMES, gameById } from './core/games.js';
-import { me, setName, currentRoom, setRoom, newRoomId, inviteUrl, gameUrl, pageUrl, isLocalMode } from './core/identity.js';
+import {
+  me, setName, currentRoom, setRoom, newRoomId, inviteUrl, gameUrl, pageUrl, isLocalMode, parseInviteHash,
+} from './core/identity.js';
+import { sonDurum, girisAcikMi, cihazlar, uyelikModu } from './core/uyelik.js';
+import { kapidanGec, davetSakla } from './core/kapi.js';
 import { joinRoom, partnerGoruyor } from './core/room.js';
 import { roomStats } from './core/db.js';
 import { openCollection } from './core/veri.js';
@@ -13,7 +17,7 @@ import {
 import {
   h, icon, ICONS, avatarEl, toast, celebrate, shareInvite, copyInvite, muteButton, pairEl, knownPartner, rememberPartner,
   partnerWhere, locative, genitive, trackShellHeight, formatDay, startAppServices, mountTabBar, removeTabBar,
-  listenTouches, TOUCHES, touchByTur,
+  listenTouches, TOUCHES, touchByTur, davetLinki,
 } from './core/ui.js';
 import { sfx } from './core/sound.js';
 
@@ -25,6 +29,7 @@ const TOUCH_GAP_MS = 2000; // dokunuş: en çok 2 sn'de bir
 const MOOD_NOTE_MAX = 80;
 const PROFIL_WAIT_MS = 4000; // ilk açılışta tarih sorusundan önce profili en fazla bu kadar bekle
 const PAGES = { gunler: 'sayfalar/gunler/', gunsorusu: 'sayfalar/gunun-sorusu/', ayarlar: 'sayfalar/ayarlar/' };
+const ISTEK_ARALIK_MS = 15000; // bekleyen cihaz isteğine en sık bu aralıkla bakılır (açılış ve öne gelince)
 
 // ====================================================================================
 // Saf yardımcılar (Node'da test edilir)
@@ -249,6 +254,8 @@ const state = {
   lastErrToast: 0,
   savingStart: false,
   today: '',
+  kapiOda: null, // üyelik kapısından geçilen oda
+  kapiBekleniyor: null, // kapı kararı beklenen oda
 };
 
 // ---------- Küçük yardımcılar ----------
@@ -296,19 +303,20 @@ function docOf(col, id) {
   return (id ? col.get(id) : pickPartnerDoc(col.all(), myId())) || null;
 }
 
-// ---------- Davet linki: #oda=<id> ----------
+// ---------- Davet linki: #oda=<id>[&davet=<kod>] ----------
+/** -> 'yeni' (yeni oda) | 'davet' (aynı oda, onaysız cihaza davet kodu geldi) | false */
 function takeHashRoom() {
-  const m = location.hash.match(/^#oda=([a-z0-9]{4,40})$/i);
   if (!location.hash.startsWith('#oda=')) return false;
+  const p = parseInviteHash(location.hash);
   history.replaceState(null, '', location.pathname + location.search);
-  if (!m) return false;
-  const id = m[1].toLowerCase();
-  if (id === currentRoom()) return false;
+  if (!p) return false;
+  if (p.davet) davetSakla(p.oda, p.davet); // kapı oda_katil'e verir, onaydan sonra siler
+  if (p.oda === currentRoom()) return p.davet && !girisAcikMi(sonDurum(p.oda)) ? 'davet' : false;
   leaveRoom();
-  setRoom(id);
+  setRoom(p.oda);
   state.fresh = false;
   state.onboard = true;
-  return true;
+  return 'yeni';
 }
 
 // ---------- Oda bağlantısı ----------
@@ -367,6 +375,7 @@ async function ensureRoom(roomId) {
   openData(room);
   mountGs(state.view);
   paintAll();
+  istekKontrol(true);
 }
 
 function onStatus(status, detail) {
@@ -529,11 +538,14 @@ function gameCard(g, onOpen) {
 
 function linkBox(roomId) {
   const select = (e) => e.currentTarget.select();
+  const input = h('input', {
+    class: 'input', type: 'text', readonly: true, value: inviteUrl(roomId),
+    'aria-label': 'Davet linki', onfocus: select, onclick: select,
+  });
+  // Tek kullanımlık davet kodu gelince alan kodlu linki gösterir (paylaş/kopyala da aynı kodu kullanır).
+  davetLinki(roomId).then((u) => { input.value = u; });
   return h('div', { class: 'linkbox' },
-    h('input', {
-      class: 'input', type: 'text', readonly: true, value: inviteUrl(roomId),
-      'aria-label': 'Davet linki', onfocus: select, onclick: select,
-    }),
+    input,
     h('button', { type: 'button', class: 'btn small', onclick: () => copyInvite(roomId) }, icon('copy'), 'Kopyala'));
 }
 
@@ -778,6 +790,7 @@ function paintDate() {
 function bizScreen(roomId) {
   const view = { roomId, keys: {}, seenAt: Number(lsGet(seenKey(roomId))) || 0, cd: null, gsMounted: false, gsCleanup: null, lastPlayed: null };
   view.heading = h('h1', { class: 'sr-only', id: 'biz-h', tabindex: '-1' }, 'Biz');
+  view.istekBox = h('div', { hidden: true });
   view.thread = h('div', { class: 'biz-thread' });
   view.counterBox = h('div', { class: 'biz-counter' });
   view.noteBox = h('div', { class: 'couple-note stack' });
@@ -796,6 +809,7 @@ function bizScreen(roomId) {
 
   const el = h('div', { class: 'hub-wrap biz' },
     h('section', { class: 'biz-hero', 'aria-labelledby': 'biz-h' }, view.heading, view.thread, view.counterBox),
+    view.istekBox,
     view.noteBox,
     view.todayBox,
     nowSection(view),
@@ -987,6 +1001,33 @@ async function mountGs(view) {
     console.warn('[biz] Günün Sorusu kartı açılamadı', e);
     box.replaceChildren(gsFallback());
   }
+}
+
+// ---------- Yeni cihaz isteği (TALIMAT §5.4) ----------
+const ISTEK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="5" y="3" width="10.5" height="18" rx="2.6"/><path d="M8.8 17.6h2.9"/><path d="M19 8v6M16 11h6"/></svg>';
+
+/** Onaylı cihazda bekleyen katılma isteği var mı? Açılışta ve sayfa öne gelince bakılır. */
+async function istekKontrol(zorla = false) {
+  const v = state.view;
+  const roomId = state.roomId;
+  if (!v || !roomId || v.roomId !== roomId || !state.room) return;
+  const mod = uyelikModu(roomId);
+  if (mod === 'eski-sunucu' || mod === 'yerel-gevsek' || !girisAcikMi(sonDurum(roomId))) return;
+  const now = Date.now();
+  if (!zorla && now - (v.istekAt || 0) < ISTEK_ARALIK_MS) return;
+  v.istekAt = now;
+  let n;
+  try {
+    n = (await cihazlar(roomId)).filter((c) => c.durum === 'bekliyor').length;
+  } catch {
+    return; // ağ yok: sonra yeniden bakılır
+  }
+  if (state.view !== v || !changed(v, 'istek', n)) return;
+  v.istekBox.hidden = !n;
+  v.istekBox.replaceChildren(...(n ? [h('div', { class: 'biz-istek', role: 'status' },
+    h('span', { class: 'biz-istek-simge', 'aria-hidden': 'true', html: ISTEK_SVG }),
+    h('p', { class: 'biz-istek-metin' }, n === 1 ? 'Yeni bir cihaz odamıza katılmak istiyor.' : `${n} yeni cihaz odamıza katılmak istiyor.`),
+    h('a', { class: 'btn small primary', href: `${pageUrl(PAGES.ayarlar)}#ayar-cihaz` }, 'Gör'))] : []));
 }
 
 // ---------- Boyama ----------
@@ -1409,6 +1450,9 @@ function render({ focus = false } = {}) {
   } else if (!roomId) {
     leaveRoom();
     screen = welcomeScreen(name);
+  } else if (!kapidanGecildi(roomId)) {
+    // Üyelik kapısı: karar gelene dek kısa bekleme; onaysızsa kapı ekranı (kapi.js) bunun üstünü örter.
+    screen = kapiBeklemeEkrani(name);
   } else {
     ensureRoom(roomId);
     if (state.fresh) screen = inviteScreen(roomId, name);
@@ -1426,12 +1470,40 @@ function render({ focus = false } = {}) {
   else removeTabBar();
   mountGs(state.view);
   paintAll();
+  if (state.view) istekKontrol(true);
 
   if (focus) {
     window.scrollTo(0, 0);
     const target = screen.el.querySelector('[data-autofocus]') || screen.el.querySelector('h1');
     target?.focus({ preventScroll: true });
   }
+}
+
+/** Kapıdan geçildi mi? Önbellekte onay varsa hemen evet (arkada tazelenir); yoksa kararı başlatır. */
+function kapidanGecildi(roomId) {
+  if (state.kapiOda === roomId) return true;
+  if (girisAcikMi(sonDurum(roomId))) {
+    state.kapiOda = roomId;
+    kapidanGec(roomId); // anında döner; durumu arkada tazeler ve izler
+    return true;
+  }
+  if (state.kapiBekleniyor !== roomId) {
+    state.kapiBekleniyor = roomId;
+    kapidanGec(roomId).then(() => {
+      state.kapiBekleniyor = null;
+      state.kapiOda = roomId;
+      if (currentRoom() === roomId) render({ focus: true });
+    });
+  }
+  return false;
+}
+
+function kapiBeklemeEkrani(name) {
+  const el = h('section', { class: 'screen center' },
+    h('div', { class: 'hub-narrow stack center' },
+      pairEl({ meName: name, link: 'wait', lg: true }),
+      h('p', { class: 'subtitle', role: 'status' }, 'Bir saniye…')));
+  return { el };
 }
 
 function tick() {
@@ -1454,7 +1526,10 @@ function main() {
   buildHeader();
 
   window.addEventListener('hashchange', () => {
-    if (takeHashRoom()) {
+    const r = takeHashRoom();
+    if (r === 'davet') {
+      location.reload(); // kapı davet koduyla yeniden karar versin
+    } else if (r) {
       render({ focus: true });
       if (cleanName(me().name)) toast('Odanıza hoş geldin');
     }
@@ -1473,11 +1548,14 @@ function main() {
   window.addEventListener('pagehide', saveSeen);
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') saveSeen();
-    else paintAll();
+    else {
+      paintAll();
+      istekKontrol();
+    }
   });
   setInterval(tick, 1000);
 
-  const arrived = takeHashRoom();
+  const arrived = takeHashRoom() === 'yeni';
   render();
   if (arrived && cleanName(me().name)) toast('Odanıza hoş geldin');
 }

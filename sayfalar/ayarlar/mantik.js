@@ -1,5 +1,6 @@
 // Ayarlar sayfasının saf mantığı (Node'da test edilir; DOM yok).
 import { countdown } from '../../js/core/gunler.js';
+import { ID_RE, checkData } from '../../js/core/veri.js';
 
 export const SURUM = '2.0';
 
@@ -140,4 +141,82 @@ export function yedekSayisi(yedek) {
 export function yedekDosyaAdi(simdi = new Date()) {
   const d = new Date(simdi);
   return `biz-ikimiz-yedek-${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}.json`;
+}
+
+// ---------- Yedekten geri yükleme ----------
+const TUR_ADLARI = {
+  kisi: 'profil', cift: 'çift bilgisi', gun: 'özel gün', mesaj: 'mesaj', okundu: 'okundu bilgisi', ani: 'anı',
+  mektup: 'mektup', liste: 'liste öğesi', randevu: 'randevu fikri', gs: 'soru cevabı', sevgidili: 'sevgi dili sonucu',
+  ruh: 'ruh hâli', dokunus: 'dokunuş', konum: 'konum', oyunkayit: 'oyun kaydı',
+};
+const YEDEK_DEGIL = 'Bu dosya bir Biz İkimiz yedeği değil.';
+const tarihMi = (v) => typeof v === 'string' && Number.isFinite(Date.parse(v));
+
+/**
+ * Yedek dosyası (yedekVerisi biçimi; nesne ya da JSON metni) → doc_ice_aktar belgeleri.
+ * -> { belgeler: [{ kind, id, data, author?, created_at?, updated_at? }], hatalar: [metin], sayilar: { [tür]: n } }
+ * Dosya yedek değilse ya da daha yeni bir sürümdense belgeler boş, hatalar[0] nedeni söyler.
+ * Bozuk kayıtlar ve bilinmeyen türler atlanır (hatalarda sayılır).
+ */
+export function yedektenBelgeler(json) {
+  let y = json;
+  if (typeof y === 'string') {
+    try { y = JSON.parse(y); } catch { y = null; }
+  }
+  const bos = (metin) => ({ belgeler: [], hatalar: [metin], sayilar: {} });
+  if (!y || typeof y !== 'object' || Array.isArray(y) || y.uygulama !== 'Biz İkimiz'
+    || typeof y.surum !== 'string' || !y.turler || typeof y.turler !== 'object' || Array.isArray(y.turler)) {
+    return bos(YEDEK_DEGIL);
+  }
+  if (!/^2(\.\d+)*$/.test(y.surum)) {
+    return bos(/^\d/.test(y.surum) && parseInt(y.surum, 10) > 2
+      ? `Bu yedek daha yeni bir sürümden (${y.surum.slice(0, 10)}). Önce uygulamayı güncelle.`
+      : YEDEK_DEGIL);
+  }
+  const belgeler = [];
+  const hatalar = [];
+  const sayilar = {};
+  for (const [tur, docs] of Object.entries(y.turler)) {
+    if (!YEDEK_TURLERI.includes(tur)) {
+      hatalar.push(`Bilinmeyen tür atlandı: ${String(tur).slice(0, 20)}`);
+      continue;
+    }
+    if (!Array.isArray(docs)) {
+      hatalar.push(`${TUR_ADLARI[tur]}: okunamadı`);
+      continue;
+    }
+    let atlanan = 0;
+    for (const d of docs) {
+      if (!d || typeof d !== 'object' || !ID_RE.test(d.id || '') || checkData(d.data)) {
+        atlanan++;
+        continue;
+      }
+      const b = { kind: tur, id: d.id, data: d.data };
+      if (typeof d.author === 'string' && ID_RE.test(d.author)) b.author = d.author;
+      if (tarihMi(d.created_at)) b.created_at = d.created_at;
+      if (tarihMi(d.updated_at)) b.updated_at = d.updated_at;
+      belgeler.push(b);
+      sayilar[tur] = (sayilar[tur] || 0) + 1;
+    }
+    if (atlanan) hatalar.push(`${TUR_ADLARI[tur]}: ${atlanan} kayıt atlandı`);
+  }
+  return { belgeler, hatalar, sayilar };
+}
+
+/** Diziyi n'lik parçalara böler. */
+export function parcala(dizi, n) {
+  const out = [];
+  const k = Math.max(1, Math.floor(n) || 1);
+  for (let i = 0; i < (dizi?.length || 0); i += k) out.push(dizi.slice(i, i + k));
+  return out;
+}
+
+/** { [tür]: n } → "1.234 kayıt: 800 mesaj, 40 anı …" (en çok olan dört tür). */
+export function yedekOzeti(sayilar) {
+  const liste = Object.entries(sayilar || {}).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]);
+  const toplam = liste.reduce((t, [, n]) => t + n, 0);
+  if (!toplam) return 'Yedekte kayıt yok.';
+  const f = (n) => n.toLocaleString('tr-TR');
+  const parcalar = liste.slice(0, 4).map(([t, n]) => `${f(n)} ${TUR_ADLARI[t] || t}`).join(', ');
+  return `${f(toplam)} kayıt: ${parcalar}${liste.length > 4 ? ' …' : ''}`;
 }

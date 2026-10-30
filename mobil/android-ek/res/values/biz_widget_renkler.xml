@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ana ekran widget'ı renkleri: açık tema (css/base.css "gül" ailesi). Koyu karşılıkları values-night/. -->
+<resources>
+    <color name="biz_widget_zemin">#FBF4EE</color>
+    <color name="biz_widget_cizgi">#EADAD1</color>
+    <color name="biz_widget_yazi">#3B1F2B</color>
+    <color name="biz_widget_soluk">#7D6070</color>
+    <color name="biz_widget_vurgu">#C2375C</color>
+    <color name="biz_widget_hap">#FBE3E9</color>
+    <color name="biz_widget_hap_yazi">#A8264B</color>
+</resources>

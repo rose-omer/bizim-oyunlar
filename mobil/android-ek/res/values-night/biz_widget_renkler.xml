@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ana ekran widget'ı renkleri: koyu tema (css/base.css "erik gecesi"). Sistem teması seçer. -->
+<resources>
+    <color name="biz_widget_zemin">#281A2D</color>
+    <color name="biz_widget_cizgi">#46314E</color>
+    <color name="biz_widget_yazi">#F7E9EF</color>
+    <color name="biz_widget_soluk">#BBA2B2</color>
+    <color name="biz_widget_vurgu">#F08DA8</color>
+    <color name="biz_widget_hap">#4A2139</color>
+    <color name="biz_widget_hap_yazi">#F8B4C6</color>
+</resources>

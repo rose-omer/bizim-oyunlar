@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Buluşma geri sayımı hapı (css .chip.accent karşılığı). -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@color/biz_widget_hap" />
+    <corners android:radius="999dp" />
+</shape>

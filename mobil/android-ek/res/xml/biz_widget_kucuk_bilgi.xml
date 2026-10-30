@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ana ekran widget'ı 2×1 (BizWidgetKucuk). minWidth/minHeight eski hücre formülü (70 × n − 30 dp);
+     targetCell*, previewLayout, description Android 12+ (eskilerde yok sayılır).
+     Tazeleme: gece yarısı alarmı (BizWidget.java); updatePeriodMillis 6 saatlik yedek. -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/biz_widget_kucuk_aciklama"
+    android:initialLayout="@layout/biz_widget_kucuk"
+    android:minWidth="110dp"
+    android:minHeight="40dp"
+    android:minResizeWidth="110dp"
+    android:minResizeHeight="40dp"
+    android:previewLayout="@layout/biz_widget_kucuk"
+    android:resizeMode="horizontal|vertical"
+    android:targetCellWidth="2"
+    android:targetCellHeight="1"
+    android:updatePeriodMillis="21600000"
+    android:widgetCategory="home_screen" />

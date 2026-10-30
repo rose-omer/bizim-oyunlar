@@ -161,6 +161,23 @@ test('bitiş: tüm hücreler doğruysa biter, süre kesinleşir', () => {
   assert.equal(katki[0] + katki[1], 81 - S.ipucuSayisi(s.bulmaca));
 });
 
+test('bitiş: son yanlışı geri almak bulmacayı tamamlarsa biter', () => {
+  let s = basla();
+  const x = bosHucre(s);
+  s = act(s, { type: 'yaz', i: x, d: dogru(s, x), v: 0 }, A, { now: 2000 });
+  s = act(s, { type: 'yaz', i: x, d: yanlis(s, x), v: 1 }, A, { now: 3000 });
+  for (let i = 0; i < 81; i++) {
+    if (s.bulmaca[i] !== '0' || i === x) continue;
+    s = act(s, { type: 'yaz', i, d: dogru(s, i), v: s.sur[i] }, B, { now: 4000 });
+  }
+  assert.equal(s.faz, 'oyun');
+  s = act(s, { type: 'geri' }, A, { now: 11000 });
+  assert.equal(s.deger[x], dogru(s, x));
+  assert.equal(s.faz, 'bitti');
+  assert.equal(s.sure, 10000);
+  assert.equal(s.basla, null);
+});
+
 test('bitiş: dolu ama yanlışsa sürer', () => {
   let s = basla();
   const ilk = bosHucre(s);

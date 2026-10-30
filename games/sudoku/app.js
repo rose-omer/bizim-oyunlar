@@ -67,29 +67,40 @@ const M = params.roomId || currentRoom()
   : await yalniz();
 const me = M.meId;
 
-/** Odasız tek kişilik açılış: bootMasa ile aynı biçimde nesne döner. */
+/**
+ * Odasız tek kişilik açılış: bootMasa ile aynı biçimde nesne döner. Durum bu cihazda süresiz saklanır
+ * (createSync'in kendi deposu 3 saatte unutur); biten bulmaca silinir.
+ */
 async function yalniz() {
   const room = await joinRoom({ roomId: null, ns: NS });
   mountShell({ title: BASLIK, room });
   const meId = room.me.clientId;
-  const storage = {
-    get: (k) => { try { return localStorage.getItem(k); } catch { return null; } },
-    set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* dolu */ } },
+  const KEY = 'bizim.sudoku.yalniz';
+  let kayitli = null;
+  try {
+    const d = JSON.parse(localStorage.getItem(KEY) || 'null');
+    if (S.gecerliKayit(d) && d.players[0] === meId && d.faz === 'oyun') kayitli = d;
+  } catch { /* bozuk kayıt */ }
+  const sakla = (s) => {
+    try {
+      if (s.faz === 'oyun') localStorage.setItem(KEY, JSON.stringify(s));
+      else localStorage.removeItem(KEY);
+    } catch { /* dolu ya da kapalı */ }
   };
   let handlers = {};
   const sync = createSync({
     room, ns: NS, isHost: true, solo: true,
     reduce: S.reduce,
     toAction: (intent, by, s) => S.toAction(intent, by, s, { hostId: meId, now: Date.now(), seed: newSeed() }),
-    initial: S.initialState({ players: [meId], names: { [meId]: room.me.name || 'Ben' }, now: Date.now() }),
-    storage,
-    storeKey: 'bizim.sudoku.yalniz',
-    accept: (s) => S.gecerliKayit(s) && s.players[0] === meId,
-    onState: (s, prev) => handlers.onState?.(s, prev, {}),
+    initial: kayitli || S.initialState({ players: [meId], names: { [meId]: room.me.name || 'Ben' }, now: Date.now() }),
+    onState: (s, prev) => {
+      if (prev && prev.seq !== s.seq) sakla(s);
+      handlers.onState?.(s, prev, {});
+    },
   });
   return {
     room, roomId: null, meId, authority: true, sync,
-    resumed: sync.state?.faz === 'oyun',
+    resumed: !!kayitli,
     nameOf: (id) => (id === meId ? room.me.name || 'Sen' : 'Sevgilin'),
     partnerHere: () => false,
     becomeHost: () => {},
@@ -102,7 +113,7 @@ async function yalniz() {
 let sec = null;            // seçili hücre
 let notModu = false;
 let hataGoster = (() => { try { return localStorage.getItem(HATA_KEY) !== '0'; } catch { return true; } })();
-let opt = null;            // { s, timer } misafirin onaysız hamlesi
+let bekleyen = [];         // misafirin onaysız hücre hamleleri: { intent, i, hedef, at }
 let sonNiyet = null;       // { i, d, at } çakışma bildirimi için
 let partnerSec = null;
 let partnerBurada = false;
@@ -118,9 +129,25 @@ let yeniO = new Set();     // partnerin yeni yazdığı hücreler (kısa vurgu)
 const later = (fn, ms = 0) => setTimeout(fn, ms);
 const away = M.roomId ? mountAway(root, { isGuest: !M.authority, onHost: () => M.becomeHost() }) : { set() {} };
 
+/** Gösterilen durum: ev sahibinden gelen + henüz onaylanmamış kendi hamlelerim (misafir). */
 function state() {
-  return opt?.s || M.sync.state;
+  const s = M.sync.state;
+  if (!s || !bekleyen.length || s.faz !== 'oyun') return s;
+  let out = s;
+  for (const b of bekleyen) {
+    const a = S.toAction(b.intent, me, out, { hostId: null, now: M.sync.hostNow() });
+    if (a) out = S.reduce(out, a);
+  }
+  return out;
 }
+/** Ev sahibinin işlediği (sürümü hedefe ulaşan) ya da süresi dolan hamleleri bırak. */
+function bekleyenleriAyikla() {
+  const s = M.sync.state;
+  const simdi = Date.now();
+  bekleyen = bekleyen.filter((b) => s && s.sur?.[b.i] < b.hedef && simdi - b.at < OPT_MS);
+}
+/** Hamlenin taşıyacağı sürüm: ev sahibinden gelen son onaylı durum (iyimser önizleme değil). */
+const surum = (i) => M.sync.state?.sur?.[i] ?? 0;
 const myIdx = (s) => Math.max(0, s.players.indexOf(me));
 const ikiKisi = (s) => s.players.length > 1;
 const pName = (s) => M.nameOf(s.players.find((x) => x !== me), s);
@@ -285,11 +312,10 @@ function gonder(intent) {
   const ok = M.sync.dispatch(intent);
   if (!M.authority) {
     if (ok === false) { toast('Bağlantı yok; biraz sonra yeniden dene.'); return false; }
-    const a = S.toAction(intent, me, base, { hostId: null, now: M.sync.hostNow() });
-    const next = a ? S.reduce(base, a) : base;
-    if (next !== base) {
-      clearTimeout(opt?.timer);
-      opt = { s: next, timer: later(() => { opt = null; paint(); }, OPT_MS) };
+    if (Number.isInteger(intent.i)) {
+      // hedef: ev sahibi bu hamleyi işleyince hücrenin ulaşacağı sürüm
+      bekleyen.push({ intent, i: intent.i, hedef: base.sur[intent.i] + 1, at: Date.now() });
+      later(() => { bekleyenleriAyikla(); paint(); }, OPT_MS + 50);
     }
   }
   paint();
@@ -309,13 +335,13 @@ function rakamBas(d) {
   if (notModu) {
     if (s.deger[sec]) { toast('Dolu hücreye not yazılmaz; önce sil.'); return; }
     sfx('tap');
-    gonder({ type: 'not', i: sec, d, v: s.sur[sec] });
+    gonder({ type: 'not', i: sec, d, v: surum(sec) });
     return;
   }
   const yanlis = d !== Number(s.cozum[sec]) && s.deger[sec] !== d;
   sfx(yanlis && hataGoster ? 'wrong' : 'snap');
   sonNiyet = { i: sec, d: s.deger[sec] === d ? 0 : d, at: Date.now() };
-  gonder({ type: 'yaz', i: sec, d, v: s.sur[sec] });
+  gonder({ type: 'yaz', i: sec, d, v: surum(sec) });
 }
 
 function silHucre() {
@@ -324,7 +350,7 @@ function silHucre() {
   if (!s.deger[sec] && !s.notlar[sec]) return;
   sfx('pop');
   sonNiyet = { i: sec, d: 0, at: Date.now() };
-  gonder({ type: 'sil', i: sec, v: s.sur[sec] });
+  gonder({ type: 'sil', i: sec, v: surum(sec) });
 }
 function geriAl() {
   const s = state();
@@ -539,7 +565,7 @@ function oturumAc() {
 
 M.start({
   onState(s, prev, info) {
-    if (opt) { clearTimeout(opt.timer); opt = null; }
+    bekleyenleriAyikla();
     if (s.faz !== 'oyun') dropResume();
     if (s.faz === 'secim') delete secimEl.dataset.kurulu; // kişi sayısı değişmiş olabilir
     paint();

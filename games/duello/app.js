@@ -653,6 +653,7 @@ function dropResume() {
 
 M.start({
   onState(s, prev, info) {
+    if (info?.adopted) geriDenendi.clear(); // benimsenen kayıtta gizliler yine boş: yeniden koy
     gizlileriSakla(s);
     if (s.faz === 'bitti') dropResume();
     const v = view();

@@ -103,6 +103,15 @@ function izinli(s, a, idx) {
   return a.ev || a.v === s.sur[a.i] || s.son[a.i] === idx;
 }
 
+/** Değişiklik sonrası: tahta doğru dolduysa biter (süre kesinleşir), değilse yalnız seq artar. */
+function sonrasi(next, d, now) {
+  if (d && bittiMi(next)) {
+    const sure = gecenSure(next, now ?? next.at ?? 0);
+    return bump(next, now, { faz: 'bitti', sure, basla: null, bitti: now });
+  }
+  return bump(next, now, {});
+}
+
 /** Hücreyi değiştirir; geri kaydı ve bitiş denetimi. */
 function degistir(s, a, idx, d1, n1) {
   const i = a.i;
@@ -121,12 +130,7 @@ function degistir(s, a, idx, d1, n1) {
   const geri = s.geri.map((g, k) => (k === idx ? yigin : g));
   let hata = s.hata;
   if (d1 && d1 !== d0 && d1 !== s.cozum.charCodeAt(i) - 48) hata = s.hata.map((h, k) => (k === idx ? h + 1 : h));
-  const next = { ...s, deger, notlar, sur, son, geri, hata };
-  if (d1 && bittiMi(next)) {
-    const sure = gecenSure(next, a.now ?? next.at ?? 0);
-    return bump(next, a.now, { faz: 'bitti', sure, basla: null, bitti: a.now });
-  }
-  return bump(next, a.now, {});
+  return sonrasi({ ...s, deger, notlar, sur, son, geri, hata }, d1, a.now);
 }
 
 export function reduce(s, a) {
@@ -159,7 +163,7 @@ export function reduce(s, a) {
         notlar[e.i] = e.n0;
         sur[e.i] += 1;
         son[e.i] = idx;
-        return bump(s, a.now, { deger, notlar, sur, son, geri: s.geri.map((g, k) => (k === idx ? yigin : g)) });
+        return sonrasi({ ...s, deger, notlar, sur, son, geri: s.geri.map((g, k) => (k === idx ? yigin : g)) }, e.d0, a.now);
       }
       if (!s.geri[idx].length) return s;
       return bump(s, a.now, { geri: s.geri.map((g, k) => (k === idx ? [] : g)) });

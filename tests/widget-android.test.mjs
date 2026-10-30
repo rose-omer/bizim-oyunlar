@@ -9,7 +9,7 @@ import { join, relative, sep, basename } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import {
-  manifestYamala, widgetManifestYamala, mainActivityYamala, hazirla, WIDGETLER,
+  manifestYamala, widgetManifestYamala, mainActivityYamala, hazirla, WIDGETLER, WEB_IZINLERI,
 } from '../mobil/scripts/android-hazirla.mjs';
 
 const yol = (p) => fileURLToPath(new URL(`../${p}`, import.meta.url));
@@ -137,6 +137,10 @@ test('hazirla: Capacitor 8 projesinde Java, kaynak, manifest, MainActivity; iki 
     const manifest = readFileSync(join(ana, 'AndroidManifest.xml'), 'utf8');
     assert.match(manifest, /BizWidgetKucuk/);
     assert.match(manifest, /SCHEDULE_EXACT_ALARM/);
+    assert.equal(WEB_IZINLERI.length, 4);
+    for (const izin of WEB_IZINLERI) {
+      assert.equal(manifest.split(`<uses-permission android:name="${izin}" />`).length - 1, 1, izin);
+    }
     assert.match(readFileSync(join(kok, 'android', 'app', 'build.gradle'), 'utf8'), /versionCode 12\n/);
     assert.match(readFileSync(join(ana, 'res', 'values', 'strings.xml'), 'utf8'), /app_name/, 'şablon strings.xml ezilmemeli');
     for (const p of dosyalar(join(EK, 'res'))) {

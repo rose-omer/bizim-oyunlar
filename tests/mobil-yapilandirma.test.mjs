@@ -81,6 +81,27 @@ test('manifestYamala: tools ad alanı ve kesin alarm izni kaldırma; tekrar zara
   assert.equal(manifestYamala(bir), bir);
 });
 
+test('manifestYamala: WebView mikrofon ve konum izinleri birer kez', () => {
+  // Capacitor 8 BridgeWebChromeClient bunları çalışma anında ister (getUserMedia ses → RECORD_AUDIO +
+  // MODIFY_AUDIO_SETTINGS; navigator.geolocation → COARSE + FINE). Manifest'te yoksa istek hemen reddedilir.
+  const izinler = ['RECORD_AUDIO', 'MODIFY_AUDIO_SETTINGS', 'ACCESS_COARSE_LOCATION', 'ACCESS_FINE_LOCATION'];
+  const say = (xml, ad) => xml.split(`<uses-permission android:name="android.permission.${ad}"`).length - 1;
+  const bir = manifestYamala(MANIFEST);
+  for (const ad of izinler) assert.equal(say(bir, ad), 1, ad);
+  const iki = manifestYamala(manifestYamala(bir));
+  assert.equal(iki, bir, 'tekrar çalıştırınca çoğalmamalı');
+  // Şablonda zaten varsa eklenmez (CRLF dosyada da).
+  const hazir = MANIFEST.replace('</manifest>', '    <uses-permission android:name="android.permission.RECORD_AUDIO"/>\n</manifest>');
+  assert.equal(say(manifestYamala(hazir), 'RECORD_AUDIO'), 1);
+  const crlf = manifestYamala(MANIFEST.replace(/\n/g, '\r\n'));
+  for (const ad of izinler) assert.equal(say(crlf, ad), 1, `${ad} (CRLF)`);
+  assert.equal(manifestYamala(crlf), crlf);
+  // İzinler <application> dışında, <manifest> altında.
+  assert.ok(bir.indexOf('RECORD_AUDIO') > bir.indexOf('<application'));
+  assert.ok(bir.indexOf('RECORD_AUDIO') < bir.indexOf('</manifest>'));
+  assert.doesNotMatch(bir.slice(bir.indexOf('<application'), bir.indexOf('/>', bir.indexOf('<application'))), /uses-permission/);
+});
+
 test('gradleYamala: sürüm kodu/adı ve tek imza bloğu', () => {
   const bir = gradleYamala(GRADLE, { surumKodu: '57' });
   assert.match(bir, /versionCode 57\n/);

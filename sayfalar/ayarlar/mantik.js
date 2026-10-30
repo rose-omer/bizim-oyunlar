@@ -114,6 +114,7 @@ export const YEDEK_TURLERI = [
   'randevu', 'gs', 'sevgidili', 'ruh', 'dokunus', 'konum', 'oyunkayit',
   'ruhgecmis',
   'skor',
+  'gunfoto', 'haftalik', 'harcama',
 ];
 
 /**

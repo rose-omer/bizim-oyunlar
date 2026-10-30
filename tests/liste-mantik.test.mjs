@@ -15,8 +15,8 @@ const doc = (data, { author = BEN, at } = {}) => {
   return { id: `d${seq}`, data, author, deleted: false, created_at: t, updated_at: t };
 };
 
-test('beş liste, sabit sırada ve eksiksiz', () => {
-  assert.deepEqual(LISTELER.map((l) => l.id), ['yapilacak', 'izlenecek', 'gidilecek', 'hediye', 'alisveris']);
+test('altı liste, sabit sırada ve eksiksiz (şarkılar sonda)', () => {
+  assert.deepEqual(LISTELER.map((l) => l.id), ['yapilacak', 'izlenecek', 'gidilecek', 'hediye', 'alisveris', 'sarki']);
   for (const l of LISTELER) {
     assert.ok(l.emoji && l.ad && l.kisa && l.ipucu && l.bos, l.id);
   }

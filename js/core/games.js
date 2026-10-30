@@ -144,6 +144,9 @@ export const SAYFALAR = [
   { id: 'skor', title: 'Skor Tablosu', icon: '🏆', path: 'sayfalar/skor/', desc: 'Kim kaç kez kazandı? Oyun oyun skorunuz.' },
   { id: 'yilimiz', title: 'Yılımız', icon: '✨', path: 'sayfalar/yilimiz/', desc: 'Bir yılınızın hikâyesi: mesajlar, anılar, oyunlar.' },
   { id: 'rozetler', title: 'Rozetlerimiz', icon: '🏅', path: 'sayfalar/rozetler/', desc: 'Birlikte açtığınız rozetler ve sıradakiler.' },
+  { id: 'gunfoto', title: 'Günün Fotoğrafı', icon: '📷', path: 'sayfalar/gunfoto/', desc: 'Her gün birer kare; ikiniz de gönderince ikisi birden açılır.' },
+  { id: 'haftalik', title: 'Haftalık Kontrol', icon: '🌡️', path: 'sayfalar/haftalik/', desc: 'Haftada bir dakika: iletişim, yakınlık, eğlence, destek.' },
+  { id: 'harcama', title: 'Ortak Harcamalar', icon: '💸', path: 'sayfalar/harcama/', desc: 'Kim ödedi, nasıl bölündü, kim kime borçlu?' },
 ];
 
 // Alt sekme çubuğu sırası.

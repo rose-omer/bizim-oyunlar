@@ -4,11 +4,17 @@
 // Presence yükü: { clientId, name, page: ns, host, gorunur }. host = oyun sayfasının ev sahibi (URL'deki host);
 // lobide ya da URL'de yoksa null. Lobi, partnerin oyununa doğru ev sahibiyle katılmak için kullanır.
 // gorunur = sekme öndeyse true (document.visibilityState). Eski istemcide alan yoksa true sayılır.
+// Cihaz üyeliği (TALIMAT §5.3): Supabase konusu 'oda:' + kanal (uyelik.js). Onaysız cihaz kanala katılmaz;
+// kanal değişince (bir cihaz çıkarıldı) yenisine geçer. Yerel modda BroadcastChannel adı değişmez.
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../config.js';
 import { me as whoAmI, isLocalMode, uuid, readGameParams } from './identity.js';
+import { sonDurum, odaGiris, durumTazele } from './uyelik.js';
+import { kanalSec } from './uyelik-mantik.js';
 
 const VENDOR_URL = new URL('../../vendor/supabase.js', import.meta.url).href;
 const WAKE_BEAT_MS = 4000; // uyanınca ikinci kalp atışı: ilki yanıtsızsa kütüphane soketi yeniler
+const UYELIK_TAZELE_MS = 60000; // kanal yenilenmesini yakalamak için durum tazeleme
+const ONAY_BEKLIYOR = 'Bu cihaz onay bekliyor.';
 
 // ---- Saf yardımcılar (test edilir) ----
 
@@ -303,8 +309,13 @@ function loadLibrary() {
   return libPromise;
 }
 
-/** Tek Supabase istemcisi (storage.js ve db.js de kullanır). */
+let testIstemci = null;
+/** Test: sahte Supabase istemcisi (async () => client). null → gerçek istemci. */
+export function _testSupabase(fn) { testIstemci = fn; }
+
+/** Tek Supabase istemcisi (storage.js, db.js, veri.js, uyelik.js de kullanır). */
 export function getSupabase() {
+  if (testIstemci) return testIstemci();
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
     return Promise.reject(new Error('Supabase ayarı yok (js/config.js).'));
   }
@@ -323,11 +334,15 @@ export function getSupabase() {
   return clientPromise;
 }
 
-/** Testte sahte istemciyle kullanılır (getClient). → { room, settled } */
-export function openSupabaseRoom({ roomId, ns, me, host = null, getClient = getSupabase }) {
+/**
+ * Testte sahte istemciyle kullanılır (getClient). → { room, settled }
+ * uyelik (isteğe bağlı): { sonuc: async () => sonuç, dinle: (fn) => off, tazele: () => void }.
+ * Verilmezse konu 'oda:' + roomId (eski davranış).
+ */
+export function openSupabaseRoom({ roomId, ns, me, host = null, getClient = getSupabase, uyelik = null }) {
   const base = createBase({ roomId, ns, me, backend: 'supabase' });
   const { room } = base;
-  const topic = 'oda:' + roomId;
+  let topic = 'oda:' + roomId;
   const from = { clientId: me.clientId, name: me.name };
   let client = null;
   let ch = null;
@@ -379,6 +394,19 @@ export function openSupabaseRoom({ roomId, ns, me, host = null, getClient = getS
     base.setPartner(null);
     base.setStatus('connecting', 'Bağlanıyor…');
 
+    if (uyelik) {
+      let s = null;
+      try { s = await uyelik.sonuc(); } catch { /* aşağıda çevrimdışı sayılır */ }
+      if (!mine()) return;
+      const k = kanalSec(s, roomId);
+      if (!k) {
+        if (!s || s.durum === 'cevrimdisi') lost('error', 'Bağlantı kurulamadı. Yeniden deneniyor…');
+        else base.setStatus('error', ONAY_BEKLIYOR); // onay gelince 'bizim:uyelik' ile bağlanır
+        return;
+      }
+      topic = 'oda:' + k;
+    }
+
     try {
       client = client || (await getClient());
     } catch {
@@ -400,6 +428,7 @@ export function openSupabaseRoom({ roomId, ns, me, host = null, getClient = getS
     channel.on('broadcast', { event: 'm' }, (msg) => {
       const env = msg && msg.payload;
       if (!mine() || !acceptEnvelope(env, ns, me.clientId)) return;
+      if (env.m && env.m.t === 'uyelik') uyelik?.tazele(); // bir cihaz çıkarıldı/onaylandı: kanalı denetle
       base.emit('message', env.m, { clientId: env.from.clientId, name: String(env.from.name || '') });
     });
     const onPresence = () => { if (mine()) updatePresence(); };
@@ -454,15 +483,48 @@ export function openSupabaseRoom({ roomId, ns, me, host = null, getClient = getS
     attempt = 0;
     connect();
   };
+  // Üyelik değişti: kanal aynıysa dokunma; değiştiyse eskisini bırakıp yenisine katıl; onay kalktıysa ayrıl.
+  const onUyelik = async (s) => {
+    if (left) return;
+    const k = kanalSec(s, roomId);
+    if (k && 'oda:' + k === topic && (joined || base.status() === 'connecting')) return;
+    if (joined && ch && k) {
+      // Kanal yenilendi (bir cihaz çıkarıldı): eski kanaldakiler de durumunu tazelesin.
+      try {
+        Promise.resolve(ch.send({ type: 'broadcast', event: 'm', payload: { ns: '*', from, m: { t: 'uyelik' } } })).catch(() => {});
+      } catch { /* kanal kapanıyor */ }
+    }
+    gen++; // eski kanalın geri çağrıları yok sayılır
+    clearTimeout(retryTimer);
+    retryTimer = null;
+    joined = false;
+    base.setPartner(null);
+    const old = ch;
+    ch = null;
+    if (old && client) await removeQuietly(old);
+    if (left) return;
+    if (!k) {
+      base.setStatus('error', ONAY_BEKLIYOR);
+      return;
+    }
+    attempt = 0;
+    connect();
+  };
+  const uyelikTimer = uyelik ? setInterval(() => { if (!left && visible()) uyelik.tazele(); }, UYELIK_TAZELE_MS) : null;
+
   const offs = [
     listen(doc(), 'visibilitychange', () => {
       track(); // gorunur değişti: presence yükünü yenile
-      if (visible()) refresh(false);
+      if (visible()) {
+        refresh(false);
+        uyelik?.tazele();
+      }
     }),
     listen(win(), 'online', () => refresh(true)),
     listen(win(), 'offline', () => { if (!left) lost('offline', 'İnternet bağlantısı yok.'); }),
     listen(win(), 'pageshow', (e) => { if (e.persisted) refresh(true); }),
   ];
+  if (uyelik) offs.push(uyelik.dinle(onUyelik));
 
   const sendEnv = (target, m) => {
     if (left || !joined || !ch) return false;
@@ -482,6 +544,7 @@ export function openSupabaseRoom({ roomId, ns, me, host = null, getClient = getS
     gen++;
     clearTimeout(retryTimer);
     clearTimeout(beatTimer);
+    clearInterval(uyelikTimer);
     offs.forEach((off) => off());
     base.clear();
     joined = false;
@@ -527,7 +590,12 @@ export async function joinRoom({ roomId, ns = 'lobby' } = {}) {
   const id = String(roomId);
   const host = space === 'lobby' ? null : readGameParams().hostId;
   if (isLocalMode()) return openLocalRoom({ roomId: id, ns: space, me: who, host });
-  const { room, settled } = openSupabaseRoom({ roomId: id, ns: space, me: who, host });
+  const uyelik = {
+    sonuc: async () => sonDurum(id) || odaGiris(id),
+    dinle: (fn) => listen(win(), 'bizim:uyelik', (e) => { if (e?.detail?.roomId === id) fn(e.detail); }),
+    tazele: () => { durumTazele(id).catch(() => {}); },
+  };
+  const { room, settled } = openSupabaseRoom({ roomId: id, ns: space, me: who, host, uyelik });
   await settled;
   return room;
 }

@@ -3,7 +3,7 @@
 // Açılışta tam ekran tuş takımı; arka plan içerik görünmez ve `inert`. 5 yanlışta 30 sn bekleme.
 // Oturum: sayfalar arası geçişte yeniden sormaz; sekme 5 dk arka planda kalırsa ya da sayfa yenilenirse sorar.
 // Üst kısım saf (Node'da test edilir); DOM yalnız fonksiyonların içinde kullanılır.
-import { readStore, writeStore, clearRoom, lobbyUrl, isValidRoomId } from './identity.js';
+import { readStore, writeStore, clearRoom, lobbyUrl, isValidRoomId, me } from './identity.js';
 
 export const K_PIN = 'bizim.kilit';
 export const K_DENEME = 'bizim.kilit.deneme';
@@ -12,6 +12,7 @@ export const MAX_YANLIS = 5;
 export const BEKLEME_MS = 30_000;
 export const ARKA_PLAN_MS = 5 * 60_000;
 export const BILDIRIM_BEKLE_MS = 5000; // odadan çıkarken bildirim kapatma en çok bu kadar beklenir
+export const CIKAR_BEKLE_MS = 5000; // "PIN'i unuttum": cihaz kaydını silme en çok bu kadar beklenir
 
 const PIN_RE = /^\d{4,6}$/;
 const HEX_RE = (n) => new RegExp(`^[0-9a-f]{${n}}$`);
@@ -212,6 +213,27 @@ export async function cihazdanUnut(roomId) {
     } catch { /* depo yok */ }
   }
   clearRoom();
+}
+
+/**
+ * "PIN'i unuttum": önce bu cihazın oda kaydını silmeyi dener (sunucu ya da yerel sıkı öykünme; en çok
+ * CIKAR_BEKLE_MS). Böylece anahtar unutulunca geri dönüşte çakışma olmaz. Olmazsa (çevrimdışı) yine de unutur;
+ * kapı sonraki açılışta çakışmayı gösterir (kurtarma kodu çözer). Sonra odayı unutur ve PIN'i siler.
+ */
+export async function pinUnutuldu(roomId) {
+  if (isValidRoomId(roomId)) {
+    let zaman;
+    try {
+      await Promise.race([
+        import('./uyelik.js').then((m) => m.cihazCikar(roomId, me().clientId)),
+        new Promise((r) => { zaman = setTimeout(r, CIKAR_BEKLE_MS); }),
+      ]);
+    } catch { /* kayıt silinemedi: yine de unut */ } finally {
+      clearTimeout(zaman);
+    }
+  }
+  await cihazdanUnut(roomId);
+  await kilitAyarla(null);
 }
 
 // ---------- Kilit ekranı (DOM) ----------
@@ -436,8 +458,7 @@ async function kapakKur() {
       if (!ok) return;
       unuttum.disabled = true; // bildirim kapatılırken (en çok 5 sn) ikinci tıklama olmasın
       const { currentRoom } = await import('./identity.js');
-      await cihazdanUnut(currentRoom());
-      await kilitAyarla(null);
+      await pinUnutuldu(currentRoom());
       location.replace(lobbyUrl());
     },
   }, 'PIN\'i unuttum');

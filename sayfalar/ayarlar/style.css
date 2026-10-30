@@ -353,3 +353,79 @@ ul.ayar-riza {
   .ayar-avatar.yukleniyor::after, .ayar-kapak.yukleniyor::after { animation: none; }
   .ayar-avatar:active { transform: none; }
 }
+
+/* ---------- Cihazlar ---------- */
+.cihaz-liste { display: flex; flex-direction: column; margin: -4px 0; padding: 0; list-style: none; }
+.cihaz {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  column-gap: 12px;
+  row-gap: 10px;
+  align-items: center;
+  padding: 12px 0;
+}
+.cihaz + .cihaz { border-top: 1px solid var(--line); }
+.cihaz-simge {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: var(--surface-2);
+  color: var(--muted);
+}
+.cihaz-simge svg { width: 22px; height: 22px; }
+.cihaz[data-durum='bekliyor'] .cihaz-simge { background: var(--accent-soft); color: var(--accent-strong); }
+.cihaz[data-durum='reddedildi'] .cihaz-ad > span:first-child { color: var(--muted); }
+.cihaz-metin { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cihaz-ad { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-weight: 750; line-height: 1.3; overflow-wrap: anywhere; }
+.cihaz-ad .chip { font-size: 0.75rem; }
+.cihaz-alt { color: var(--muted); font-size: 0.875rem; line-height: 1.4; }
+.cihaz[data-durum='bekliyor'] .cihaz-alt { color: var(--accent-strong); font-weight: 700; }
+.cihaz-eylemler { grid-column: 2; display: flex; flex-wrap: wrap; gap: 8px; }
+.cihaz-eylemler .btn.small { min-height: 44px; }
+@media (min-width: 520px) {
+  .cihaz { grid-template-columns: 44px minmax(0, 1fr) auto; }
+  .cihaz-eylemler { grid-column: 3; justify-content: flex-end; }
+}
+
+/* Kurtarma kodu: bir kez gösterilir */
+.ayar-kod {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 12px;
+  padding: 12px 12px 12px 16px;
+  border: 1.5px dashed color-mix(in srgb, var(--accent) 50%, transparent);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+.ayar-kod-deger {
+  font-family: ui-monospace, 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+  font-size: 1.125rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+.ayar-kod-deger:focus { outline: none; }
+.ayar-kod .btn.small { min-height: 44px; }
+.ayar-vurgu { color: var(--accent-strong); font-weight: 750; }
+
+/* Geri yükleme ilerlemesi */
+.ayar-geri { display: flex; flex-direction: column; gap: 8px; }
+.ayar-ilerleme {
+  width: 100%;
+  height: 8px;
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  accent-color: var(--accent);
+  appearance: none;
+}
+.ayar-ilerleme::-webkit-progress-bar { background: var(--surface-2); border-radius: var(--radius-pill); }
+.ayar-ilerleme::-webkit-progress-value { background: var(--accent); border-radius: var(--radius-pill); transition: width 0.3s var(--ease); }
+.ayar-ilerleme::-moz-progress-bar { background: var(--accent); border-radius: var(--radius-pill); }

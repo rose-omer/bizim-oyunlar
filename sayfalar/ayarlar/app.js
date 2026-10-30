@@ -1,9 +1,14 @@
-// Ayarlar: profil, biz, bildirimler, kilit, görünüm, mesafe, yedek, oda, hakkında.
+// Ayarlar: profil, biz, bildirimler, kilit, görünüm, mesafe, yedek (indir / geri yükle), cihazlar, oda, hakkında.
 import { bootPage } from '../../js/core/sayfa.js';
 import { openProfil } from '../../js/core/profil.js';
-import { openCollection, listDocs } from '../../js/core/veri.js';
+import { openCollection, listDocs, iceAktar, onbellekTemizle } from '../../js/core/veri.js';
 import { setName, inviteUrl, lobbyUrl, pageUrl, writeStore } from '../../js/core/identity.js';
-import { h, icon, toast, confirmDialog, shareInvite, copyInvite, initial, formatDay, readTema, parseTema } from '../../js/core/ui.js';
+import {
+  h, icon, toast, confirmDialog, shareInvite, copyInvite, copyText, initial, formatDay, readTema, parseTema, davetHazirla,
+} from '../../js/core/ui.js';
+import {
+  cihazlar, cihazOnayla, cihazReddet, cihazCikar, kurtarmaOlustur, odaGiris, uyelikModu,
+} from '../../js/core/uyelik.js';
 import { uploadPhoto, loadPhoto, isAllowedPhotoUrl } from '../../js/core/storage.js';
 import { normalizeImage } from '../../games/yapboz/image.js';
 import { isMuted, setMuted, sfx } from '../../js/core/sound.js';
@@ -16,7 +21,7 @@ import { bulusmaDogrula } from '../gunler/mantik.js';
 import {
   SURUM, K_TEMA, TEMA_RENKLERI, TEMA_MODLARI, KISI_RENKLERI,
   bulusmaAyir, bulusmaMetni, konumVerisi, mesafeKm, mesafeMetni,
-  bildirimGorunum, YEDEK_TURLERI, yedekVerisi, yedekSayisi, yedekDosyaAdi,
+  bildirimGorunum, YEDEK_TURLERI, yedekVerisi, yedekSayisi, yedekDosyaAdi, yedektenBelgeler, parcala, yedekOzeti,
 } from './mantik.js';
 
 const { room, roomId, me } = await bootPage({ ns: 'ayarlar', title: 'Ayarlar', tab: 'daha' });
@@ -36,6 +41,12 @@ const SVG = {
   zil: '<path d="M6.5 16.5V11a5.5 5.5 0 0 1 11 0v5.5l1.5 1.5H5z"/><path d="M10 20.5a2.2 2.2 0 0 0 4 0"/>',
   konum: '<path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.4"/>',
   indir: '<path d="M12 4v10.5M7.5 10 12 14.5 16.5 10"/><path d="M5 19.5h14"/>',
+  yukle: '<path d="M12 15.5V5M7.5 9.5 12 5l4.5 4.5"/><path d="M5 19.5h14"/>',
+  telefon: '<rect x="6.5" y="3" width="11" height="18" rx="2.6"/><path d="M10.5 17.6h3"/>',
+  tablet: '<rect x="4.5" y="3" width="15" height="18" rx="2.4"/><path d="M10.5 17.6h3"/>',
+  bilgisayar: '<rect x="4" y="5" width="16" height="11" rx="1.8"/><path d="M2.5 19h19"/>',
+  anahtar: '<circle cx="8" cy="15" r="3.6"/><path d="m10.6 12.4 7.4-7.4M15.5 7.5l2.2 2.2M13.4 9.6l1.6 1.6"/>',
+  kopya: '<rect x="8.5" y="8.5" width="11" height="11" rx="2.5"/><path d="M15.5 8.5V6.2A1.7 1.7 0 0 0 13.8 4.5H6.2A1.7 1.7 0 0 0 4.5 6.2v7.6a1.7 1.7 0 0 0 1.7 1.7h2.3"/>',
   cikis: '<path d="M14 4.5h3.5A1.5 1.5 0 0 1 19 6v12a1.5 1.5 0 0 1-1.5 1.5H14"/><path d="M10 8 6 12l4 4M6 12h9.5"/>',
   bilgi: '<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5M12 8h.01"/>',
 };
@@ -242,6 +253,8 @@ adInput.addEventListener('change', async () => {
   adInput.value = v;
   setName(v);
   await yaz(profil.setBen({ ad: v }), adAlan);
+  // Cihaz listesindeki ad da güncellensin (onaylı cihazda oda_katil adı yazar).
+  if (uyeModu()) odaGiris(roomId).then(() => cihazYukle()).catch(() => {});
 });
 
 const dogumInput = h('input', { class: 'input', id: 'ayar-dogum', type: 'date', max: toDay() });
@@ -718,28 +731,278 @@ async function yedekIndir() {
   }
 }
 
-// ---------- Oda ----------
-const linkInput = h('input', {
-  class: 'input', id: 'ayar-davet', type: 'text', readonly: true, value: inviteUrl(roomId),
-  'aria-describedby': 'ayar-davet-y',
-  onfocus: (e) => e.currentTarget.select(), onclick: (e) => e.currentTarget.select(),
+// Yedekten geri yükleme: dosya → doğrula → özet + onay → 200'lük parçalarla doc_ice_aktar → ilerleme → toast.
+const PARCA = 200;
+const sayi = (n) => n.toLocaleString('tr-TR');
+const geriSecici = h('input', { type: 'file', accept: '.json,application/json', class: 'sr-only', tabindex: '-1', 'aria-hidden': 'true' });
+const geriBtn = h('button', { type: 'button', class: 'btn small', onclick: () => geriSecici.click() }, svg('yukle'), h('span', {}, 'Yedekten geri yükle'));
+const geriIlerleme = h('progress', { class: 'ayar-ilerleme', max: '1', value: '0', 'aria-labelledby': 'ayar-geri-durum' });
+const geriDurum = h('p', { class: 'ayar-yardim', id: 'ayar-geri-durum', role: 'status' });
+const geriKutu = h('div', { class: 'ayar-geri', hidden: true }, geriDurum, geriIlerleme);
+geriSecici.addEventListener('change', () => {
+  const f = geriSecici.files?.[0];
+  geriSecici.value = '';
+  if (f) geriYukle(f);
 });
-const odaKart = kart(
-  h('div', { class: 'ayar-alan' },
-    h('div', { class: 'ayar-alan-ust' }, h('label', { class: 'ayar-etiket', for: 'ayar-davet' }, 'Davet linki')),
-    h('div', { class: 'linkbox' }, linkInput,
+
+async function geriYukle(dosya) {
+  if (dosya.size > 25 * 1024 * 1024) {
+    toast('Bu dosya bir Biz İkimiz yedeği olamayacak kadar büyük.');
+    return;
+  }
+  let metin;
+  try { metin = await dosya.text(); } catch { toast('Dosya okunamadı. Başka bir dosya dener misin?'); return; }
+  const { belgeler, hatalar, sayilar } = yedektenBelgeler(metin);
+  if (!belgeler.length) {
+    toast(hatalar[0] || 'Bu yedekte geri yüklenecek kayıt yok.');
+    return;
+  }
+  const atlanan = hatalar.length ? ' Okunamayan birkaç kayıt atlanır.' : '';
+  const ok = await confirmDialog(`${yedekOzeti(sayilar)}.${atlanan} Var olan kayıtlar silinmez; daha yeni kopyalar korunur; silinmiş kayıtlar geri gelir.`, { ok: 'Geri yükle' });
+  if (!ok) return;
+
+  const toplam = belgeler.length;
+  let giden = 0;
+  let yazilan = 0;
+  for (const b of [geriBtn, yedekBtn]) { b.disabled = true; }
+  geriBtn.setAttribute('aria-busy', 'true');
+  geriIlerleme.max = toplam;
+  geriKutu.hidden = false;
+  const ilerle = () => {
+    geriIlerleme.value = giden;
+    geriDurum.textContent = `Geri yükleniyor… ${sayi(giden)} / ${sayi(toplam)}`;
+  };
+  try {
+    for (const parca of parcala(belgeler, PARCA)) {
+      ilerle();
+      yazilan += await iceAktar(roomId, parca);
+      giden += parca.length;
+    }
+    ilerle();
+    // Geri gelen kayıtların tarihi eski olabilir: önbellekler baştan yüklensin, bu sayfa tam tazelensin.
+    onbellekTemizle(roomId, YEDEK_TURLERI);
+    profil.kisiler.refresh({ tam: true });
+    profil.ciftKoleksiyon.refresh({ tam: true });
+    konum.refresh({ tam: true });
+    sfx('pop');
+    toast(yazilan
+      ? `Geri yükleme bitti: ${sayi(yazilan)} kayıt eklendi ya da güncellendi.`
+      : 'Geri yükleme bitti. Yedekteki her şey zaten burada.');
+  } catch (e) {
+    const kalan = giden ? ` ${sayi(giden)} kayıt yüklendi; kalanı için yeniden deneyebilirsin.` : '';
+    toast(`${e?.message || 'Geri yüklenemedi.'}${kalan}`, { ms: 8000 });
+  } finally {
+    for (const b of [geriBtn, yedekBtn]) { b.disabled = false; }
+    geriBtn.removeAttribute('aria-busy');
+    geriKutu.hidden = true;
+  }
+}
+
+// ---------- Cihazlar (TALIMAT §5.4) ----------
+// Mod: 'sunucu' | 'yerel-siki' → tam yönetim; 'eski-sunucu' → bilgi + kodsuz link; 'yerel-gevsek' → bilgi + bu cihaz.
+const uyeModu = () => ['sunucu', 'yerel-siki'].includes(uyelikModu(roomId));
+const cihazKutu = kart();
+let cihazListe = null; // son başarılı liste
+let cihazHata = false;
+let cihazSira = 0;
+let davetUrl = null; // bu sayfada oluşturulan davet linki
+let kurtarmaKodu = null; // bir kez gösterilir (sayfadan çıkınca kaybolur)
+
+const DURUM_ADI = { onayli: 'Onaylı', bekliyor: 'Onay bekliyor', reddedildi: 'Reddedildi' };
+const SIRA = { bekliyor: 0, onayli: 2, reddedildi: 3 };
+const cihazTuru = (ad) => (/iPad|tablet/i.test(ad || '') ? 'tablet' : /telefon|iPhone/i.test(ad || '') ? 'telefon' : 'bilgisayar');
+
+async function cihazYukle() {
+  const sira = ++cihazSira;
+  try {
+    const l = await cihazlar(roomId);
+    if (sira !== cihazSira) return;
+    cihazListe = l;
+    cihazHata = false;
+  } catch {
+    if (sira !== cihazSira) return;
+    cihazHata = true;
+  }
+  cihazCiz();
+}
+
+function islem(etiket, sinif, aria, is) {
+  const b = h('button', { type: 'button', class: sinif, 'aria-label': aria }, etiket);
+  b.addEventListener('click', async () => {
+    b.disabled = true;
+    b.setAttribute('aria-busy', 'true');
+    try { await is(); } finally {
+      if (b.isConnected) { b.disabled = false; b.removeAttribute('aria-busy'); }
+    }
+  });
+  return b;
+}
+
+async function onayla(c, ad) {
+  if (await cihazOnayla(roomId, c.cihaz)) {
+    sfx('pop');
+    toast(`${ad} onaylandı. Artık odanızda.`);
+    room.sendAll({ t: 'uyelik' });
+  } else {
+    toast('Onaylanamadı. Biraz sonra tekrar dener misin?');
+  }
+  await cihazYukle();
+}
+
+async function reddet(c) {
+  toast(await cihazReddet(roomId, c.cihaz) ? 'İstek reddedildi.' : 'Reddedilemedi. Biraz sonra tekrar dener misin?');
+  await cihazYukle();
+}
+
+async function cikar(c, ad) {
+  const ok = await confirmDialog(`${ad} çıkarılsın mı? Bu cihaz artık verilerinize erişemez.`, { ok: 'Çıkar' });
+  if (!ok) return;
+  toast(await cihazCikar(roomId, c.cihaz) ? `${ad} çıkarıldı.` : 'Çıkarılamadı. Biraz sonra tekrar dener misin?');
+  await cihazYukle();
+}
+
+function cihazSatiri(c) {
+  const ad = c.ad || 'Adsız cihaz';
+  const zaman = c.son_gorulme ? `son görülme ${formatDay(c.son_gorulme)}`
+    : c.durum === 'bekliyor' && c.olusturma ? `${formatDay(c.olusturma)} istedi` : '';
+  const eylem = [];
+  if (c.durum === 'bekliyor') {
+    eylem.push(islem('Onayla', 'btn small primary', `${ad}: onayla`, () => onayla(c, ad)),
+      islem('Reddet', 'btn small ghost', `${ad}: reddet`, () => reddet(c)));
+  } else if (c.durum === 'reddedildi') {
+    eylem.push(islem('Onayla', 'btn small', `${ad}: onayla`, () => onayla(c, ad)));
+  } else if (!c.ben && uyeModu()) {
+    eylem.push(islem('Çıkar', 'btn small danger', `${ad}: odadan çıkar`, () => cikar(c, ad)));
+  }
+  return h('li', { class: 'cihaz', dataset: { durum: c.durum } },
+    h('span', { class: 'cihaz-simge', 'aria-hidden': 'true', html: `<svg viewBox="0 0 24 24" ${STROKE}>${SVG[cihazTuru(ad)]}</svg>` }),
+    h('div', { class: 'cihaz-metin' },
+      h('p', { class: 'cihaz-ad' }, h('span', {}, ad), c.ben ? h('span', { class: 'chip accent' }, 'Bu cihaz') : null),
+      h('p', { class: 'cihaz-alt' }, [DURUM_ADI[c.durum] || c.durum, zaman].filter(Boolean).join(' · '))),
+    eylem.length ? h('div', { class: 'cihaz-eylemler' }, eylem) : null);
+}
+
+function davetAlani() {
+  const kodlu = uyeModu();
+  const yardim = kodlu
+    ? 'Bu linkle gelen cihaz onay beklemeden girer. 7 gün geçerli, tek kullanımlık.'
+    : 'Bu link odanızın anahtarı. Yalnız sevgilinle paylaş.';
+  const url = davetUrl || (kodlu ? null : inviteUrl(roomId));
+  const icerik = [];
+  if (url) {
+    icerik.push(h('div', { class: 'linkbox' },
+      h('input', {
+        class: 'input', id: 'ayar-davet', type: 'text', readonly: true, value: url, 'aria-describedby': 'ayar-davet-y',
+        onfocus: (e) => e.currentTarget.select(), onclick: (e) => e.currentTarget.select(),
+      }),
       h('button', { type: 'button', class: 'btn small', onclick: () => copyInvite(roomId) }, icon('copy'), 'Kopyala')),
-    h('p', { class: 'ayar-yardim', id: 'ayar-davet-y' }, 'Bu link odanızın anahtarı. Yalnız sevgilinle paylaş.')),
-  h('div', { class: 'ayar-eylemler' },
-    h('button', { type: 'button', class: 'btn small', onclick: () => shareInvite(roomId) }, icon('share'), 'Linki paylaş')),
-  h('div', { class: 'ayar-ayrac' }),
+    h('div', { class: 'ayar-eylemler' },
+      h('button', { type: 'button', class: 'btn small', onclick: () => shareInvite(roomId) }, icon('share'), 'Linki paylaş'),
+      kodlu ? islem('Yeni link', 'btn small ghost', 'Yeni davet linki oluştur', davetOlusturVeGoster) : null));
+  } else {
+    icerik.push(h('div', { class: 'ayar-eylemler' },
+      islem('Davet linki oluştur', 'btn small primary', null, davetOlusturVeGoster)));
+  }
+  return h('div', { class: 'ayar-alan' },
+    h('div', { class: 'ayar-alan-ust' }, h(url ? 'label' : 'span', { class: 'ayar-etiket', for: url ? 'ayar-davet' : null }, 'Davet linki')),
+    ...icerik,
+    h('p', { class: 'ayar-yardim', id: 'ayar-davet-y' }, yardim));
+}
+
+async function davetOlusturVeGoster() {
+  const kod = await davetHazirla(roomId, { yeni: true });
+  if (!kod) toast('Davet kodu alınamadı. Kodsuz linkle gelen cihaz onay bekler.');
+  davetUrl = inviteUrl(roomId, kod);
+  cihazCiz();
+  document.getElementById('ayar-davet')?.focus();
+}
+
+function kurtarmaAlani() {
+  const ust = h('div', { class: 'ayar-alan-ust' }, h('span', { class: 'ayar-etiket' }, 'Kurtarma kodu'));
+  const metin = 'Bu kodu güvenli bir yere yaz. Tüm cihazların kaybolursa odaya bununla dönersin. Yeni kod eskisini geçersiz yapar.';
+  if (kurtarmaKodu) {
+    return h('div', { class: 'ayar-alan' }, ust,
+      h('div', { class: 'ayar-kod' },
+        h('span', { class: 'ayar-kod-deger', id: 'ayar-kurtarma-kod', tabindex: '-1' }, kurtarmaKodu),
+        h('button', {
+          type: 'button', class: 'btn small', 'aria-label': 'Kurtarma kodunu kopyala',
+          onclick: async () => toast(await copyText(kurtarmaKodu) ? 'Kod kopyalandı' : 'Kopyalanamadı. Kodu elle yaz.'),
+        }, svg('kopya'), 'Kopyala')),
+      h('p', { class: 'ayar-yardim' }, metin),
+      h('p', { class: 'ayar-yardim ayar-vurgu' }, 'Bu kod bir daha gösterilmez.'));
+  }
+  return h('div', { class: 'ayar-alan' }, ust,
+    h('p', { class: 'ayar-yardim' }, metin),
+    h('div', { class: 'ayar-eylemler' },
+      islem('Kurtarma kodu oluştur', 'btn small', null, async () => {
+        try {
+          kurtarmaKodu = await kurtarmaOlustur(roomId);
+        } catch {
+          toast('Kurtarma kodu oluşturulamadı. Biraz sonra tekrar dener misin?');
+          return;
+        }
+        cihazCiz();
+        document.getElementById('ayar-kurtarma-kod')?.focus();
+      })));
+}
+
+function cihazCiz() {
+  const mod = uyelikModu(roomId);
+  const ayrac = () => h('div', { class: 'ayar-ayrac' });
+  if (mod === 'eski-sunucu') {
+    cihazKutu.replaceChildren(bilgi('Sunucu güncellenince burada cihazlarınız görünecek.'), ayrac(), davetAlani());
+    return;
+  }
+  let liste;
+  if (cihazListe) {
+    const sirali = [...cihazListe].sort((a, b) => ((SIRA[a.durum] ?? 4) - (a.ben ? 1 : 0)) - ((SIRA[b.durum] ?? 4) - (b.ben ? 1 : 0)));
+    liste = h('ul', { class: 'cihaz-liste', 'aria-label': 'Odadaki cihazlar' }, sirali.map(cihazSatiri));
+  } else if (cihazHata) {
+    liste = h('div', { class: 'ayar-eylemler' },
+      h('p', { class: 'ayar-satir-aciklama' }, 'Cihaz listesi alınamadı.'),
+      h('button', { type: 'button', class: 'btn small', onclick: cihazYukle }, 'Tekrar dene'));
+  } else {
+    liste = h('p', { class: 'ayar-satir-aciklama', role: 'status', 'aria-busy': 'true' }, 'Cihazlar yükleniyor…');
+  }
+  const bekleyen = (cihazListe || []).filter((c) => c.durum === 'bekliyor').length;
+  cihazKutu.replaceChildren(...[
+    mod === 'yerel-gevsek'
+      ? bilgi('Yerel test modu: her cihaz onaylı sayılır.')
+      : h('p', { class: 'ayar-satir-aciklama' }, bekleyen
+        ? 'Yeni bir cihaz odanıza katılmak istiyor. Tanıyorsan onayla.'
+        : 'Odanıza yalnız onayladığınız cihazlar girer.'),
+    liste,
+    ayrac(),
+    davetAlani(),
+    mod === 'yerel-gevsek' ? null : ayrac(),
+    mod === 'yerel-gevsek' ? null : kurtarmaAlani(),
+  ].filter(Boolean));
+}
+
+// ---------- Oda ----------
+const odaKart = kart(
   h('div', { class: 'ayar-tehlike' },
-    h('p', { class: 'ayar-satir-aciklama' }, 'Bu cihaz odanızı ve bu odanın önbelleğini unutur. Verileriniz silinmez; davet linkini yeniden açarak dönebilirsin.'),
+    h('p', { class: 'ayar-satir-aciklama' }, uyeModu()
+      ? 'Bu cihaz odadan çıkar ve odanızı unutur. Verileriniz silinmez. Geri dönmek için yeni bir davet linki gerekir.'
+      : 'Bu cihaz odanızı ve bu odanın önbelleğini unutur. Verileriniz silinmez; davet linkini yeniden açarak dönebilirsin.'),
     h('button', {
       type: 'button', class: 'btn small danger',
       onclick: async () => {
-        const ok = await confirmDialog('Bu cihazda odadan çıkılsın mı? Davet linkini yeniden açarak dönebilirsin.', { ok: 'Odadan çık' });
+        const uye = uyeModu();
+        const baskaOnayli = (cihazListe || []).some((c) => !c.ben && c.durum === 'onayli');
+        const metin = !uye
+          ? 'Bu cihazda odadan çıkılsın mı? Davet linkini yeniden açarak dönebilirsin.'
+          : baskaOnayli
+            ? 'Bu cihaz odadan çıkarılsın mı? Geri dönmek için yeni bir davet linki gerekir.'
+            : 'Bu cihaz odadan çıkarılsın mı? Odada onaylı başka cihaz yok; geri dönmek için kurtarma kodu gerekir.';
+        const ok = await confirmDialog(metin, { ok: 'Odadan çık' });
         if (!ok) return;
+        // Cihaz kaydını da sil: anahtar unutulunca aynı cihazla geri dönüş çakışma vermesin.
+        // Silinemezse (bağlantı yok) unutma: yoksa bu cihaz geri dönünce "tanınmadı" ekranında kalır.
+        if (uye && !(await cihazCikar(roomId, myId))) {
+          toast('Odadan çıkılamadı. İnternet bağlantını kontrol edip tekrar dener misin?');
+          return;
+        }
         await cihazdanUnut(roomId);
         location.replace(lobbyUrl());
       },
@@ -755,12 +1018,16 @@ app.replaceChildren(h('div', { class: 'ayar' },
   bolum('gorunum', 'Görünüm', kart(temaRenkAlan, modAlan), kart(sesSatiri)),
   bolum('mesafe', 'Mesafe', mesafeKutu),
   bolum('veri', 'Verilerimiz', kart(
-    h('p', { class: 'ayar-satir-aciklama' }, 'Profiller, mesajlar, anılar, mektuplar, listeler ve özel günler tek bir dosyada. Fotoğrafların kendisi değil, adresleri girer.'),
-    h('div', { class: 'ayar-eylemler' }, yedekBtn))),
+    h('p', { class: 'ayar-satir-aciklama' }, 'Profiller, mesajlar, anılar, mektuplar, listeler ve özel günler tek bir dosyada. Fotoğrafların kendisi değil, adresleri girer. Geri yüklerken var olan kayıtlar silinmez.'),
+    h('div', { class: 'ayar-eylemler' }, yedekBtn, geriBtn, geriSecici),
+    geriKutu)),
+  bolum('cihaz', 'Cihazlar', cihazKutu),
   bolum('oda', 'Oda', odaKart),
   bolum('hakkinda', 'Hakkında', kart(
     h('p', { class: 'ayar-hakkinda-ad' }, 'Biz İkimiz', h('span', { class: 'chip' }, `Sürüm ${SURUM}`)),
-    h('p', { class: 'ayar-satir-aciklama' }, 'İkiniz için ücretsiz, hesapsız bir köşe. Verileriniz oda kodunuzla korunur: davet linkini bilen herkes odanıza girebilir, o yüzden linki yalnız sevgilinle paylaş.')))));
+    h('p', { class: 'ayar-satir-aciklama' }, uyelikModu(roomId) === 'eski-sunucu'
+      ? 'İkiniz için ücretsiz, hesapsız bir köşe. Verileriniz oda kodunuzla korunur: davet linkini bilen herkes odanıza girebilir, o yüzden linki yalnız sevgilinle paylaş.'
+      : 'İkiniz için ücretsiz, hesapsız bir köşe. Odanıza yalnız onayladığınız cihazlar girer; onları Cihazlar bölümünden yönetirsin.')))));
 
 const hepsiniYenile = () => { profilYenile(); bizYenile(); mesafeCiz(); };
 profil.on('change', hepsiniYenile);
@@ -769,7 +1036,15 @@ hepsiniYenile();
 temaYenile();
 kilitCiz();
 bildirimCiz();
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') bildirimCiz(); });
+cihazCiz();
+cihazYukle();
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return;
+  bildirimCiz();
+  cihazYukle();
+});
+window.addEventListener('bizim:uyelik', (e) => { if (e.detail?.roomId === roomId) cihazYukle(); });
+setInterval(() => { if (document.visibilityState === 'visible' && uyeModu()) cihazYukle(); }, 20_000);
 setInterval(() => { if (document.visibilityState === 'visible') bulusmaYenile(); }, 60_000);
 
 // #ayar-kilit gibi bir bağlantıyla gelindiyse o bölüme kaydır.

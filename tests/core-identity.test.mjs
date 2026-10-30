@@ -116,3 +116,21 @@ test('me / setName / oda: kalıcı ve tutarlı', () => {
 test('readGameParams: location yokken solo', () => {
   assert.deepEqual(readGameParams(), { roomId: null, hostId: null, isHost: true, solo: true });
 });
+
+test('buildInviteUrl: davet kodu hash\'e eklenir; geçersiz kod eklenmez', async () => {
+  const { parseInviteHash } = await import('../js/core/identity.js');
+  const kod = 'k'.repeat(32);
+  assert.equal(buildInviteUrl(ROOT, 'abcdefghij', false, kod), `https://kullanici.github.io/repo/#oda=abcdefghij&davet=${kod}`);
+  assert.equal(buildInviteUrl(ROOT, 'abcdefghij', true, kod), `https://kullanici.github.io/repo/?yerel=1#oda=abcdefghij&davet=${kod}`);
+  assert.equal(buildInviteUrl(ROOT, 'abcdefghij', false, null), 'https://kullanici.github.io/repo/#oda=abcdefghij');
+  assert.equal(buildInviteUrl(ROOT, 'abcdefghij', false, '<x>'), 'https://kullanici.github.io/repo/#oda=abcdefghij');
+  assert.match(inviteUrl('abcdefghij', kod), new RegExp(`#oda=abcdefghij&davet=${kod}$`));
+
+  assert.deepEqual(parseInviteHash('#oda=abcdefghij'), { oda: 'abcdefghij', davet: null });
+  assert.deepEqual(parseInviteHash('#oda=ABCDEFGHIJ&davet=' + kod), { oda: 'abcdefghij', davet: kod });
+  assert.deepEqual(parseInviteHash('#oda=abcdefghij&davet=kisa'), { oda: 'abcdefghij', davet: null });
+  assert.equal(parseInviteHash('#oda=ab'), null);
+  assert.equal(parseInviteHash('#oda=abcdefghij&x=1'), null);
+  assert.equal(parseInviteHash('#ayar-kilit'), null);
+  assert.equal(parseInviteHash(''), null);
+});

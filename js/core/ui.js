@@ -413,6 +413,10 @@ export function mountShell({ title = '', room = null } = {}) {
   syncShellBack();
   const untrack = trackShellHeight(header);
   startAppServices();
+  // Üyelik kapısı (oyun sayfaları bootPage'den geçmez): onaysız cihazda tam ekran kapı; çalışırken yetki giderse de.
+  if (live && roomId) {
+    import('./kapi.js').then((m) => m.kapidanGec(roomId)).catch((e) => console.warn('[kapı]', e));
+  }
 
   shellCleanup = () => {
     for (const off of subs) if (typeof off === 'function') off();
@@ -482,16 +486,32 @@ let servicesStarted = false;
 /** Her sayfada bir kez: tema, PIN kilidi, service worker, Android köprüsü. mountShell çağırır; ana sayfa da çağırır. */
 // Bildirim açıksa aboneliği oturumda bir kez sunucuya yeniden yaz (oda değişimi, tarayıcının yenilediği abonelik).
 // İzin zaten verilmiş olduğundan kullanıcıya soru çıkmaz.
+// Cihaz kimliği (p_anahtar) ile yazılsın diye üyelik kapısından geçildikten sonra çalışır (önbellekte onay yoksa
+// 'bizim:uyelik' ile onay gelince); aksi hâlde kayıt koruma başlayınca sayılmaz.
 function tazeleBildirim() {
   const roomId = currentRoom();
   if (!roomId) return;
-  try {
-    if (sessionStorage.getItem('bizim.bildirim.tazelendi') === roomId) return;
-    sessionStorage.setItem('bizim.bildirim.tazelendi', roomId);
-  } catch { /* gizli sekme */ }
-  import('./bildirim.js')
-    .then(async (m) => { if ((await m.bildirimDurumu()) === 'acik') await m.bildirimAc(roomId); })
-    .catch((e) => console.warn('[bildirim]', e));
+  const calistir = () => {
+    try {
+      if (sessionStorage.getItem('bizim.bildirim.tazelendi') === roomId) return;
+      sessionStorage.setItem('bizim.bildirim.tazelendi', roomId);
+    } catch { /* gizli sekme */ }
+    import('./bildirim.js')
+      .then(async (m) => { if ((await m.bildirimDurumu()) === 'acik') await m.bildirimAc(roomId); })
+      .catch((e) => console.warn('[bildirim]', e));
+  };
+  import('./uyelik.js').then((u) => {
+    if (u.girisAcikMi(u.sonDurum(roomId))) {
+      calistir();
+      return;
+    }
+    const bekle = (e) => {
+      if (e?.detail?.roomId !== roomId || !u.girisAcikMi(e.detail)) return;
+      window.removeEventListener('bizim:uyelik', bekle);
+      calistir();
+    };
+    window.addEventListener('bizim:uyelik', bekle);
+  }).catch((e) => console.warn('[bildirim]', e));
 }
 
 export function startAppServices() {
@@ -738,7 +758,8 @@ export function celebrate({ title, lines = [], buttons = [] } = {}) {
 }
 
 // ---------- Davet ----------
-async function copyText(s) {
+/** Metni panoya kopyalar (yedek: gizli textarea). -> başarılı mı */
+export async function copyText(s) {
   try {
     await navigator.clipboard.writeText(s);
     return true;
@@ -756,6 +777,25 @@ async function copyText(s) {
   }
 }
 
+// Davet linki tek kullanımlık kod taşır (uyelik.js davetOlustur; eski sunucu / yerel gevşek modda kodsuz).
+// Aynı sayfada 10 dk boyunca aynı kod paylaşılır: kopyala ve paylaş art arda yeni kod üretmesin.
+const DAVET_TTL_MS = 10 * 60_000;
+const davetler = new Map(); // roomId → { at, kod: Promise<string|null> }
+
+/** Davet kodunu hazırlar (önceden çağrılırsa paylaşım kullanıcı dokunuşunun içinde kalır). -> Promise<kod|null> */
+export function davetHazirla(roomId, { yeni = false } = {}) {
+  const v = davetler.get(roomId);
+  if (!yeni && v && Date.now() - v.at < DAVET_TTL_MS) return v.kod;
+  const kod = import('./uyelik.js').then((m) => m.davetOlustur(roomId)).catch(() => null);
+  davetler.set(roomId, { at: Date.now(), kod });
+  return kod;
+}
+
+/** Kodlu davet linki (kod alınamazsa kodsuz). */
+export async function davetLinki(roomId, opts) {
+  return inviteUrl(roomId, await davetHazirla(roomId, opts));
+}
+
 /** Davet linkini panoya kopyalar, bildirim gösterir. -> 'copied' | 'failed' | 'none' */
 export async function copyInvite(roomId) {
   const id = roomId || activeRoomId();
@@ -763,7 +803,7 @@ export async function copyInvite(roomId) {
     toast('Önce odanızı kurun.');
     return 'none';
   }
-  const ok = await copyText(inviteUrl(id));
+  const ok = await copyText(await davetLinki(id));
   if (ok) sfx('pop');
   toast(ok ? 'Link kopyalandı' : 'Kopyalanamadı. Linki seçip elle kopyala.');
   return ok ? 'copied' : 'failed';
@@ -778,7 +818,8 @@ export async function shareInvite(roomId) {
   }
   if (typeof navigator.share === 'function') {
     try {
-      await navigator.share({ title: 'Biz İkimiz', text: "Biz İkimiz'de odamıza gel; günlerimizi sayalım, birlikte oynayalım.", url: inviteUrl(id) });
+      const url = await davetLinki(id);
+      await navigator.share({ title: 'Biz İkimiz', text: "Biz İkimiz'de odamıza gel; günlerimizi sayalım, birlikte oynayalım.", url });
       return 'shared';
     } catch (e) {
       if (e?.name === 'AbortError') return 'cancelled';
@@ -896,6 +937,7 @@ export function waitForPartner(room, { text, allowSolo = false, ns } = {}) {
             },
           }, 'Buraya çağır'));
         } else {
+          davetHazirla(roomId); // paylaşım dokunuşun içinde kalsın
           btns.push(h('button', { type: 'button', class: 'btn primary', onclick: () => shareInvite(roomId) }, icon('share'), 'Linki paylaş'));
           btns.push(h('button', { type: 'button', class: 'btn ghost', onclick: () => copyInvite(roomId) }, icon('copy'), 'Linki kopyala'));
         }

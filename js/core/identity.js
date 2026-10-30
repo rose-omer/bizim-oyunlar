@@ -139,11 +139,21 @@ export function clearRoom() {
 
 // ---- Adresler (saf hâlleri test edilir; base enjekte edilir) ----
 
-export function buildInviteUrl(root, roomId, local) {
+const DAVET_RE = /^[a-z2-9]{32}$/;
+
+/** Davet linki. davet = tek kullanımlık kod (uyelik.js davetOlustur); geçersizse eklenmez. */
+export function buildInviteUrl(root, roomId, local, davet = null) {
   const u = new URL(root);
   u.search = local ? '?yerel=1' : '';
-  u.hash = 'oda=' + encodeURIComponent(roomId);
+  u.hash = 'oda=' + encodeURIComponent(roomId) + (DAVET_RE.test(davet || '') ? '&davet=' + davet : '');
   return u.href;
+}
+
+/** Saf: '#oda=<id>' ya da '#oda=<id>&davet=<kod>' → { oda, davet|null } | null. */
+export function parseInviteHash(hash) {
+  const m = /^#oda=([a-z0-9]{4,40})(?:&davet=([^&]*))?$/i.exec(String(hash || ''));
+  if (!m) return null;
+  return { oda: m[1].toLowerCase(), davet: DAVET_RE.test(m[2] || '') ? m[2] : null };
 }
 
 export function buildLobbyUrl(root, local) {
@@ -177,8 +187,8 @@ export function pageUrl(path, params = {}) {
   return buildPageUrl(SITE_ROOT, path, params, isLocalMode());
 }
 
-export function inviteUrl(roomId) {
-  return buildInviteUrl(SITE_ROOT, roomId, isLocalMode());
+export function inviteUrl(roomId, davet = null) {
+  return buildInviteUrl(SITE_ROOT, roomId, isLocalMode(), davet);
 }
 
 export function lobbyUrl() {

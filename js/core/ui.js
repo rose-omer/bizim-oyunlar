@@ -1,8 +1,8 @@
 // Ortak arayüz: üst şerit, bildirim, kutlama, partner bekleme, onay, davet paylaşımı.
 // Sözleşme §9. Ek dışa aktarımlar (h, icon, pairEl, muteButton, copyInvite, …) ana sayfa içindir;
 // oyunlar da kullanabilir ama sözleşmenin parçası değildir.
-import { me, currentRoom, inviteUrl, lobbyUrl, gameUrl, readGameParams } from './identity.js';
-import { gameById } from './games.js';
+import { me, currentRoom, inviteUrl, lobbyUrl, gameUrl, readGameParams, pageUrl } from './identity.js';
+import { gameById, SAYFALAR, SEKMELER, sayfaById } from './games.js';
 import { sfx, isMuted, setMuted } from './sound.js';
 
 // ---------- Küçük yardımcılar ----------
@@ -262,6 +262,7 @@ export function mountShell({ title = '', room = null } = {}) {
   }
   paint();
   const untrack = trackShellHeight(header);
+  startAppServices();
 
   shellCleanup = () => {
     for (const off of subs) if (typeof off === 'function') off();
@@ -269,6 +270,36 @@ export function mountShell({ title = '', room = null } = {}) {
     shellCleanup = null;
   };
   return shellCleanup;
+}
+
+// ---------- Uygulama servisleri (kilit, PWA) ----------
+let servicesStarted = false;
+/** Her sayfada bir kez: PIN kilidi ve service worker. mountShell çağırır; ana sayfa da çağırmalı. */
+export function startAppServices() {
+  if (servicesStarted || typeof document === 'undefined') return;
+  servicesStarted = true;
+  import('./kilit.js').then((m) => m.kilitKontrol()).catch((e) => console.warn('[kilit]', e));
+  import('./pwa.js').then((m) => m.registerPwa()).catch((e) => console.warn('[pwa]', e));
+}
+
+// ---------- Alt sekme çubuğu ----------
+/** Altta sabit sekme çubuğu (SEKMELER). active = sayfa id'si ya da null. -> nav öğesi */
+export function mountTabBar(active = null) {
+  let nav = document.getElementById('tabbar');
+  if (!nav) {
+    nav = h('nav', { id: 'tabbar', 'aria-label': 'Ana gezinme' });
+    document.body.append(nav);
+  }
+  document.body.classList.add('has-tabbar');
+  nav.replaceChildren(...SEKMELER.map((id) => {
+    const s = sayfaById(id);
+    const on = id === active;
+    return h('a', {
+      class: 'tab', href: s.path ? pageUrl(s.path) : lobbyUrl(),
+      'aria-current': on ? 'page' : null,
+    }, h('span', { class: 'tab-icon', 'aria-hidden': 'true' }, s.icon), h('span', { class: 'tab-label' }, s.title));
+  }));
+  return nav;
 }
 
 /** Üst şeridin gerçek yüksekliğini :root --shell-h'ye yazar ve izler. -> durdur() */

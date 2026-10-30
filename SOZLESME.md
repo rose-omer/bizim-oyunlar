@@ -232,3 +232,186 @@ Misafir `hash` farkı görürse (sürüklemiyor ve son 1 sn eylem yok) `need` yo
 - RPC (security definer, `anon`'a execute): `log_game(p_room, p_game, p_result)`, `room_stats(p_room)`, `ping()`.
 - Depolama: herkese açık `photos` kovası; 5 MB sınır; yalnız jpeg/webp/png; `anon` yalnız INSERT (listeleme yok).
 - Ücretsiz proje 7 gün hareketsiz kalırsa durur: `keepalive.yml` 3 günde bir `ping` çağırır.
+
+---
+
+# v2 — "Biz İkimiz": sevgili uygulaması
+
+v2 bölümleri v1'in üstüne gelir. Çatışmada v2 geçerli.
+
+## 14. Ürün ve kararlar
+- Ad: **Biz İkimiz** (uygulama adı). Site aynı adreste kalır: https://rose-omer.github.io/bizim-oyunlar/
+- Ücretli çift uygulamalarının (Between, Paired, Lovewick, Agapé) özellikleri + oyunlar, ücretsiz.
+- Sunucu = **Supabase** (veritabanı, depolama, realtime, Edge Functions, pg_cron). Bu bilgisayar sunucu değildir.
+- Mobil = **PWA** (iPhone + Android; ana ekrana kurulur; anlık bildirim) + **Android APK** (Capacitor; GitHub Actions derler; GitHub Releases'ta).
+- Her şey oda (çift) koduyla korunur. Oda kodu 10 karakter, tahmin edilemez. Giriş/hesap yok.
+- Alt sekmeler: **Biz** (ana sayfa) · **Sohbet** · **Anılar** · **Günler** · **Daha**. Oyunlar ana sayfada.
+
+## 15. v2 klasörler ve sahipler
+Her ajan yalnız kendi dosyalarına yazar. Başkasının dosyasında değişiklik gerekirse raporunda önerir.
+
+| Yol | Sahip |
+|---|---|
+| `js/core/veri.js`, `profil.js`, `gunler.js`, `sayfa.js`, `games.js`, `identity.js`, `SOZLESME.md`, `README.md`, `tests/core-veri*`, `tests/core-gunler*` | Koordinatör (Günler ajanı gunler.js'e fonksiyon EKLEYEBİLİR, var olanı değiştirmez) |
+| `index.html`, `js/hub.js`, `css/base.css`, `js/core/ui.js`, `js/core/sound.js`, `assets/*` (ikonlar hariç), `tests/hub-*` | Ana Sayfa ajanı |
+| `sayfalar/ayarlar/*`, `sayfalar/daha/*`, `js/core/kilit.js`, `tests/ayar-*` | Ayarlar ajanı |
+| `sayfalar/gunler/*`, `tests/gunler-*` | Günler ajanı |
+| `sayfalar/sohbet/*`, `tests/sohbet-*` | Sohbet ajanı |
+| `sayfalar/anilar/*`, `sayfalar/mektup/*`, `js/core/foto.js`, `tests/ani-*`, `tests/mektup-*` | Anılar ajanı |
+| `sayfalar/listeler/*`, `sayfalar/randevu/*`, `tests/liste-*`, `tests/randevu-*` | Listeler ajanı |
+| `sayfalar/gunun-sorusu/*`, `sayfalar/sevgi-dili/*`, `tests/gs-*`, `tests/sevgidili-*` | Günün Sorusu ajanı |
+| `games/kimdaha/*`, `games/hicyaptin/*`, `games/derin/*`, `tests/soru2-*` (`games/_soru/*` yalnız okunur) | Soru oyunları ajanı |
+| `games/dama/*`, `games/tavla/*`, `tests/dama-*`, `tests/tavla-*` | Masa oyunları ajanı |
+| `games/dorttas/*`, `games/amiral/*`, `sayfalar/izle/*`, `tests/dorttas-*`, `tests/amiral-*`, `tests/izle-*` | Hızlı oyunlar + İzle ajanı |
+| `supabase/schema.sql` (yalnız "5." ve sonrası bölümler), `supabase/functions/*`, `js/core/bildirim.js`, `js/core/pwa.js`, `sw.js`, `manifest.webmanifest`, `assets/icons/*`, `.github/workflows/keepalive.yml`, `tests/sunucu-*` | Sunucu ajanı |
+| `mobil/*`, `.github/workflows/android.yml`, `js/core/mobil.js`, `tests/mobil-*` | Mobil ajanı |
+
+## 16. js/core/veri.js — kalıcı çift verisi (Koordinatör, hazır ve testli)
+Belge: `{ id, data, author, deleted, created_at, updated_at }`. `(oda, tür, id)` tekil; son yazan kazanır.
+Tür: `^[a-z]{2,20}$`. id: `^[A-Za-z0-9_-]{1,64}$`. `data` düz nesne, en çok 32 KB (JSON, UTF-8).
+Hız sınırı: oda başına saatte 2000 yazma. Döngüde toplu yazma yapma.
+
+```js
+import { openCollection } from '../../js/core/veri.js';
+const col = await openCollection(room, 'liste');                    // room = bootPage/joinRoom sonucu
+const col2 = await openCollection(room, 'mesaj', { recent: 100 });  // uzun türler: son N, loadOlder ile geri
+col.all()                 // silinmemiş belgeler, created_at'e göre ESKİDEN YENİYE
+col.get(id)               // belge | null
+await col.put(data, id?)  // ekle/değiştir (id yoksa uuid). -> id. Hemen yerelde görünür (iyimser).
+await col.patch(id, kismi)// mevcut data ile birleştirip yazar
+await col.remove(id)
+col.on('change', (docs) => {})  // her değişimde silinmemiş belgelerin tamamı. -> abonelikten çık
+col.on('error', (err) => {})    // err.message Türkçe, kullanıcıya gösterilebilir (toast)
+await col.refresh(); await col.loadOlder(50); col.hasOlder(); col.close();
+```
+- Önbellek: açılışta localStorage'dan anında gelir; sonra sunucudan tamamlanır. Çevrimdışı yazma giden kutusunda bekler, bağlantı gelince gider.
+- Canlı: yazan taraf `room.sendAll({ t:'veri', kind, doc })` yayar; karşı tarafın aynı türdeki koleksiyonları güncellenir. Ayrıca 60 sn'de bir ve sekme öne gelince tazeler.
+- `put` reddedilirse (çok uzun / geçersiz) Promise hata fırlatır ve yazma geri alınır. Ağ hatasında hata fırlatmaz; `error` olayı gelir, yazma bekler.
+- Düşük seviye (gerekirse): `putDoc, removeDoc, listDocs, pageDocs` (roomId ile).
+- Yerel modda (`?yerel=1`) veri localStorage'da; aynı tarayıcının sekmeleri paylaşır.
+- Kendi yazdığın belge için `change` hemen (iyimser) ve sunucu onayından sonra bir kez daha gelir. Ekranı `docs`'tan baştan çiz (idempotent).
+
+## 17. Veri türleri (data alanları)
+Tarih: gün `'YYYY-MM-DD'`, an ISO (`new Date().toISOString()`). `author` = yazanın clientId'si (otomatik).
+
+| Tür | id | data | Sahibi |
+|---|---|---|---|
+| `kisi` | clientId | `{ ad, foto?, dogum?: gün, renk? }` | profil.js |
+| `cift` | `'cift'` | `{ baslangic?: gün, bulusma?: ISO, bulusmaNotu?, kapak?: url, ad? }` | profil.js |
+| `gun` | uuid | `{ baslik, tarih: gün, tekrar: 'yil'/'ay'/'yok', tur: 'yildonumu'/'dogumgunu'/'ozel'/'plan', emoji, not?, hatirlat?: [0,1,7] }` | Günler |
+| `mesaj` | uuid | `{ metin?, foto?: url, yanit?: id, tepki?: { [clientId]: emoji }, duzenlendi?: ISO }` | Sohbet |
+| `okundu` | clientId | `{ son: mesajId, at: ISO }` | Sohbet |
+| `ani` | uuid | `{ baslik, tarih: gün, yer?, not?, fotolar: [url], etiketler?: [], begeni?: { [clientId]: true } }` | Anılar |
+| `mektup` | uuid | `{ baslik, metin, kime: clientId, acilis?: ISO, acildi?: ISO, zarf?: renk }` | Anılar |
+| `liste` | uuid | `{ liste: 'yapilacak'/'izlenecek'/'gidilecek'/'hediye'/'alisveris', metin, not?, yapildi?: ISO, yapan?: clientId, kimin?: clientId }` | Listeler |
+| `randevu` | uuid | `{ fikirId?, metin, plan?: gün, yapildi?: ISO }` | Listeler |
+| `gs` | `<gunNo>-<clientId>` | `{ gun: number, cevap: string }` | Günün Sorusu |
+| `sevgidili` | clientId | `{ puanlar: { soz, zaman, hediye, hizmet, dokunma }, at: ISO }` | Günün Sorusu |
+| `ruh` | clientId | `{ emoji, not?, at: ISO }` (son ruh hâli) | Ana Sayfa |
+| `dokunus` | uuid | `{ tur: 'kalp'/'opucuk'/'sarilma'/'ozledim'/'dusunuyorum', kime: clientId, at: ISO }` | Ana Sayfa |
+| `konum` | clientId | `{ lat, lng (2 ondalık), sehir?, at: ISO }` (isteğe bağlı, varsayılan kapalı) | Ayarlar |
+| `oyunkayit` | oyun id | oyuna özel kayıtlı durum (Dama/Tavla "kaldığın yerden") | Masa oyunları |
+
+Yeni tür gerekirse raporunda bildir; çakışmayan bir ad seç.
+
+## 18. js/core/profil.js ve js/core/gunler.js (Koordinatör, hazır)
+```js
+import { openProfil } from '../../js/core/profil.js';
+const profil = await openProfil(room);
+profil.ben()      // { clientId, ad, foto?, dogum?, renk? }
+profil.partner()  // aynı biçim | null (henüz hiç görünmediyse)
+profil.cift()     // { baslangic?, bulusma?, bulusmaNotu?, kapak?, ad? }
+await profil.setBen({ foto }); await profil.setCift({ baslangic: '2025-02-14' });
+profil.on('change', fn); profil.close();
+```
+```js
+// gunler.js (saf; Node'da test edilir)
+parseDay(s) toDay(date) daysBetween(a,b) addDays(day,n) daysInMonth(y,m)
+daysTogether(baslangic, bugun)   // başlangıç günü = 1. gün
+durationParts(baslangic, bugun)  // { years, months, days }
+nextOccurrence(gun, tekrar, from) occurrenceIndex(gun, tekrar, olus)
+upcoming(gunBelgeleri, { today, limit, within })  // [{ id, baslik, emoji, tur, tekrar, tarih, date, daysLeft, kacinci }]
+milestones(baslangic, { today, limit, monthly })   // [{ date, baslik, tur:'gun'|'yil'|'ay', n, daysLeft }]
+todaysEvents(gunBelgeleri, baslangic, bugun)
+countdown(hedefIso, simdi)  // { past, total, days, hours, minutes, seconds } | null
+leftText(daysLeft)          // 'Bugün' | 'Yarın' | 'N gün kaldı'
+```
+
+## 19. Uygulama sayfası şablonu (sayfalar/<ad>/)
+`sayfalar/<ad>/index.html`:
+```html
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Sohbet · Biz İkimiz</title>
+  <link rel="stylesheet" href="../../css/base.css">
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body class="sayfa">
+  <header id="shell"></header>
+  <main id="app"></main>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
+```
+`app.js`:
+```js
+import { bootPage } from '../../js/core/sayfa.js';
+import { openCollection } from '../../js/core/veri.js';
+const { room, roomId, me } = await bootPage({ ns: 'sohbet', title: 'Sohbet', tab: 'sohbet' });
+```
+- `bootPage`: oda yoksa ana sayfaya gider; odaya katılır; `mountShell` + `mountTabBar(tab)`. ns = `SAYFALAR` id'si.
+  Sekmesi olmayan sayfa (`ayarlar`, `mektup`, ...) `tab: 'daha'` verir.
+- Sayfa adresi üretmek: `pageUrl('sayfalar/mektup/', { id })` (identity.js; yerel modu korur).
+- Kayıtlar: `js/core/games.js` → `GAMES` (oyunlar), `SAYFALAR` (özellik sayfaları), `SEKMELER`, `sayfaById`.
+- PWA etiketleri (manifest, apple-touch-icon) tüm HTML'lere sonda koordinatör ekler. Siz eklemeyin.
+- Ortak arayüz: `ui.js` (h, icon, toast, confirmDialog, celebrate, formatDay, pairEl, knownPartner), `sound.js`.
+  Yeni ortak bileşen gerekirse kendi klasörünüzde yazın.
+- Oyun sayfaları v1 §10 şablonunu ve `_soru` motorunu izler.
+
+## 20. Ortak servis modülleri (yer tutucular hazır; sahipleri doldurur)
+```js
+// js/core/bildirim.js (Sunucu)
+bildirimDestegi()            // 'var' | 'ana-ekran-gerek' | 'yok'
+await bildirimDurumu()       // 'acik' | 'kapali' | 'engelli' | 'yok'
+await bildirimAc(roomId)     // kullanıcı tıklamasıyla; -> boolean
+await bildirimKapat(roomId)
+await bildir(roomId, { tur, baslik, metin, url })  // partnerin cihazlarına push; hata fırlatmaz
+//   tur: 'dokunus'|'mesaj'|'mektup'|'ani'|'gun'|'oyun'|'soru'|'liste'|'izle'. url site köküne göre göreli ('sayfalar/sohbet/').
+// js/core/pwa.js (Sunucu)
+registerPwa(); kurulumDurumu()  // { durum: 'kurulu'|'kurulabilir'|'ios-elle'|'yok', kur() }
+// js/core/kilit.js (Ayarlar)
+await kilitKontrol(); await kilitAyarla(pin | null); kilitVarMi()
+// js/core/mobil.js (Mobil)
+isNative(); titret(desen); await yerelHatirlaticilar([{ id, baslik, metin, zaman: ISO }])
+// js/core/foto.js (Anılar) — fotoğraf seç, küçült, yükle
+await fotoSecVeYukle(roomId, { coklu }) // -> [url]; games/yapboz/image.js normalizeImage + storage.js uploadPhoto kullanır
+```
+`ui.js startAppServices()` (mountShell içinde) kilit ve PWA'yı başlatır.
+
+## 21. Doğrulama (her ajan)
+1. Saf mantık ayrı modülde; `tests/<önek>-*.test.mjs` ile test. Çalıştır: `node --test --test-timeout=15000 tests/<dosyalarınız>`.
+2. `node --check` ile her JS dosyası.
+3. **Tarayıcı duman testi** (zorunlu, arayüzü olan her parça): headless Edge + yerel mod.
+   Sunucu açık: http://localhost:5173 (kapatmayın, yeni sunucu açmayın). Yardımcı:
+   ```js
+   import { ikiKisi } from 'file:///C:/Users/koseo/AppData/Local/Temp/pw/iki.mjs';
+   const t = await ikiKisi('sayfalar/sohbet/'); // t.a = Ömer, t.b = Gül; aynı oda 'testpaka23'; telefon boyu 390x844
+   // t.a / t.b Playwright Page. t.hatalar = konsol hataları ve yakalanmayan istisnalar.
+   await t.kapat();
+   ```
+   Betikleri kendi geçici klasörünüze yazın (`C:/Users/koseo/AppData/Local/Temp/pw/<ajan>/`), proje klasörüne değil.
+   `C:/Users/koseo/AppData/Local/Temp/pw` içinden `node <ajan>/<betik>.mjs` ile çalıştırın (playwright-core orada).
+   İki kişilik akışı uçtan uca deneyin; ekran görüntüsü alıp Read ile bakın (taşma, kesilme, okunaksızlık, koyu tema).
+   Hedef: `t.hatalar` boş (bilinen favicon/ikon 404'ü hariç), yatay kaydırma yok (`scrollWidth <= innerWidth`).
+4. Claude tarayıcı paneli araçlarını (`mcp__Claude_Browser__*`) KULLANMAYIN. Sunucuyu kapatmayın.
+5. git commit YAPMAYIN. Koordinatör toplar.
+
+## 22. Görsel dil
+- Sıcak, romantik, sade, "premium" his. `css/base.css` değişkenleri; sabit renk yok (kendi `style.css`'inizde de değişken).
+- Arayüz yazmadan önce `ui-ux-pro-max` ve `impeccable` skill'lerini yükleyin (Skill aracı); mobil uygulama kalitesinde tasarlayın.
+- Telefon öncelikli (390 px). Dokunma alanı ≥ 44 px. Koyu tema çalışmalı. Hareketler kısa ve `prefers-reduced-motion`'a uyar.
+- Boş durumlar sevimli ve yol gösterici ("Henüz anı yok. İlkini ekleyelim mi?").
+- Metinler Türkçe, sıcak, kısa. Emoji ölçülü. Açık saçık içerik yok.

@@ -900,3 +900,18 @@ dialog.ui-dialog[open] { animation: pop-in 0.24s var(--ease); }
   }
   .pair[data-link] .pair-heart svg, .celebrate-mark svg { animation: none !important; }
 }
+
+/* ---------- Alt sekme çubuğu (mountTabBar) ---------- */
+#tabbar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
+  display: grid; grid-template-columns: repeat(5, 1fr);
+  padding: 4px 4px calc(4px + var(--safe-bottom));
+  background: var(--surface); border-top: 1px solid var(--line);
+}
+#tabbar .tab {
+  min-height: 52px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  color: var(--muted); text-decoration: none; font-size: 0.72rem; font-weight: 600; border-radius: var(--radius);
+}
+#tabbar .tab-icon { font-size: 1.25rem; line-height: 1; }
+#tabbar .tab[aria-current="page"] { color: var(--accent-ink); background: var(--accent-soft); }
+body.has-tabbar #app { padding-bottom: calc(68px + var(--safe-bottom)); }

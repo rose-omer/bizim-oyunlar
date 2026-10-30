@@ -163,6 +163,20 @@ export function buildGameUrl(root, gameId, { roomId, host } = {}, local = false)
   return u.href;
 }
 
+/** Site köküne göre sayfa adresi (ör. 'sayfalar/sohbet/'). Yerel modda yerel=1 ekler. */
+export function buildPageUrl(root, path, params = {}, local = false) {
+  const u = new URL(path, root);
+  const p = new URLSearchParams();
+  for (const [k, v] of Object.entries(params || {})) if (v != null && v !== '') p.set(k, String(v));
+  if (local) p.set('yerel', '1');
+  u.search = p.toString();
+  return u.href;
+}
+
+export function pageUrl(path, params = {}) {
+  return buildPageUrl(SITE_ROOT, path, params, isLocalMode());
+}
+
 export function inviteUrl(roomId) {
   return buildInviteUrl(SITE_ROOT, roomId, isLocalMode());
 }

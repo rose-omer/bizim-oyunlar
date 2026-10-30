@@ -805,7 +805,8 @@ create table if not exists public.oda (
   kanal text not null,
   zorunlu timestamptz not null,
   olusturma timestamptz not null default now(),
-  kurtarma_ozet bytea
+  kurtarma_ozet bytea,
+  kurtarma_olusturan text
 );
 
 alter table public.oda enable row level security;
@@ -1002,13 +1003,17 @@ revoke execute on function public.oda_yetki_kimlikli(text, text, text, text) fro
 
 -- Odaya katıl. Onay yolları (ilk tutan):
 --   a. kurucu: odada onaylı cihaz ve belge yok (ilk = true)
---   b. geçiş: oda satırından önce yazılmış bir belgede bu cihazın kişisi (kind 'kisi', id) ya da yazarlığı var
+--   b. geçiş: yalnız koruma başlamadan (now() < zorunlu); oda satırından önce yazılmış 'kisi' belgesinin id'si
+--      bu cihaz. Yazarlık (author) sayılmaz: son yazandır, oda kodunu bilen değiştirebilir. Çıkarma korumayı
+--      hemen başlattığından çıkarılan cihaz bu yolla dönemez.
 --   c. geçerli davet (aynı oda, süresi geçmemiş, kullanılmamış; harcanır)
 --   d. geçerli kurtarma kodu (harcanır)
 -- Hiçbiri tutmazsa yeni satır 'bekliyor'; var olan 'reddedildi' satırı reddedildi kalır.
 -- Aynı cihaz farklı anahtarla gelirse 'cakisma' (satıra dokunulmaz).
--- Hız: onaylı cihazın girişi dışındaki denemeler; oda başına saatte 30, genel saatte 1000.
--- Sınır: odada en çok 8 onaylı, toplam 20 cihaz satırı (aşılırsa 54000; harcanan davet geri alınır).
+-- Hız: onaylı cihazın girişi dışındaki denemeler, oda başına saatte 30. Genel: saatte 1000 yeni oda.
+-- Sınır: odada en çok 8 onaylı; onaylı + bekleyen en çok 20 satır (aşılırsa 54000; harcanan davet geri alınır).
+-- Temizlik: 30 gündür görülmeyen bekleyen ve reddedilen satırlar her katılma denemesinde; 7 günden eski
+-- sahipsiz odalar (onaylı cihaz, belge ve oyun kaydı yok) saatin ilk yeni odasında silinir.
 create or replace function public.oda_katil(
   p_room text, p_cihaz text, p_anahtar text,
   p_ad text default null, p_davet text default null, p_kurtarma text default null)
@@ -1039,6 +1044,27 @@ begin
   -- Oda satırı ilk katılmada oluşur ve kilitlenir (eşzamanlı iki kurucu olmaz).
   select * into v_oda from public.oda as o where o.room = p_room for update;
   if not found then
+    -- Genel sınır yalnız yeni oda oluşturmayı sayar: var olan odaya katılma başkalarınca engellenemez.
+    insert into public.oda_katil_rate as r (room, bucket, n) values ('*', v_saat, 1)
+      on conflict (room, bucket) do update set n = r.n + 1
+      returning r.n into v_all;
+    if v_all > 1000 then
+      raise exception 'oda_katil: cok fazla deneme' using errcode = '54000';
+    end if;
+    if v_all = 1 then
+      delete from public.oda_katil_rate as r where r.bucket < v_saat - interval '1 day';
+      with sahipsiz as (
+        delete from public.oda as o
+        where o.olusturma < pg_catalog.now() - interval '7 days'
+          and not exists (select 1 from public.oda_cihaz as c where c.room = o.room and c.durum = 'onayli')
+          and not exists (select 1 from public.room_doc as d where d.room = o.room)
+          and not exists (select 1 from public.game_log as g where g.room = o.room)
+        returning o.room
+      ), cihazlar as (
+        delete from public.oda_cihaz as c where c.room in (select s.room from sahipsiz as s)
+      )
+      delete from public.oda_davet as v where v.room in (select s.room from sahipsiz as s);
+    end if;
     insert into public.oda (room, kanal, zorunlu)
     values (p_room, public.oda_rastgele('0123456789abcdef', 32),
       case when exists (select 1 from public.room_doc as d where d.room = p_room)
@@ -1063,26 +1089,26 @@ begin
   insert into public.oda_katil_rate as r (room, bucket, n) values (p_room, v_saat, 1)
     on conflict (room, bucket) do update set n = r.n + 1
     returning r.n into v_n;
-  insert into public.oda_katil_rate as r (room, bucket, n) values ('*', v_saat, 1)
-    on conflict (room, bucket) do update set n = r.n + 1
-    returning r.n into v_all;
-  if v_n > 30 or v_all > 1000 then
+  if v_n > 30 then
     raise exception 'oda_katil: cok fazla deneme' using errcode = '54000';
-  end if;
-  if v_all = 1 then
-    delete from public.oda_katil_rate as r where r.bucket < v_saat - interval '1 day';
   end if;
 
   if v_var and v_c.anahtar_ozet <> v_ozet then
     return public.oda_cevap('cakisma', p_room, v_oda.kanal, v_oda.zorunlu, false);
   end if;
 
+  -- 30 gündür görülmeyen bekleyen ve reddedilen satırlar (bu cihazınki hariç) silinir.
+  delete from public.oda_cihaz as c
+  where c.room = p_room and c.cihaz <> p_cihaz and c.durum <> 'onayli'
+    and coalesce(c.son_gorulme, c.olusturma) < pg_catalog.now() - interval '30 days';
+
   if not exists (select 1 from public.oda_cihaz as c where c.room = p_room and c.durum = 'onayli')
      and not exists (select 1 from public.room_doc as d where d.room = p_room) then
     v_yol := 'kurucu';
-  elsif exists (select 1 from public.room_doc as d
-                where d.room = p_room and d.created_at < v_oda.olusturma
-                  and ((d.kind = 'kisi' and d.id = p_cihaz) or d.author = p_cihaz)) then
+  elsif pg_catalog.now() < v_oda.zorunlu
+        and exists (select 1 from public.room_doc as d
+                    where d.room = p_room and d.kind = 'kisi' and d.id = p_cihaz
+                      and d.created_at < v_oda.olusturma) then
     v_yol := 'gecis';
   end if;
   if v_yol is null and p_davet is not null then
@@ -1096,7 +1122,7 @@ begin
   end if;
   if v_yol is null and p_kurtarma is not null and v_oda.kurtarma_ozet
        = public.oda_ozet(pg_catalog.upper(pg_catalog.replace(pg_catalog.btrim(p_kurtarma), '-', ''))) then
-    update public.oda as o set kurtarma_ozet = null where o.room = p_room;
+    update public.oda as o set kurtarma_ozet = null, kurtarma_olusturan = null where o.room = p_room;
     v_yol := 'kurtarma';
   end if;
 
@@ -1113,7 +1139,8 @@ begin
         son_gorulme = pg_catalog.now()
     where c.room = p_room and c.cihaz = p_cihaz;
   else
-    if (select count(*) from public.oda_cihaz as c where c.room = p_room) >= 20 then
+    if (select count(*) from public.oda_cihaz as c
+        where c.room = p_room and c.durum in ('onayli', 'bekliyor')) >= 20 then
       raise exception 'oda_katil: cok fazla cihaz' using errcode = '54000';
     end if;
     insert into public.oda_cihaz (room, cihaz, anahtar_ozet, ad, durum, son_gorulme, onaylayan)
@@ -1217,8 +1244,8 @@ begin
 end;
 $$;
 
--- Cihazı odadan çıkarır (kendini de). Push abonelikleri ve kullanılmamış davetleri silinir, kanal yenilenir,
--- koruma hemen başlar. -> silindi mi.
+-- Cihazı odadan çıkarır (kendini de). Push abonelikleri, kullanılmamış davetleri ve oluşturduğu kurtarma kodu
+-- silinir, kanal yenilenir, koruma hemen başlar. -> silindi mi.
 create or replace function public.cihaz_cikar(p_room text, p_cihaz text, p_anahtar text, p_hedef text)
 returns boolean
 language plpgsql
@@ -1239,7 +1266,9 @@ begin
   delete from public.oda_davet as v where v.room = p_room and v.olusturan = p_hedef;
   update public.oda as o
   set kanal = public.oda_rastgele('0123456789abcdef', 32),
-      zorunlu = least(o.zorunlu, pg_catalog.now())
+      zorunlu = least(o.zorunlu, pg_catalog.now()),
+      kurtarma_ozet = case when o.kurtarma_olusturan = p_hedef then null else o.kurtarma_ozet end,
+      kurtarma_olusturan = case when o.kurtarma_olusturan = p_hedef then null else o.kurtarma_olusturan end
   where o.room = p_room;
   return true;
 end;
@@ -1269,7 +1298,7 @@ end;
 $$;
 
 -- Kurtarma kodu: 16 karakter (I, O, 0, 1 yok), 'ABCD-EFGH-JKLM-NPQR'. Yalnız özeti (tiresiz) saklanır;
--- yenisi eskisini geçersiz yapar.
+-- yenisi eskisini geçersiz yapar. Oluşturan cihaz çıkarılınca kod silinir (cihaz_cikar).
 create or replace function public.kurtarma_olustur(p_room text, p_cihaz text, p_anahtar text)
 returns text
 language plpgsql
@@ -1282,15 +1311,21 @@ begin
   perform 1 from public.oda as o where o.room = p_room for update;
   perform public.oda_yetki_kimlikli('kurtarma_olustur', p_room, p_cihaz, p_anahtar);
   v_kod := public.oda_rastgele('ABCDEFGHJKLMNPQRSTUVWXYZ23456789', 16);
-  update public.oda as o set kurtarma_ozet = public.oda_ozet(v_kod) where o.room = p_room;
+  update public.oda as o set kurtarma_ozet = public.oda_ozet(v_kod), kurtarma_olusturan = p_cihaz
+  where o.room = p_room;
   return pg_catalog.concat_ws('-', pg_catalog.substr(v_kod, 1, 4), pg_catalog.substr(v_kod, 5, 4),
     pg_catalog.substr(v_kod, 9, 4), pg_catalog.substr(v_kod, 13, 4));
 end;
 $$;
 
 -- Yedekten geri yükleme. p_belgeler = en çok 200 belge: { kind, id, data, author?, deleted?, created_at?, updated_at? }
--- (doc_put biçim kuralları). Satır yoksa eklenir (zamanlar yedekten, yoksa şimdi); varsa yalnız yedekteki
--- updated_at daha yeniyse üstüne yazılır. Gelecekteki zaman şimdiye çekilir (eşitleme imleci bozulmasın).
+-- (doc_put biçim kuralları). Kurallar:
+--   - Satır yoksa eklenir (created_at yedekten, yoksa şimdi; gelecekteki created_at şimdiye çekilir).
+--   - Var olan satır silinmişse yedekteki canlı kopya geri yazılır (geri yükleme silinenleri getirir).
+--   - Var olan canlı satıra yalnız yedekteki updated_at daha yeniyse yazılır.
+--   - Yedekteki silinmiş kopya var olan satırı değiştirmez.
+-- Yazılan satırın updated_at'i yazma anıdır (clock_timestamp): diğer cihazların artımlı eşitlemesi
+-- (updated_at > since) görsün; aynı yedek ikinci kez yüklenince hiçbir şey yazılmaz.
 -- Biri bozuksa hiçbiri yazılmaz (22023). Sınır (doc_sinir) bir kez, yazılan bayt kadar. -> yazılan satır sayısı.
 create or replace function public.doc_ice_aktar(p_room text, p_cihaz text, p_anahtar text, p_belgeler jsonb)
 returns integer
@@ -1352,18 +1387,15 @@ begin
     if v_c > v_simdi then
       v_c := v_simdi;
     end if;
-    if v_u > v_simdi then
-      v_u := v_simdi;
-    end if;
 
     insert into public.room_doc as d (room, kind, id, data, author, deleted, created_at, updated_at)
-    values (p_room, v_kind, v_id, v_data, v_author, v_del, coalesce(v_c, v_simdi), coalesce(v_u, v_simdi))
+    values (p_room, v_kind, v_id, v_data, v_author, v_del, coalesce(v_c, v_simdi), pg_catalog.clock_timestamp())
     on conflict (room, kind, id) do update
       set data = excluded.data,
           author = excluded.author,
-          deleted = excluded.deleted,
-          updated_at = excluded.updated_at
-      where v_u > d.updated_at;
+          deleted = false,
+          updated_at = pg_catalog.clock_timestamp()
+      where not v_del and (d.deleted or v_u > d.updated_at);
     if found then
       v_yazilan := v_yazilan + 1;
       v_bayt := v_bayt + pg_catalog.octet_length(v_data::text);

@@ -121,9 +121,10 @@ export function applyPatch(data, patch) {
 }
 
 /**
- * Yedekten içe aktarma kuralı (sunucudaki doc_ice_aktar ile aynı): belge yoksa eklenir (tarihler yedekten,
- * yoksa simdi; gelecek tarih simdi'ye çekilir). Varsa yalnız gelen updated_at daha yeniyse ya da var olan
- * belge silinmişse üstüne yazılır (silinenler geri gelir). hepsi = { id: belge } yerinde değişir.
+ * Yedekten içe aktarma kuralı (sunucudaki doc_ice_aktar ile aynı): belge yoksa eklenir; varsa yalnız yedekteki
+ * updated_at daha yeniyse ya da var olan belge silinmişse üstüne yazılır (silinenler geri gelir).
+ * Yazılan belgenin updated_at'i simdi olur (karşı cihazlar artımlı eşitlemede görsün); created_at yedekten
+ * (yoksa simdi; gelecek tarih simdi'ye çekilir), var olanınki korunur. hepsi = { id: belge } yerinde değişir.
  * -> yazılan belge sayısı
  */
 export function iceAktarBirlestir(hepsi, belgeler, simdi) {
@@ -136,7 +137,7 @@ export function iceAktarBirlestir(hepsi, belgeler, simdi) {
     if (cur && !cur.deleted && !(updated && timeOf(updated) > timeOf(cur.updated_at))) continue;
     hepsi[b.id] = {
       id: b.id, data: b.deleted ? {} : b.data, author: b.author ?? null, deleted: !!b.deleted,
-      created_at: cur?.created_at || kirp(b.created_at) || simdi, updated_at: updated || simdi,
+      created_at: cur?.created_at || kirp(b.created_at) || simdi, updated_at: simdi,
     };
     n++;
   }

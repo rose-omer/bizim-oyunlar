@@ -159,8 +159,8 @@ function ykGiris(roomId, { davet, kurtarma }) {
   const cihaz = me().clientId;
   return ykIs(roomId, (st) => {
     const sinir = st.oda ? zaman(st.oda.olusturma) : Date.now();
-    const eskiYazar = belgeler.some((d) => zaman(d.created_at) < sinir
-      && ((d.kind === 'kisi' && d.id === cihaz) || d.author === cihaz));
+    // Geçiş yolu (sunucuyla aynı): yalnız id'si bu cihaz olan eski 'kisi' belgesi; yazar (author) sayılmaz.
+    const eskiYazar = belgeler.some((d) => d.kind === 'kisi' && d.id === cihaz && zaman(d.created_at) < sinir);
     return ykKatil(st, {
       room: roomId, cihaz, anahtar: anahtarim(roomId), ad: tarayiciAdi(), davet, kurtarma,
       veriVar: belgeler.length > 0, eskiYazar,

@@ -234,3 +234,37 @@ test('ykYetki: geçerli onaylı kimlik geçer, son_gorulme en çok 10 dk\'da bir
   assert.equal(kodu(() => ykYetki(st, kim('omer', anahtar()), T0)), '42501');
   assert.equal(kodu(() => ykYetki(st, kim('kimse', a), T0)), '42501');
 });
+
+test('öykünme: geçerli kurtarma kodu çakışmayı çözer (anahtar yenilenir, onaylanır, kod tükenir); davet çözmez', () => {
+  const st = yeniDurum();
+  const eski = anahtar();
+  ykKatil(st, { room: R, cihaz: 'omer', anahtar: eski }, ctx());
+  const kod = ykKurtarmaOlustur(st, kim('omer', eski), ctx());
+  const davet = ykDavetOlustur(st, kim('omer', eski), ctx());
+  const yeni = anahtar();
+  assert.equal(ykKatil(st, { room: R, cihaz: 'omer', anahtar: yeni, davet }, ctx()).durum, 'cakisma', 'davet çakışmayı çözmez');
+  assert.equal(ykKatil(st, { room: R, cihaz: 'omer', anahtar: yeni, kurtarma: 'ABCD-EFGH-JKLM-NPQR' }, ctx()).durum, 'cakisma');
+  const s = ykKatil(st, { room: R, cihaz: 'omer', anahtar: yeni, kurtarma: kod }, ctx());
+  assert.equal(s.durum, 'onayli');
+  assert.equal(st.cihazlar.omer.anahtar, yeni);
+  assert.equal(st.oda.kurtarma, null);
+  assert.equal(ykDurum(st, kim('omer', eski), T0).durum, 'cakisma', 'eski anahtar artık geçmez');
+  assert.equal(ykDurum(st, kim('omer', yeni), T0).durum, 'onayli');
+  // Reddedilmiş satır da kurtarmayla (yeni anahtarla) onaylanır.
+  ykKatil(st, { room: R, cihaz: 'tel', anahtar: anahtar() }, ctx());
+  ykReddet(st, kim('omer', yeni), 'tel', ctx());
+  const kod2 = ykKurtarmaOlustur(st, kim('omer', yeni), ctx());
+  assert.equal(ykKatil(st, { room: R, cihaz: 'tel', anahtar: anahtar(), kurtarma: kod2 }, ctx()).durum, 'onayli');
+});
+
+test('öykünme: geçiş yolu yalnız koruma başlamadan (zorunlu öncesi)', () => {
+  const st = yeniDurum();
+  const a = anahtar();
+  ykKatil(st, { room: R, cihaz: 'omer', anahtar: a, veriVar: true, eskiYazar: true }, ctx()); // zorunlu = T0 + 3 gün
+  assert.equal(ykKatil(st, { room: R, cihaz: 'gec', anahtar: anahtar(), eskiYazar: true }, ctx(T0 + 4 * GUN)).durum, 'bekliyor');
+  const g = anahtar();
+  assert.equal(ykKatil(st, { room: R, cihaz: 'gul', anahtar: g, eskiYazar: true }, ctx(T0 + GUN)).durum, 'onayli');
+  // Çıkarılan cihaz geçiş yoluyla geri dönemez: çıkarma korumayı hemen başlatır.
+  ykCikar(st, kim('omer', a), 'gul', ctx(T0 + GUN));
+  assert.equal(ykKatil(st, { room: R, cihaz: 'gul', anahtar: g, eskiYazar: true }, ctx(T0 + GUN + 1000)).durum, 'bekliyor');
+});

@@ -121,8 +121,12 @@ test('iceAktarBirlestir: yoksa ekler, yalnız daha yeni olan üstüne yazar; say
   assert.equal(hepsi.b.data.v, 'yeni');
   assert.equal(hepsi.b.author, 'y');
   assert.equal(hepsi.b.created_at, '2026-01-01T00:00:00Z');
-  assert.deepEqual(hepsi.c, { id: 'c', data: { v: 'yok' }, author: null, deleted: false, created_at: '2025-12-01T00:00:00Z', updated_at: '2025-12-02T00:00:00Z' });
+  // Yazılan kaydın updated_at'i şimdi: karşı cihazlar artımlı eşitlemede görür (karşılaştırma yedekteki tarihle).
+  assert.equal(hepsi.b.updated_at, '2026-02-01T00:00:00.000Z');
+  assert.deepEqual(hepsi.c, { id: 'c', data: { v: 'yok' }, author: null, deleted: false, created_at: '2025-12-01T00:00:00Z', updated_at: '2026-02-01T00:00:00.000Z' });
   assert.equal(hepsi.d.updated_at, '2026-02-01T00:00:00.000Z');
+  // Aynı yedek ikinci kez: yazılmaz (yazılanların tarihi artık yedektekinden yeni).
+  assert.equal(iceAktarBirlestir(hepsi, [{ kind: 'liste', id: 'b', data: { v: 'yeni' }, updated_at: '2026-01-06T00:00:00Z' }], '2026-02-02T00:00:00.000Z'), 0);
 });
 
 test('iceAktar: Supabase doc_ice_aktar (kimlikli); yerel modda yerel depoya', async () => {
@@ -205,7 +209,7 @@ test('bildirim.js: bildir gövdesinde anahtar; eski sunucuda yok', async (t) => 
   assert.equal('anahtar' in govdeler[1], false);
 });
 
-test('geri yükleme sonrası: refresh({ tam: true }) eski tarihli belgeleri de getirir; önbellek temizlenir', async () => {
+test('geri yükleme sonrası: eski tarihli yedek kaydı artımlı tazelemede de gelir (updated_at = şimdi); önbellek temizlenir', async () => {
   const { onbellekTemizle } = await import('../js/core/veri.js');
   const { readStore } = await import('../js/core/identity.js');
   writeStore('session', 'bizim.yerel', '1');
@@ -215,7 +219,8 @@ test('geri yükleme sonrası: refresh({ tam: true }) eski tarihli belgeleri de g
   try {
     await iceAktar(R, [{ kind: 'liste', id: 'eski1', data: { metin: 'yedekten' }, created_at: '2020-01-01T00:00:00Z', updated_at: '2020-01-01T00:00:00Z' }]);
     await col.refresh();
-    assert.equal(col.get('eski1'), null, 'artımlı tazeleme eski tarihi atlar');
+    assert.equal(col.get('eski1')?.data.metin, 'yedekten', 'karşı cihaz da artımlı eşitlemede görür');
+    assert.equal(col.get('eski1').created_at, '2020-01-01T00:00:00Z');
     await col.refresh({ tam: true });
     assert.equal(col.get('eski1').data.metin, 'yedekten');
     assert.ok(readStore('local', `bizim.veri.${R}.liste`));

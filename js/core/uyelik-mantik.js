@@ -135,7 +135,10 @@ export function ykYetki(st, kim, simdi) {
   gorul(row, simdi);
 }
 
-/** oda_katil. args: { room, cihaz, anahtar, ad, davet, kurtarma, veriVar, eskiYazar }. Durumu yerinde değiştirir. */
+/**
+ * oda_katil. args: { room, cihaz, anahtar, ad, davet, kurtarma, veriVar, eskiYazar }. Durumu yerinde değiştirir.
+ * eskiYazar = odada oda satırından önce yazılmış, id'si bu cihaz olan 'kisi' belgesi var (geçiş yolu).
+ */
 export function ykKatil(st, args, { simdi, rastgele }) {
   const { room, cihaz, anahtar, davet, kurtarma, veriVar = false, eskiYazar = false } = args;
   if (!CIHAZ_RE.test(cihaz || '') || !ANAHTAR_RE.test(anahtar || '')) throw hata('22023', 'oda_katil: gecersiz');
@@ -146,8 +149,19 @@ export function ykKatil(st, args, { simdi, rastgele }) {
       zorunlu: iso(veriVar ? simdi + ESKI_ODA_GUN * GUN_MS : simdi),
     };
   }
+  const kurtarmaGecerli = !!(kurtarma && st.oda.kurtarma && kurtarmaTemizle(kurtarma) === st.oda.kurtarma);
   let row = st.cihazlar[cihaz];
-  if (row && row.anahtar !== anahtar) return { durum: 'cakisma', kanal: null, zorunlu: st.oda.zorunlu, ilk: false };
+  if (row && row.anahtar !== anahtar) {
+    // Çakışma: yalnız geçerli kurtarma kodu çözer (anahtar yenilenir, onaylanır, kod tükenir). Davet çözmez.
+    if (!kurtarmaGecerli) return { durum: 'cakisma', kanal: null, zorunlu: st.oda.zorunlu, ilk: false };
+    if (row.durum !== 'onayli' && onayliSayisi(st) >= MAX_ONAYLI) throw hata('54000', 'oda_katil: cok fazla cihaz');
+    st.oda.kurtarma = null;
+    row.anahtar = anahtar;
+    row.durum = 'onayli';
+    if (ad) row.ad = ad;
+    row.son_gorulme = iso(simdi);
+    return sonucOf(st, row, simdi);
+  }
   if (row && row.durum === 'onayli') {
     if (ad) row.ad = ad;
     gorul(row, simdi);
@@ -158,9 +172,9 @@ export function ykKatil(st, args, { simdi, rastgele }) {
   let ilk = false;
   let yol = null;
   if (n === 0 && !veriVar) { yol = 'kurucu'; ilk = true; }
-  else if (eskiYazar) yol = 'gecis';
+  else if (eskiYazar && simdi < zaman(st.oda.zorunlu)) yol = 'gecis'; // geçiş yalnız koruma başlamadan
   else if (davet && st.davetler[davet] && !st.davetler[davet].kullanildi && zaman(st.davetler[davet].son) > simdi) yol = 'davet';
-  else if (kurtarma && st.oda.kurtarma && kurtarmaTemizle(kurtarma) === st.oda.kurtarma) yol = 'kurtarma';
+  else if (kurtarmaGecerli) yol = 'kurtarma';
 
   if (!yol) {
     if (!row) {

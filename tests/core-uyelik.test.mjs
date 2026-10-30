@@ -279,3 +279,32 @@ test('yetkiKaybedildi: kimliksiz istekte (eski sunucu önbelleği) ya da kayıts
   assert.equal(sonDurum(R).durum, 'onayli');
   assert.deepEqual(olaylar.map((o) => o.durum), ['onayli']);
 });
+
+test("yerel sıkı: geçiş yalnız kisi belgesi id'siyle (author sayılmaz)", async () => {
+  writeStore('session', 'bizim.yerel', '1');
+  writeStore('session', 'bizim.yerel.uyelik', '1');
+  const R = 'gecisoda23';
+  const m = new Map(Object.entries({
+    [`bizim.yerelveri.${R}.kisi`]: JSON.stringify({ gecmis: { id: 'gecmis', data: { ad: 'G' }, author: 'gecmis', created_at: '2020-01-01T00:00:00Z' } }),
+    [`bizim.yerelveri.${R}.mesaj`]: JSON.stringify({ m1: { id: 'm1', data: { metin: 'x' }, author: 'yazar', created_at: '2020-01-01T00:00:00Z' } }),
+  }));
+  window.localStorage = {
+    get length() { return m.size; },
+    key: (i) => [...m.keys()][i] ?? null,
+    getItem: (k) => (m.has(k) ? m.get(k) : null),
+    setItem: (k, v) => m.set(k, String(v)),
+    removeItem: (k) => m.delete(k),
+  };
+  try {
+    writeStore('session', 'bizim.client', 'yazar');
+    assert.equal((await odaGiris(R)).durum, 'bekliyor', 'yalnız yazar olmak yetmez');
+    writeStore('session', 'bizim.client', 'gecmis');
+    writeStore('session', 'bizim.anahtar.' + R, null);
+    writeStore('session', 'bizim.uyelik.' + R, null);
+    assert.equal((await odaGiris(R)).durum, 'onayli', 'kendi kisi belgesi olan cihaz geçişle onaylı');
+  } finally {
+    delete window.localStorage;
+    writeStore('session', 'bizim.client', null);
+    sunucuModu();
+  }
+});

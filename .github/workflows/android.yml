@@ -1,7 +1,7 @@
 # Biz İkimiz Android APK'sı (Capacitor). Uygulama canlı siteyi açar (mobil/capacitor.config.json server.url);
 # site güncellenince APK'yı yeniden kurmak gerekmez. Bu iş yalnız kabuk (mobil/) değişince ya da elle çalışır.
 # android/ klasörü depoda tutulmaz: her derlemede sabit Capacitor sürümünden üretilir, sonra
-# mobil/scripts/android-hazirla.mjs ayarları uygular (izin, sürüm, imza, bildirim ikonu).
+# mobil/scripts/android-hazirla.mjs ayarları uygular (izin, sürüm, imza, bildirim ikonu, ana ekran widget'ı).
 # İmza: ANDROID_KEYSTORE_B64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD secret'ları
 # varsa release imzası; yoksa debug APK (uyarıyla). Çıktı: Release "android-latest" → BizIkimiz.apk
 #   https://github.com/rose-omer/bizim-oyunlar/releases/download/android-latest/BizIkimiz.apk
@@ -52,7 +52,7 @@ jobs:
       - name: İkon ve açılış ekranı (assets/*.svg)
         run: npx capacitor-assets generate --android --assetPath assets
 
-      - name: Proje ayarları (izin, sürüm, imza, bildirim ikonu)
+      - name: Proje ayarları (izin, sürüm, imza, bildirim ikonu, widget)
         env:
           BIZ_SURUM_KODU: ${{ github.run_number }}
         run: node scripts/android-hazirla.mjs

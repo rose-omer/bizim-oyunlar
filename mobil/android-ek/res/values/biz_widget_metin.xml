@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ana ekran widget'ı metinleri. Kesme işareti \' ile yazılır (aapt). -->
+<resources>
+    <string name="biz_widget_kucuk_ad">Gün sayacı</string>
+    <string name="biz_widget_buyuk_ad">Gün sayacı ve buluşma</string>
+    <string name="biz_widget_kucuk_aciklama">Kaç gündür birlikte olduğunuz.</string>
+    <string name="biz_widget_buyuk_aciklama">Kaç gündür birlikte olduğunuz, adlarınız ve buluşmaya kalan gün.</string>
+    <string name="biz_widget_baslik">Biz İkimiz</string>
+    <string name="biz_widget_gundur">gündür birlikteyiz</string>
+    <string name="biz_widget_bos">Başlangıç gününüzü ekleyin</string>
+    <string name="biz_widget_yakinda">Sayacımız yakında başlıyor</string>
+    <string name="biz_widget_bulusma_bugun">Buluşma bugün</string>
+    <string name="biz_widget_bulusma_yarin">Buluşma yarın</string>
+    <string name="biz_widget_bulusmaya">Buluşmaya %1$s gün</string>
+    <!-- Seçicideki önizleme ve ilk çizim (veri gelene dek) -->
+    <string name="biz_widget_ornek_sayi" translatable="false">365</string>
+</resources>

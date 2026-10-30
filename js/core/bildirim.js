@@ -5,6 +5,7 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY, VAPID_PUBLIC_KEY } from '../config.js';
 import { me, isLocalMode, isValidRoomId } from './identity.js';
 import { getSupabase } from './room.js';
+import { kimlik } from './uyelik.js';
 import { isNative } from './mobil.js';
 import { KOK_URL, iosMu, standaloneMu, registerPwa } from './pwa.js';
 
@@ -144,9 +145,11 @@ export async function bildirimAc(roomId) {
       sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: anahtarBaytlari(VAPID_PUBLIC_KEY) });
     }
     const client = await getSupabase();
+    const { p_anahtar } = kimlik(roomId); // eski sunucuda yok: parametre gönderilmez
     const { error } = await client.rpc('push_kaydet', {
       p_room: roomId, p_client: me().clientId, p_sub: aboneJson(sub),
       p_ua: String(globalThis.navigator.userAgent || '').slice(0, 200),
+      ...(p_anahtar ? { p_anahtar } : {}),
     });
     if (error) throw new Error(error.message);
     return true;
@@ -187,6 +190,8 @@ export async function bildir(roomId, { tur, baslik, metin, url } = {}) {
     if (!sunucuVar() || !isValidRoomId(roomId)) return false;
     const govde = bildirGovdesi(roomId, me().clientId, { tur, baslik, metin, url });
     if (!govde || !kisitla(sonGonderim, `${roomId}:${tur}`, Date.now())) return false;
+    const { p_anahtar } = kimlik(roomId); // cihaz anahtarı (sunucu push_hedef'te doğrular)
+    if (p_anahtar) govde.anahtar = p_anahtar;
     const res = await fetch(bildirAdresi(SUPABASE_URL), {
       method: 'POST',
       headers: istekBasliklari(SUPABASE_ANON_KEY),

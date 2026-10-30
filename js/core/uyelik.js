@@ -6,7 +6,7 @@
 // Değişen durum window 'bizim:uyelik' olayıyla yayılır (detail = { roomId, durum, kanal, zorunlu, ilk }).
 // Node'da içe aktarılabilir: tarayıcı nesnelerine yalnız fonksiyon içinde erişilir.
 import { me, isLocalMode, readStore, writeStore } from './identity.js';
-import { getSupabase } from './room.js';
+import { getSupabase, _testSupabase } from './room.js';
 import {
   ANAHTAR_RE, base64url, cihazAdi, yetkiHatasiMi, eskiSunucuHatasiMi, sonucCoz, girisAcikMi, kanalSec,
   kurtarmaTemizle, davetKoduMu, yeniDurum, ykKatil, ykDurum, ykYetki, ykListele, ykOnayla, ykReddet, ykCikar,
@@ -27,10 +27,9 @@ const depo = () => (isLocalMode() ? 'session' : 'local');
 const rastgele = (n) => globalThis.crypto.getRandomValues(new Uint8Array(n));
 const tarayiciAdi = () => cihazAdi(globalThis.navigator?.userAgent || '', me().name);
 
-let istemciAl = null;
-/** Test: sahte Supabase istemcisi (async () => client). null → gerçek istemci. */
-export function _testIstemci(fn) { istemciAl = fn; }
-const istemci = () => (istemciAl ? istemciAl() : getSupabase());
+/** Test: sahte Supabase istemcisi (room.js _testSupabase ile aynı kanca). */
+export const _testIstemci = _testSupabase;
+const istemci = () => getSupabase();
 
 function mod() {
   if (!isLocalMode()) return 'sunucu';

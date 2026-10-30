@@ -3,8 +3,12 @@
 // Supabase: room_doc tablosu, RPC doc_put / doc_list / doc_page (supabase/schema.sql).
 // Yerel mod: localStorage 'bizim.yerelveri.<oda>.<tür>' (aynı tarayıcının sekmeleri paylaşır).
 // Canlı güncelleme: yazan taraf odaya { t:'veri', kind, doc } yayar (ns '*'); karşı taraf koleksiyonunu günceller.
+// Cihaz üyeliği (uyelik.js): her RPC'ye kimlik eklenir. 42501 (yetki yok): yazma giden kutusunda kalır,
+// eşitleme durur, yetkiKaybedildi çağrılır; onay geri gelince ('bizim:uyelik') eşitleme sürer.
 import { isLocalMode, readStore, writeStore, uuid } from './identity.js';
 import { getSupabase } from './room.js';
+import { kimlik, yetkiKaybedildi, yerelVeriYetkisi } from './uyelik.js';
+import { yetkiHatasiMi, girisAcikMi } from './uyelik-mantik.js';
 
 export const KIND_RE = /^[a-z]{2,20}$/;
 export const ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
@@ -116,6 +120,54 @@ export function applyPatch(data, patch) {
   return out;
 }
 
+/**
+ * Yedekten içe aktarma kuralı (sunucudaki doc_ice_aktar ile aynı): belge yoksa eklenir (tarihler yedekten,
+ * yoksa simdi); varsa yalnız gelen updated_at daha yeniyse üstüne yazılır. hepsi = { id: belge } yerinde değişir.
+ * -> yazılan belge sayısı
+ */
+export function iceAktarBirlestir(hepsi, belgeler, simdi) {
+  let n = 0;
+  for (const b of belgeler || []) {
+    if (!b || typeof b.id !== 'string') continue;
+    const updated = b.updated_at || simdi;
+    const cur = hepsi[b.id];
+    if (cur && !(timeOf(updated) > timeOf(cur.updated_at))) continue;
+    hepsi[b.id] = {
+      id: b.id, data: b.deleted ? {} : b.data, author: b.author ?? null, deleted: !!b.deleted,
+      created_at: cur?.created_at || b.created_at || simdi, updated_at: updated,
+    };
+    n++;
+  }
+  return n;
+}
+
+// ---------- Yetki (cihaz üyeliği) ----------
+
+const YETKI_MESAJ = 'Bu cihazın odaya erişimi yok.';
+const durdu = new Set(); // yetkisi giden odalar: eşitleme durur
+const devam = new Map(); // roomId → Set<() => void>: onay geri gelince eşitlemeyi sürdürenler
+let uyelikDinleniyor = false;
+
+function uyelikDinle() {
+  if (uyelikDinleniyor || typeof window === 'undefined' || typeof window.addEventListener !== 'function') return;
+  uyelikDinleniyor = true;
+  window.addEventListener('bizim:uyelik', (e) => {
+    const d = e?.detail;
+    if (!d || !durdu.has(d.roomId) || !girisAcikMi(d)) return;
+    durdu.delete(d.roomId);
+    for (const fn of devam.get(d.roomId) || []) fn();
+  });
+}
+
+/** Yerel SIKI modda onaysız cihazın yerel veriye erişimi de reddedilir (sunucu gibi). */
+function yerelYetki(roomId) {
+  try {
+    yerelVeriYetkisi(roomId);
+  } catch (e) {
+    throw rpcError(e, roomId);
+  }
+}
+
 // ---------- Arka uç: yerel ----------
 
 const localKey = (roomId, kind) => `bizim.yerelveri.${roomId}.${kind}`;
@@ -137,6 +189,7 @@ function localNow() {
 
 const localBackend = {
   async put(roomId, kind, id, data, author, deleted) {
+    yerelYetki(roomId);
     const all = localRead(roomId, kind);
     const now = localNow();
     const prev = all[id];
@@ -149,11 +202,13 @@ const localBackend = {
     return doc;
   },
   async patch(roomId, kind, id, patch, author) {
+    yerelYetki(roomId);
     const prev = localRead(roomId, kind)[id];
     const base = prev && !prev.deleted ? prev.data : {};
     return localBackend.put(roomId, kind, id, applyPatch(base, patch), author, false);
   },
   async list(roomId, kind, since, limit) {
+    yerelYetki(roomId);
     const s = since ? timeOf(since) : -1;
     return Object.values(localRead(roomId, kind))
       .filter((d) => timeOf(d.updated_at) > s)
@@ -161,17 +216,39 @@ const localBackend = {
       .slice(0, limit);
   },
   async page(roomId, kind, before, limit) {
+    yerelYetki(roomId);
     const b = before ? timeOf(before) : Infinity;
     return Object.values(localRead(roomId, kind))
       .filter((d) => !d.deleted && timeOf(d.created_at) < b)
       .sort((x, y) => timeOf(y.created_at) - timeOf(x.created_at))
       .slice(0, limit);
   },
+  async iceAktar(roomId, belgeler) {
+    yerelYetki(roomId);
+    const turler = new Map();
+    for (const b of belgeler) {
+      if (!turler.has(b.kind)) turler.set(b.kind, []);
+      turler.get(b.kind).push(b);
+    }
+    let n = 0;
+    for (const [kind, list] of turler) {
+      const all = localRead(roomId, kind);
+      n += iceAktarBirlestir(all, list, localNow());
+      writeStore('local', localKey(roomId, kind), JSON.stringify(all));
+    }
+    return n;
+  },
 };
 
 // ---------- Arka uç: Supabase ----------
 
-function rpcError(error) {
+function rpcError(error, roomId) {
+  if (yetkiHatasiMi(error)) {
+    durdu.add(roomId);
+    yetkiKaybedildi(roomId);
+    return Object.assign(new Error(YETKI_MESAJ), { yetki: true, code: '42501' });
+  }
+  if (error?.code === 'PGRST202') return new Error('Sunucu bu işlemi henüz desteklemiyor.');
   const msg = String(error?.message || error || '');
   if (/cok fazla/.test(msg)) return new Error('Çok hızlı kaydediyorsunuz. Biraz sonra tekrar deneyin.');
   if (/cok buyuk/.test(msg)) return new Error('Bu kayıt çok uzun.');
@@ -184,29 +261,40 @@ const supabaseBackend = {
     const client = await getSupabase();
     const { data: rows, error } = await client.rpc('doc_put', {
       p_room: roomId, p_kind: kind, p_id: id, p_data: deleted ? {} : data, p_author: author, p_deleted: !!deleted,
+      ...kimlik(roomId),
     });
-    if (error) throw rpcError(error);
+    if (error) throw rpcError(error, roomId);
     return (Array.isArray(rows) ? rows[0] : rows) || null;
   },
   async patch(roomId, kind, id, patch, author) {
     const client = await getSupabase();
     const { data: rows, error } = await client.rpc('doc_patch', {
-      p_room: roomId, p_kind: kind, p_id: id, p_patch: patch, p_author: author,
+      p_room: roomId, p_kind: kind, p_id: id, p_patch: patch, p_author: author, ...kimlik(roomId),
     });
-    if (error) throw rpcError(error);
+    if (error) throw rpcError(error, roomId);
     return (Array.isArray(rows) ? rows[0] : rows) || null;
   },
   async list(roomId, kind, since, limit) {
     const client = await getSupabase();
-    const { data, error } = await client.rpc('doc_list', { p_room: roomId, p_kind: kind, p_since: since, p_limit: limit });
-    if (error) throw rpcError(error);
+    const { data, error } = await client.rpc('doc_list', {
+      p_room: roomId, p_kind: kind, p_since: since, p_limit: limit, ...kimlik(roomId),
+    });
+    if (error) throw rpcError(error, roomId);
     return data || [];
   },
   async page(roomId, kind, before, limit) {
     const client = await getSupabase();
-    const { data, error } = await client.rpc('doc_page', { p_room: roomId, p_kind: kind, p_before: before, p_limit: limit });
-    if (error) throw rpcError(error);
+    const { data, error } = await client.rpc('doc_page', {
+      p_room: roomId, p_kind: kind, p_before: before, p_limit: limit, ...kimlik(roomId),
+    });
+    if (error) throw rpcError(error, roomId);
     return data || [];
+  },
+  async iceAktar(roomId, belgeler) {
+    const client = await getSupabase();
+    const { data, error } = await client.rpc('doc_ice_aktar', { p_room: roomId, p_belgeler: belgeler, ...kimlik(roomId) });
+    if (error) throw rpcError(error, roomId);
+    return Number(data) || 0;
   },
 };
 
@@ -255,6 +343,22 @@ export async function listDocs(roomId, kind, { since = null } = {}) {
     cursor = rows[rows.length - 1].updated_at;
   }
   return out;
+}
+
+/**
+ * Yedekten geri yükleme: en çok 200 belge { kind, id, data, author?, deleted?, created_at?, updated_at? }.
+ * Var olan belge silinmez; yalnız yedekteki daha yeni kopya üstüne yazılır. -> yazılan sayısı
+ */
+export async function iceAktar(roomId, belgeler) {
+  if (!roomId) throw new Error('Oda yok.');
+  if (!Array.isArray(belgeler) || belgeler.length > 200) throw new Error('Tek seferde en çok 200 kayıt.');
+  for (const b of belgeler) {
+    checkArgs(roomId, b?.kind, b?.id);
+    const bad = b.deleted ? null : checkData(b.data);
+    if (bad) throw new Error(bad);
+  }
+  if (!belgeler.length) return 0;
+  return backend().iceAktar(roomId, belgeler);
 }
 
 /** Silinmemiş belgeler, yeniden eskiye; 'before' (created_at) öncesi. */
@@ -361,7 +465,7 @@ export async function openCollection(room, kind, { recent = 0 } = {}) {
 
   let flushing = false;
   async function flush() {
-    if (flushing || closed) return;
+    if (flushing || closed || durdu.has(roomId)) return;
     flushing = true;
     try {
       for (const op of outbox().filter((o) => o.kind === kind && o.n)) {
@@ -393,6 +497,7 @@ export async function openCollection(room, kind, { recent = 0 } = {}) {
     changed();
     const rest = op.patch ? outbox() : outbox().filter((o) => !(o.kind === kind && o.id === op.id));
     setOutbox([...rest, op]);
+    if (durdu.has(roomId)) return op.id; // yetki yok: giden kutusunda bekler
     try {
       await send(op);
       dropOp(op);
@@ -412,7 +517,7 @@ export async function openCollection(room, kind, { recent = 0 } = {}) {
   const newOp = (id, extra) => ({ n: uuid(), kind, id, at: new Date().toISOString(), ...extra });
 
   async function refresh() {
-    if (closed) return;
+    if (closed || durdu.has(roomId)) return;
     try {
       const docs = await listDocs(roomId, kind, { since: overlapSince(since) });
       since = maxUpdated(docs, since);
@@ -437,7 +542,9 @@ export async function openCollection(room, kind, { recent = 0 } = {}) {
 
   // İlk yükleme. Önbellek varsa hemen döner, sunucudan tazeleme arkada sürer (değişince 'change' gelir).
   try {
-    if (recent > 0 && !since) {
+    if (durdu.has(roomId)) {
+      // yetki yok: yalnız önbellek
+    } else if (recent > 0 && !since) {
       const docs = await pageDocs(roomId, kind, { limit: recent });
       if (docs.length < recent) older = false;
       mergeDocs(map, docs);
@@ -462,6 +569,9 @@ export async function openCollection(room, kind, { recent = 0 } = {}) {
   });
   // Bağlantı geri gelince ve sekme öne gelince eksikleri çek.
   const quiet = () => { refresh().catch(() => {}); flush(); };
+  uyelikDinle();
+  if (!devam.has(roomId)) devam.set(roomId, new Set());
+  devam.get(roomId).add(quiet);
   const offStatus = room.on?.('status', (st) => { if (st === 'online') quiet(); });
   const onVisible = () => { if (document.visibilityState === 'visible') quiet(); };
   if (typeof document !== 'undefined') document.addEventListener('visibilitychange', onVisible);
@@ -491,6 +601,7 @@ export async function openCollection(room, kind, { recent = 0 } = {}) {
     close() {
       closed = true;
       offMsg?.(); offStatus?.();
+      devam.get(roomId)?.delete(quiet);
       if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', onVisible);
       if (typeof window !== 'undefined') window.removeEventListener('online', quiet);
       clearInterval(poll); clearInterval(retry);

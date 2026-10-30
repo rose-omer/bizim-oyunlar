@@ -303,8 +303,13 @@ function loadLibrary() {
   return libPromise;
 }
 
-/** Tek Supabase istemcisi (storage.js ve db.js de kullanır). */
+let testIstemci = null;
+/** Test: sahte Supabase istemcisi (async () => client). null → gerçek istemci. */
+export function _testSupabase(fn) { testIstemci = fn; }
+
+/** Tek Supabase istemcisi (storage.js, db.js, veri.js, uyelik.js de kullanır). */
 export function getSupabase() {
+  if (testIstemci) return testIstemci();
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
     return Promise.reject(new Error('Supabase ayarı yok (js/config.js).'));
   }

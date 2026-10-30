@@ -1,7 +1,9 @@
 // Oyun kaydı ve istatistik. Oda kimliği = çift kimliği.
 // Supabase: RPC (supabase/schema.sql). Yerel mod: localStorage 'bizim.log.<oda>'.
+// Cihaz üyeliği: RPC'lere kimlik eklenir; 42501 → yetkiKaybedildi (kapı ekranı).
 import { isLocalMode, readStore, writeStore } from './identity.js';
 import { getSupabase } from './room.js';
+import { kimlik, yetkiKaybedildi, yetkiHatasiMi } from './uyelik.js';
 
 const LOG_MAX = 500;
 const logKey = (roomId) => 'bizim.log.' + roomId;
@@ -39,8 +41,11 @@ export async function logGame(roomId, gameId, result) {
       return;
     }
     const client = await getSupabase();
-    const { error } = await client.rpc('log_game', { p_room: roomId, p_game: gameId, p_result: result ?? null });
-    if (error) console.warn('[db] logGame:', error.message || error);
+    const { error } = await client.rpc('log_game', { p_room: roomId, p_game: gameId, p_result: result ?? null, ...kimlik(roomId) });
+    if (error) {
+      if (yetkiHatasiMi(error)) yetkiKaybedildi(roomId);
+      console.warn('[db] logGame:', error.message || error);
+    }
   } catch (e) {
     console.warn('[db] logGame:', e?.message || e);
   }
@@ -52,8 +57,11 @@ export async function roomStats(roomId) {
   if (isLocalMode()) return aggregateLog(readLog(roomId));
   try {
     const client = await getSupabase();
-    const { data, error } = await client.rpc('room_stats', { p_room: roomId });
-    if (error) throw error;
+    const { data, error } = await client.rpc('room_stats', { p_room: roomId, ...kimlik(roomId) });
+    if (error) {
+      if (yetkiHatasiMi(error)) yetkiKaybedildi(roomId);
+      throw error;
+    }
     return (data || []).map((r) => ({ game: String(r.game), played: Number(r.played) || 0, last_at: r.last_at }));
   } catch (e) {
     console.warn('[db] roomStats:', e?.message || e);

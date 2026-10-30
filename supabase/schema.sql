@@ -8,7 +8,7 @@
 --   1. game_log tablosu (RLS açık, politika yok: doğrudan erişim kapalı)
 --   2. RPC: log_game, room_stats, ping (security definer; anon çağırabilir)
 --   3. Depolama: herkese açık 'photos' kovası; anon yalnız yükleyebilir (listeleme yok)
---   4. Çift verisi: room_doc tablosu + RPC doc_put, doc_list, doc_page (js/core/veri.js)
+--   4. Çift verisi: room_doc tablosu + RPC doc_put, doc_patch, doc_list, doc_page (js/core/veri.js)
 --   5. Anlık bildirim: push_sub + RPC push_kaydet, push_sil (Edge Function'lar için sunucu RPC'leri)
 --   6. Zamanlanmış hatırlatmalar: pg_cron + pg_net → functions/hatirlat
 
@@ -246,6 +246,107 @@ revoke execute on function public.doc_page(text, text, timestamptz, integer) fro
 grant execute on function public.doc_put(text, text, text, jsonb, text, boolean) to anon, authenticated;
 grant execute on function public.doc_list(text, text, timestamptz, integer) to anon, authenticated;
 grant execute on function public.doc_page(text, text, timestamptz, integer) to anon, authenticated;
+
+-- Alan düzeyinde birleştirme: iki kişi aynı belgeye aynı anda farklı alan yazınca biri kaybolmasın.
+-- p_patch üst düzey anahtarları tek tek yazar; 'ana.alt' iç içe tek alanı yazar; değer null ise alanı siler.
+-- Satır kilitlenir (for update): eşzamanlı birleştirmeler sırayla uygulanır. Belge yoksa {} üstüne kurulur.
+create or replace function public.doc_patch(
+  p_room text, p_kind text, p_id text, p_patch jsonb, p_author text)
+returns table (id text, data jsonb, author text, deleted boolean, created_at timestamptz, updated_at timestamptz)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+#variable_conflict use_column
+declare
+  v_hour timestamptz := pg_catalog.date_trunc('hour', pg_catalog.now());
+  v_n integer;
+  v_all integer;
+  v_cur jsonb;
+  v_del boolean;
+  v_key text;
+  v_val jsonb;
+  v_path text[];
+begin
+  if p_room is null or p_room !~ '^[a-z2-9]{10}$' then
+    raise exception 'doc_patch: gecersiz oda' using errcode = '22023';
+  end if;
+  if p_kind is null or p_kind !~ '^[a-z]{2,20}$' then
+    raise exception 'doc_patch: gecersiz tur' using errcode = '22023';
+  end if;
+  if p_id is null or p_id !~ '^[A-Za-z0-9_-]{1,64}$' then
+    raise exception 'doc_patch: gecersiz id' using errcode = '22023';
+  end if;
+  if p_author is not null and p_author !~ '^[A-Za-z0-9_-]{1,64}$' then
+    raise exception 'doc_patch: gecersiz yazar' using errcode = '22023';
+  end if;
+  if p_patch is null or pg_catalog.jsonb_typeof(p_patch) <> 'object' then
+    raise exception 'doc_patch: gecersiz veri' using errcode = '22023';
+  end if;
+  if pg_catalog.octet_length(p_patch::text) > 32768 then
+    raise exception 'doc_patch: veri cok buyuk' using errcode = '22023';
+  end if;
+
+  insert into public.room_rate as r (room, bucket, n) values (p_room, v_hour, 1)
+    on conflict (room, bucket) do update set n = r.n + 1
+    returning r.n into v_n;
+  if v_n > 2000 then
+    raise exception 'doc_patch: cok fazla yazma' using errcode = '54000';
+  end if;
+  insert into public.room_rate as r (room, bucket, n) values ('*', v_hour, 1)
+    on conflict (room, bucket) do update set n = r.n + 1
+    returning r.n into v_all;
+  if v_all > 50000 then
+    raise exception 'doc_patch: cok fazla yazma' using errcode = '54000';
+  end if;
+
+  select d.data, d.deleted into v_cur, v_del
+  from public.room_doc as d
+  where d.room = p_room and d.kind = p_kind and d.id = p_id
+  for update;
+  if v_cur is null or coalesce(v_del, false) then
+    v_cur := '{}'::jsonb;
+  end if;
+
+  for v_key, v_val in select e.key, e.value from pg_catalog.jsonb_each(p_patch) as e loop
+    v_path := pg_catalog.string_to_array(v_key, '.');
+    if pg_catalog.array_length(v_path, 1) > 2 or v_key = '' or v_key like '%..%' or v_key like '.%' or v_key like '%.' then
+      raise exception 'doc_patch: gecersiz alan' using errcode = '22023';
+    end if;
+    if pg_catalog.array_length(v_path, 1) = 2 then
+      if pg_catalog.jsonb_typeof(v_cur -> v_path[1]) is distinct from 'object' then
+        v_cur := v_cur || pg_catalog.jsonb_build_object(v_path[1], '{}'::jsonb);
+      end if;
+      if v_val = 'null'::jsonb then
+        v_cur := v_cur #- v_path;
+      else
+        v_cur := pg_catalog.jsonb_set(v_cur, v_path, v_val, true);
+      end if;
+    elsif v_val = 'null'::jsonb then
+      v_cur := v_cur - v_key;
+    else
+      v_cur := v_cur || pg_catalog.jsonb_build_object(v_key, v_val);
+    end if;
+  end loop;
+
+  if pg_catalog.octet_length(v_cur::text) > 32768 then
+    raise exception 'doc_patch: veri cok buyuk' using errcode = '22023';
+  end if;
+
+  return query
+  insert into public.room_doc as d (room, kind, id, data, author, deleted, created_at, updated_at)
+  values (p_room, p_kind, p_id, v_cur, p_author, false, pg_catalog.now(), pg_catalog.clock_timestamp())
+  on conflict (room, kind, id) do update
+    set data = excluded.data,
+        author = excluded.author,
+        deleted = false,
+        updated_at = pg_catalog.clock_timestamp()
+  returning d.id, d.data, d.author, d.deleted, d.created_at, d.updated_at;
+end;
+$$;
+
+revoke execute on function public.doc_patch(text, text, text, jsonb, text) from public;
+grant execute on function public.doc_patch(text, text, text, jsonb, text) to anon, authenticated;
 
 -- PostgREST şema önbelleğini tazele (yeni fonksiyonlar hemen görünsün).
 notify pgrst, 'reload schema';

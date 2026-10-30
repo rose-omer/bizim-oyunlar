@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import {
   pinHatasi, kayitCoz, denemeCoz, yanlisSay, beklemeKalan, kalanHak, oturumGecerli,
-  unutulacakAnahtarlar, sha256Saf, ozetle, pinDogrula, kilitAyarla, kilitVarMi, hexYap, cihazdanUnut,
+  unutulacakAnahtarlar, sha256Saf, ozetle, pinDogrula, kilitAyarla, kilitVarMi, hexYap, cihazdanUnut, pinUnutuldu,
   MAX_YANLIS, BEKLEME_MS, ARKA_PLAN_MS, BILDIRIM_BEKLE_MS, K_PIN,
 } from '../js/core/kilit.js';
 import { readStore, writeStore, setRoom, currentRoom } from '../js/core/identity.js';
@@ -177,4 +177,45 @@ test('kilitAyarla / kilitVarMi / pinDogrula uçtan uca', async () => {
   assert.notEqual(kayitCoz(readStore('local', K_PIN)).ozet, kayit.ozet);
   await kilitAyarla(null);
   assert.equal(kilitVarMi(), false);
+});
+
+test("pinUnutuldu: önce bu cihazın oda kaydı silinir (yerel sıkı), sonra oda unutulur ve PIN silinir", async () => {
+  await unutOrtami(null, async () => {
+    writeStore('session', 'bizim.yerel.uyelik', '1');
+    writeStore('session', 'bizim.client', 'pinli-cihaz');
+    try {
+      const { odaGiris } = await import('../js/core/uyelik.js');
+      setRoom(ODA);
+      assert.equal((await odaGiris(ODA)).durum, 'onayli');
+      await kilitAyarla('2468');
+      await pinUnutuldu(ODA);
+      const st = JSON.parse(readStore('local', `bizim.yerelveri.${ODA}._uyelik`));
+      assert.equal(st.cihazlar['pinli-cihaz'], undefined, 'geri dönünce çakışma olmasın diye kayıt silinir');
+      assert.equal(currentRoom(), null);
+      assert.equal(kilitVarMi(), false);
+    } finally {
+      writeStore('session', 'bizim.yerel.uyelik', null);
+      writeStore('session', 'bizim.client', null);
+    }
+  });
+});
+
+test('pinUnutuldu: kayıt silinemezse (çevrimdışı) de oda unutulur ve PIN silinir', async () => {
+  const { _testSupabase } = await import('../js/core/room.js');
+  _testSupabase(async () => { throw new TypeError('Failed to fetch'); });
+  const uyari = console.warn;
+  console.warn = () => {};
+  try {
+    await unutOrtami(null, async () => {
+      writeStore('session', 'bizim.yerel', null); // sunucu modu
+      setRoom(ODA);
+      await kilitAyarla('2468');
+      await pinUnutuldu(ODA);
+      assert.equal(currentRoom(), null);
+      assert.equal(kilitVarMi(), false);
+    });
+  } finally {
+    console.warn = uyari;
+    _testSupabase(null);
+  }
 });

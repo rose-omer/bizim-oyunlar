@@ -29,9 +29,8 @@ const ICERIK = {
   },
   cakisma: {
     baslik: 'Bu cihaz tanınmadı',
-    metin: 'Bu cihaz başka bir anahtarla kayıtlı. Odadan çıkıp davet linkiyle yeniden katıl.',
-    not: "Olmazsa sevgilin Ayarlar › Cihazlar'dan bu cihazın eski kaydını çıkarsın.",
-    eylemler: ['cik'],
+    metin: "Bu cihaz başka bir anahtarla kayıtlı. Kurtarma kodun varsa gir; yoksa sevgilin Ayarlar › Cihazlar'dan bu cihazın eski kaydını çıkarsın.",
+    eylemler: ['kurtarma', 'cik'], // kurtarma kodu çakışmayı çözer (davet çözmez)
     yokla: YOKLA_MS, // eski kayıt çıkarılınca 'yok' olur
   },
   yok: {
@@ -136,7 +135,7 @@ async function yenidenDene(roomId, ek = {}) {
     yenile(roomId);
     return s;
   }
-  if (!ek.kurtarma || s.durum !== 'bekliyor') kapiGoster(roomId, s);
+  kapiGoster(roomId, s); // durum aynıysa ekran (ve formdaki hata) olduğu gibi kalır
   return s;
 }
 

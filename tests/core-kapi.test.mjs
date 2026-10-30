@@ -13,8 +13,9 @@ test('kapiIcerigi: her durumun metni, eylemleri ve yoklama aralığı', () => {
 
   assert.equal(kapiIcerigi('reddedildi').metin, 'Bu cihazın katılma isteği reddedildi.');
   assert.deepEqual(kapiIcerigi('reddedildi').eylemler, ['cik']);
-  assert.equal(kapiIcerigi('cakisma').metin, 'Bu cihaz başka bir anahtarla kayıtlı. Odadan çıkıp davet linkiyle yeniden katıl.');
-  assert.deepEqual(kapiIcerigi('cakisma').eylemler, ['cik']);
+  assert.equal(kapiIcerigi('cakisma').metin, "Bu cihaz başka bir anahtarla kayıtlı. Kurtarma kodun varsa gir; yoksa sevgilin Ayarlar\u00a0›\u00a0Cihazlar'dan bu cihazın eski kaydını çıkarsın.");
+  assert.deepEqual(kapiIcerigi('cakisma').eylemler, ['kurtarma', 'cik']);
+  assert.equal(kapiIcerigi('cakisma').not, undefined);
   assert.equal(kapiIcerigi('yok').metin, 'Bu cihaz odadan çıkarıldı.');
   assert.deepEqual(kapiIcerigi('yok').eylemler, ['yeniden', 'cik']);
   assert.equal(kapiIcerigi('yok').yokla, 0);

@@ -1,11 +1,13 @@
 // Dört Taş (+ XOX) sayfası. Ev sahibi durumu tutar (oyun.js), misafir niyet yollar ve
 // hamlesini yerelde tahmin ederek hemen gösterir (ev sahibi onaylamazsa 3 sn sonra geri alır).
-import { joinRoom } from '../../js/core/room.js';
+import { joinRoom, partnerGoruyor } from '../../js/core/room.js';
 import { readGameParams, lobbyUrl } from '../../js/core/identity.js';
 import { mountShell, waitForPartner, celebrate, confirmDialog } from '../../js/core/ui.js';
 import { sfx } from '../../js/core/sound.js';
 import { logGame } from '../../js/core/db.js';
 import { skorKaydet, toplamSatiri } from '../../js/core/skor.js';
+import { bildir } from '../../js/core/bildirim.js';
+import { siraPartnere } from '../dama/kayit.js';
 import { createSync, sessionStore } from '../hafiza/sync.js';
 import { fitToViewport, esc } from '../hafiza/ekran.js';
 import { MODLAR, initialState, reduce, toAction, resultOf, yeniTaslar, inecegiSatir } from './oyun.js';
@@ -71,7 +73,7 @@ const sync = createSync({
   storage: sessionStore(),
   storeKey: `bizim.dorttas.${roomId || '-'}`,
   accept: (s) => s.v === 1 && s.players?.join() === players.join(),
-  onState: (s) => draw(s),
+  onState: (s, prev) => { draw(s); siraBildir(s, prev); },
   onPeer: (here) => {
     clearTimeout(awayTimer);
     if (here) away.classList.add('hidden');
@@ -90,6 +92,17 @@ fitToViewport(root, layout);
 if ('ResizeObserver' in window) new ResizeObserver(() => layout()).observe(root);
 sync.start();
 if (isHost) room.on('presence', (p) => { if (p) fillSeat(p); });
+
+// "Sıra sende" bildirimi (dama/masa.js kalıbı): sırayı devreden cihaz yollar; partner bu oyunda ve
+// uygulaması öndeyse yollanmaz.
+function siraBildir(s, prev) {
+  const holder = (x) => (x?.faz === 'oyun' ? x.players[x.sira] : null);
+  if (!prev || !roomId || !siraPartnere(holder(prev), holder(s), me) || partnerGoruyor(room.partner(), NS)) return;
+  const oyun = MODLAR[s.mod].ad;
+  const yeni = prev.oyun !== s.oyun || prev.mod !== s.mod;
+  const metin = yeni ? `${oyun}: yeni oyun · ilk hamle senin` : `${oyun}: ${room.me.name || 'Sevgilin'} hamlesini yaptı`;
+  bildir(roomId, { tur: 'oyun', baslik: 'Sıra sende', metin, url: `games/${NS}/?oda=${roomId}&host=${isHost ? me : hostId}` });
+}
 
 // ---------- yardımcılar ----------
 function myIdx(s) { return s.players.indexOf(me); }

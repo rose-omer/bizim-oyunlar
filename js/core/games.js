@@ -104,6 +104,22 @@ export const GAMES = [
     players: '2',
     minutes: '10–20 dk',
   },
+  {
+    id: 'satranc',
+    title: 'Satranç',
+    emoji: '♟️',
+    desc: 'Tam kurallı satranç. Sırayla oynayın, istediğiniz zaman kaldığınız yerden devam edin.',
+    players: '2',
+    minutes: '15–60 dk',
+  },
+  {
+    id: 'pisti',
+    title: 'Pişti',
+    emoji: '♠️',
+    desc: 'Klasik iskambil. Aynı kartla ya da valeyle topla, pişti yap; 151 olan kazanır.',
+    players: '2',
+    minutes: '10–30 dk',
+  },
 ];
 
 export function gameById(id) {

@@ -1,0 +1,295 @@
+/* Satranç. Renkler yalnız base.css değişkenlerinden. Yerleşim Dama ile aynı aile. */
+
+.sc {
+  --sc-light: color-mix(in srgb, var(--tint-3) 55%, var(--surface));
+  --sc-dark: color-mix(in srgb, var(--tint-3) 80%, var(--plum) 20%);
+  --sc-edge: color-mix(in srgb, var(--tint-3) 55%, var(--text) 18%);
+  position: relative;
+  display: grid;
+  grid-template-rows: auto auto auto auto;
+  align-content: safe center;
+  grid-template-areas: "opp" "stage" "me" "foot";
+  gap: 8px;
+  width: 100%;
+  max-width: 620px;
+  margin: 0 auto;
+  padding: 8px 12px calc(10px + var(--safe-bottom, 0px));
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+/* Oyuncu şeridi */
+.sc-plate {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 4px 8px 4px 6px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  outline: 2px solid transparent;
+  outline-offset: -2px;
+  transition: background-color .2s ease, outline-color .2s ease;
+}
+.sc-plate.is-opp { grid-area: opp; }
+.sc-plate.is-me { grid-area: me; }
+.sc-plate.is-turn { background: var(--accent-soft); outline-color: var(--accent); }
+.sc-plate:empty { visibility: hidden; }
+.sc-swatch {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+.sc-swatch .sc-piece { width: 30px; height: 30px; }
+.sc-who {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+.sc-name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-weight: 800;
+}
+.sc-caps {
+  display: flex;
+  align-items: center;
+  min-height: 18px;
+  overflow: hidden;
+}
+.sc-cap { flex: none; width: 18px; height: 18px; margin-right: -6px; }
+.sc-cap .sc-piece { width: 18px; height: 18px; }
+.sc-adv {
+  margin-left: 10px;
+  font-size: .8125rem;
+  font-weight: 800;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.sc-wins {
+  flex: none;
+  min-width: 34px;
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  font-family: var(--font-display);
+  font-weight: 600;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Taşlar: beyaz krem, siyah koyu erik; iki temada da aynı */
+.sc-piece { display: block; overflow: visible; }
+.sc-piece .g { fill: var(--pf); stroke: var(--ps); stroke-width: 1.5; stroke-linejoin: round; }
+.sc-piece .d { fill: none; stroke: var(--pd); stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round; }
+.sc-piece .e { fill: var(--pd); }
+.sc-piece.beyaz { --pf: var(--hero-ink); --ps: var(--hero); --pd: var(--hero); }
+.sc-piece.siyah {
+  --pf: var(--hero);
+  --ps: color-mix(in srgb, var(--hero) 70%, var(--rk-ink-dk));
+  --pd: color-mix(in srgb, var(--hero-ink) 80%, transparent);
+}
+
+/* Koyu tema: tahta orta tonda kalır, siyah taşlara açık kontur (iki seçicide de aynı) */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-mod="acik"]) .sc {
+    --sc-light: color-mix(in srgb, var(--hero-muted) 62%, var(--surface));
+    --sc-dark: color-mix(in srgb, var(--hero-muted) 40%, var(--surface));
+    --sc-edge: color-mix(in srgb, var(--hero-muted) 22%, var(--surface));
+  }
+  :root:not([data-mod="acik"]) .sc-piece.siyah { --ps: color-mix(in srgb, var(--hero-ink) 60%, var(--hero)); }
+}
+:root[data-mod="koyu"] .sc {
+  --sc-light: color-mix(in srgb, var(--hero-muted) 62%, var(--surface));
+  --sc-dark: color-mix(in srgb, var(--hero-muted) 40%, var(--surface));
+  --sc-edge: color-mix(in srgb, var(--hero-muted) 22%, var(--surface));
+}
+:root[data-mod="koyu"] .sc-piece.siyah { --ps: color-mix(in srgb, var(--hero-ink) 60%, var(--hero)); }
+
+/* Tahta */
+.sc-stage {
+  grid-area: stage;
+  position: relative;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+}
+.sc-board {
+  --sc-cell: 44px;
+  display: grid;
+  grid-template-columns: repeat(8, var(--sc-cell));
+  grid-template-rows: repeat(8, var(--sc-cell));
+  padding: 5px;
+  border-radius: calc(var(--radius) + 2px);
+  background: var(--sc-edge);
+  box-shadow: var(--shadow-lg);
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  outline: 3px solid transparent;
+  outline-offset: 3px;
+  transition: outline-color .25s ease;
+}
+.sc-board.is-mine { outline-color: color-mix(in srgb, var(--accent) 55%, transparent); }
+.sc-board.is-loading { opacity: .35; }
+
+.sc-sq {
+  position: relative;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: var(--sc-light);
+  color: inherit;
+  font: inherit;
+  cursor: default;
+  -webkit-tap-highlight-color: transparent;
+}
+.sc-sq.alt { background: var(--sc-dark); }
+.sc-sq:nth-child(1) { border-top-left-radius: var(--radius); }
+.sc-sq:nth-child(8) { border-top-right-radius: var(--radius); }
+.sc-sq:nth-child(57) { border-bottom-left-radius: var(--radius); }
+.sc-sq:nth-child(64) { border-bottom-right-radius: var(--radius); }
+.sc-sq:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; z-index: 2; }
+.sc-sq::before { content: ''; position: absolute; inset: 0; pointer-events: none; border-radius: inherit; }
+.sc-board.is-mine .sc-sq.is-can,
+.sc-board.is-mine .sc-sq.is-target,
+.sc-board.is-mine .sc-sq.is-sel { cursor: pointer; }
+
+.sc-sq.is-last::before { background: color-mix(in srgb, var(--plum) 24%, transparent); }
+.sc-sq.is-sel::before { background: color-mix(in srgb, var(--accent) 34%, transparent); }
+.sc-sq.is-check::before {
+  background: radial-gradient(circle, color-mix(in srgb, var(--bad) 75%, transparent) 0 30%, color-mix(in srgb, var(--bad) 30%, transparent) 62%, transparent 76%);
+}
+
+/* Olası hamleler: boş kareye nokta, taşlı kareye halka */
+.sc-mark { position: absolute; pointer-events: none; z-index: 2; }
+.sc-sq.is-target .sc-mark {
+  width: 30%;
+  height: 30%;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 70%, transparent);
+  animation: sc-pop .16s var(--ease) both;
+}
+.sc-sq.is-take .sc-mark {
+  width: 88%;
+  height: 88%;
+  background: none;
+  border: 3.5px solid color-mix(in srgb, var(--accent) 80%, transparent);
+}
+
+.sc-pc {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 90%;
+  height: 90%;
+  pointer-events: none;
+  transition: transform .16s var(--ease);
+}
+.sc-pc:empty { display: none; }
+.sc-pc .sc-piece { width: 100%; height: 100%; filter: drop-shadow(0 1.5px 1.2px color-mix(in srgb, var(--rk-ink-dk) 35%, transparent)); }
+.sc-sq.is-sel .sc-pc { transform: translateY(-3px) scale(1.06); }
+
+.sc-coord {
+  position: absolute;
+  left: 3px;
+  bottom: 1px;
+  z-index: 3;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1;
+  color: color-mix(in srgb, var(--text) 50%, transparent);
+  pointer-events: none;
+}
+
+/* Alt bölüm */
+.sc-foot {
+  grid-area: foot;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-height: 92px;
+}
+.sc-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px 10px;
+  min-height: 36px;
+  padding: 4px 14px;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-display);
+  font-variation-settings: 'SOFT' 100;
+  font-size: 1.05rem;
+  font-weight: 600;
+  text-align: center;
+  color: var(--muted);
+}
+.sc-status.is-turn { color: var(--accent-strong); }
+.sc-status.is-alert { background: var(--accent-soft); color: var(--accent-strong); }
+.sc-ask { display: inline-flex; gap: 6px; font-family: var(--font-body); }
+.sc-tools { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.sc-tools .btn:disabled { opacity: .5; cursor: not-allowed; }
+
+.sc-cover { position: absolute; inset: 0; }
+
+/* Terfi seçimi */
+.sc-promo {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+.sc-promo-btn {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  min-height: 76px;
+  padding: 8px 4px;
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  font-weight: 800;
+  font-size: .875rem;
+}
+.sc-promo-btn:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.sc-promo-pc { width: 42px; height: 42px; }
+.sc-promo-pc .sc-piece { width: 100%; height: 100%; }
+@media (hover: hover) {
+  .sc-promo-btn:hover { border-color: var(--accent); background: var(--accent-soft); }
+}
+
+@keyframes sc-pop {
+  from { transform: scale(.4); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+/* Yatay telefon: tahta solda, bilgiler sağda */
+@media (orientation: landscape) and (max-height: 560px) {
+  .sc {
+    max-width: 900px;
+    grid-template-columns: minmax(0, 1fr) minmax(200px, 290px);
+    grid-template-rows: auto auto minmax(0, 1fr);
+    align-content: stretch;
+    grid-template-areas: "stage opp" "stage me" "stage foot";
+  }
+  .sc-foot { justify-content: flex-start; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sc-sq.is-target .sc-mark { animation: none; }
+  .sc-pc { transition: none; }
+}

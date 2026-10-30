@@ -12,6 +12,8 @@ import { fotoYukle, fotoImg } from '../../js/core/foto.js';
 import * as M from './mantik.js';
 import { ikon } from './ikon.js';
 import { galeri, tamEkranAc } from './galeri.js';
+import * as HM from './harita-mantik.js';
+import { haritaGorunumu, konumSec, bulundugumYer } from './harita.js';
 
 const { room, roomId, me } = await bootPage({ ns: 'anilar', title: 'Anılarımız', tab: 'anilar' });
 const app = document.getElementById('app');
@@ -20,7 +22,12 @@ const profil = await openProfil(room).catch(() => null);
 
 const GORUNUM_ANAHTARI = 'bizim.anilar.gorunum';
 const ROTA_ANAHTARLARI = ['id', 'yeni', 'duzenle', 'baslik', 'tarih'];
-const durum = { gorunum: oku(GORUNUM_ANAHTARI) === 'album' ? 'album' : 'cizelge', etiket: '', yil: '', ara: '' };
+const GORUNUMLER = ['cizelge', 'album', 'harita'];
+const durum = {
+  gorunum: GORUNUMLER.includes(oku(GORUNUM_ANAHTARI)) ? oku(GORUNUM_ANAHTARI) : 'cizelge',
+  etiket: '', yil: '', ara: '',
+  haritaOdak: null, // "Haritada gör": harita açılınca bu anıya odaklan
+};
 let aktif = null;
 let listeKaydirma = 0;
 
@@ -159,8 +166,9 @@ function listeGorunumu() {
     arac.hidden = bos;
     suzgec.hidden = bos;
     ozet.hidden = bos;
-    fab.hidden = bos;
-    seg.replaceChildren(segDugme('cizelge', 'Zaman çizelgesi', 'cizelge'), segDugme('album', 'Albüm', 'izgara'));
+    fab.hidden = bos || durum.gorunum === 'harita'; // haritada kayan düğme iğne kartını örterdi
+    // Üç görünüm 390 px'te tek satıra sığsın diye kısa ad: "Çizelge" (zaman çizelgesi).
+    seg.replaceChildren(segDugme('cizelge', 'Çizelge', 'cizelge'), segDugme('album', 'Albüm', 'izgara'), segDugme('harita', 'Harita', 'harita'));
     boyaSuzgec(hepsi);
     boyaSonuc();
     if (odak) app.querySelector(`[data-k="${CSS.escape(odak)}"]`)?.focus();
@@ -207,7 +215,9 @@ function listeGorunumu() {
     bugun.replaceChildren(...(bugunler.length ? [bugunKartlari(bugunler)] : []));
 
     const fotoSayisi = liste.reduce((n, d) => n + (d.data.fotolar?.length || 0), 0);
-    ozet.textContent = `${liste.length} anı · ${fotoSayisi} fotoğraf`;
+    ozet.textContent = durum.gorunum === 'harita'
+      ? `${liste.length} anı · ${HM.konumluAnilar(liste).length} tanesi haritada`
+      : `${liste.length} anı · ${fotoSayisi} fotoğraf`;
 
     if (!liste.length) {
       sonuc.replaceChildren(h('div', { class: 'ani-bos kucuk' },
@@ -215,11 +225,53 @@ function listeGorunumu() {
         h('button', { type: 'button', class: 'btn', onclick: () => { durum.etiket = ''; durum.yil = ''; durum.ara = ''; ara.value = ''; boya(); } }, 'Süzgeci temizle')));
       return;
     }
+    if (durum.gorunum === 'harita') {
+      haritaBoya(liste);
+      return;
+    }
+    haritaKapat();
     sonuc.replaceChildren(durum.gorunum === 'album' ? album(liste) : cizelge(liste));
   }
 
+  // Harita: Leaflet haritası yeniden çizimlerde korunur (süzgeç, canlı değişiklik); görünümden çıkınca kaldırılır.
+  let harita = null;
+  function haritaKapat() {
+    harita?.kapat();
+    harita = null;
+    removeEventListener('resize', haritaBoyu);
+  }
+  // Harita, sayfa en üstteyken sekme çubuğuna dek kalan yüksekliği doldurur (kart altta görünür kalsın).
+  function haritaBoyu() {
+    if (!harita) return;
+    addEventListener('resize', haritaBoyu); // aynı dinleyici bir kez eklenir
+    const ust = harita.el.getBoundingClientRect().top + scrollY;
+    const alt = document.getElementById('tabbar')?.getBoundingClientRect().height || 0;
+    const boy = Math.round(Math.min(640, Math.max(320, innerHeight - ust - alt - 16)));
+    harita.el.style.setProperty('--harita-h', `${boy}px`);
+    harita.yenile();
+  }
+  function haritaBoya(liste) {
+    if (!HM.konumluAnilar(liste).length) {
+      haritaKapat();
+      sonuc.replaceChildren(h('div', { class: 'ani-bos kucuk ani-harita-bos' },
+        ikon('harita'),
+        h('p', { class: 'ani-bos-baslik' }, 'Haritada henüz iğne yok.'),
+        h('p', { class: 'muted' }, 'Bir anıyı ekleyip ya da düzenleyip “Konum”dan yerini seç; burada iğne olur.'),
+        h('button', { type: 'button', class: 'btn primary', onclick: yeniAc }, ikon('arti'), 'Anı ekle')));
+      return;
+    }
+    if (!harita) harita = haritaGorunumu({ onAc: (id) => git({ id }) });
+    if (sonuc.firstChild !== harita.el || sonuc.childNodes.length !== 1) sonuc.replaceChildren(harita.el);
+    haritaBoyu();
+    harita.guncelle(liste);
+    if (durum.haritaOdak) {
+      harita.odakla(durum.haritaOdak);
+      durum.haritaOdak = null;
+    }
+  }
+
   boya();
-  return { guncelle: boya };
+  return { guncelle: boya, kapat: haritaKapat };
 }
 
 function bugunKartlari(items) {
@@ -342,6 +394,15 @@ function ayrintiGorunumu(id) {
     const meta = [
       h('li', {}, ikon('takvim'), M.gunYazi(data.tarih)),
       data.yer ? h('li', {}, ikon('konum'), data.yer) : null,
+      HM.konumDogrula(data.konum) ? h('li', {}, ikon('harita'), h('button', {
+        type: 'button', class: 'ani-meta-link',
+        onclick: () => {
+          Object.assign(durum, { gorunum: 'harita', haritaOdak: id, etiket: '', yil: '', ara: '' });
+          yaz(GORUNUM_ANAHTARI, 'harita');
+          listeKaydirma = 0;
+          git({});
+        },
+      }, 'Haritada gör')) : null,
     ];
     const etiketler = (data.etiketler || []).map((t) => h('li', {},
       h('button', {
@@ -408,6 +469,8 @@ function formGorunumu(id) {
   const st = {
     fotolar: [...(v.fotolar || [])],
     etiketler: [...(v.etiketler || [])],
+    konum: HM.konumDogrula(v.konum),
+    konumMesgul: false,
     yukleniyor: false,
     kirli: false,
   };
@@ -427,6 +490,71 @@ function formGorunumu(id) {
   tarih.girdi.value = v.tarih || prm.tarih;
   const yer = alan('Yer', h('input', { class: 'input', type: 'text', maxlength: String(M.MAX_YER), placeholder: 'Nerede?', autocomplete: 'off', enterkeyhint: 'next' }));
   yer.girdi.value = v.yer || '';
+
+  // Konum (isteğe bağlı): bulunduğum yer ya da haritada dokunarak seç. Harita (Leaflet) yalnız seçici açılınca yüklenir.
+  const konumIc = h('div', { class: 'ani-konum-ic' });
+  const konumMesaj = h('p', { class: 'ani-konum-mesaj', role: 'status', hidden: true });
+  const konumAlan = h('div', { class: 'ani-alan ani-konum', role: 'group', 'aria-labelledby': 'ani-konum-bas' },
+    h('span', { class: 'ani-form-etiket', id: 'ani-konum-bas' }, 'Konum', h('span', { class: 'ani-istege' }, 'isteğe bağlı')),
+    konumIc, konumMesaj,
+    h('p', { class: 'ani-ipucu' }, 'Konumlu anılar Harita görünümünde iğne olur.'));
+
+  function boyaKonum({ odak = false } = {}) {
+    if (st.konum) {
+      konumIc.replaceChildren(h('div', { class: 'ani-konum-secili' },
+        h('span', { class: 'ani-konum-rozet', 'aria-hidden': 'true' }, ikon('konum')),
+        h('span', { class: 'ani-konum-yazi' }, HM.konumYazi(st.konum)),
+        h('div', { class: 'ani-konum-eylem' },
+          h('button', { type: 'button', class: 'btn small', onclick: haritadanSec }, ikon('harita'), 'Haritada değiştir'),
+          h('button', {
+            type: 'button', class: 'btn small ghost danger',
+            onclick: () => { st.konum = null; st.kirli = true; konumMesaj.hidden = true; boyaKonum({ odak: true }); },
+          }, 'Kaldır'))));
+    } else {
+      konumIc.replaceChildren(h('div', { class: 'ani-konum-dugmeler' },
+        h('button', {
+          type: 'button', class: 'btn', onclick: buradayim,
+          disabled: st.konumMesgul, 'aria-busy': st.konumMesgul ? 'true' : null,
+        }, ikon('hedef'), st.konumMesgul ? 'Konum alınıyor…' : 'Bulunduğum yer'),
+        h('button', { type: 'button', class: 'btn', onclick: haritadanSec }, ikon('harita'), 'Haritadan seç')));
+    }
+    if (odak) konumIc.querySelector('button:not(:disabled)')?.focus();
+  }
+
+  async function buradayim() {
+    konumMesaj.hidden = true;
+    st.konumMesgul = true;
+    boyaKonum();
+    let tamam = false;
+    try {
+      const pos = await bulundugumYer();
+      const k = HM.konumDogrula(pos.coords);
+      if (!k) throw new Error('geçersiz');
+      st.konum = k;
+      st.kirli = true;
+      tamam = true;
+      sfx('snap');
+    } catch (e) {
+      konumMesaj.textContent = HM.konumHataMetni(e);
+      konumMesaj.hidden = false;
+    } finally {
+      st.konumMesgul = false;
+      boyaKonum({ odak: true });
+    }
+    if (tamam) toast('Konum eklendi');
+  }
+
+  async function haritadanSec() {
+    konumMesaj.hidden = true;
+    const digerleri = HM.konumluAnilar(col.all()).filter((n) => n.id !== id);
+    const k = await konumSec({ baslangic: st.konum, digerleri });
+    if (k) {
+      st.konum = k;
+      st.kirli = true;
+    }
+    boyaKonum({ odak: true });
+  }
+
   const notSayac = h('span', { class: 'ani-sayac', 'aria-live': 'polite' });
   const not = alan('Not', h('textarea', { class: 'input', rows: '4', maxlength: String(M.MAX_NOT), placeholder: 'O gün aklında kalan…' }), { ipucu: notSayac });
   not.girdi.value = v.not || '';
@@ -575,7 +703,7 @@ function formGorunumu(id) {
       h('div', { class: 'ani-form-fotolar-bas' }, h('span', { class: 'ani-form-etiket' }, 'Fotoğraflar'), fotoSayac),
       izgara, ilerleme, fotoHata,
       h('p', { class: 'ani-ipucu' }, 'İlk fotoğraf kapak olur. Fotoğrafları buraya sürükleyip bırakabilirsin.')),
-    baslik.el, tarih.el, yer.el, not.el, etiketAlan.el,
+    baslik.el, tarih.el, yer.el, konumAlan, not.el, etiketAlan.el,
     genelHata,
     h('div', { class: 'ani-form-eylem' }, vazgecBtn, kaydetBtn));
 
@@ -598,6 +726,7 @@ function formGorunumu(id) {
   app.replaceChildren(h('div', { class: 'ani-sayfa dar' }, form));
   boyaFotolar();
   boyaEtiketler();
+  boyaKonum();
   formBaslik.focus({ preventScroll: true });
 
   function alanHatasi(a, metin) {
@@ -615,7 +744,7 @@ function formGorunumu(id) {
     if (etiketGirdi.value.trim()) { etiketEkle(etiketGirdi.value); etiketGirdi.value = ''; }
     const girdi = {
       baslik: baslik.girdi.value, tarih: tarih.girdi.value, yer: yer.girdi.value, not: not.girdi.value,
-      fotolar: st.fotolar, etiketler: st.etiketler,
+      fotolar: st.fotolar, etiketler: st.etiketler, konum: st.konum,
     };
     const hata = M.aniDogrula(girdi);
     if (hata) {

@@ -1,5 +1,6 @@
 // Anılar: saf mantık (DOM yok; Node'da test edilir). Belge = veri.js belgesi, data = 'ani' türü (SOZLESME §17).
 import { parseDay, daysInMonth } from '../../js/core/gunler.js';
+import { konumDogrula } from './harita-mantik.js';
 
 export const MAX_FOTO = 10;
 export const MAX_BASLIK = 80;
@@ -160,6 +161,7 @@ export function aniDogrula(data) {
   if ([...String(data?.yer ?? '')].length > MAX_YER) return `Yer en çok ${MAX_YER} karakter olabilir.`;
   if ([...String(data?.not ?? '')].length > MAX_NOT) return `Not en çok ${MAX_NOT} karakter olabilir.`;
   if ((data?.fotolar || []).length > MAX_FOTO) return `Bir anıya en çok ${MAX_FOTO} fotoğraf eklenebilir.`;
+  if (data?.konum != null && !konumDogrula(data.konum)) return 'Konum geçersiz. Haritadan yeniden seç.';
   return null;
 }
 
@@ -177,6 +179,8 @@ export function aniVerisi(form, onceki = {}, ekleyen = null) {
   if (not) out.not = not;
   out.fotolar = [...(form.fotolar || [])];
   if (form.etiketler?.length) out.etiketler = [...form.etiketler];
+  const konum = konumDogrula(form.konum);
+  if (konum) out.konum = konum;
   if (onceki.begeni && Object.keys(onceki.begeni).length) out.begeni = { ...onceki.begeni };
   return out;
 }
@@ -191,6 +195,7 @@ export function aniYamasi(form, onceki = {}, ekleyen = null) {
     baslik: v.baslik, tarih: v.tarih, yer: v.yer ?? null, not: v.not ?? null,
     fotolar: v.fotolar, etiketler: v.etiketler ?? null,
   };
+  if ('konum' in (form || {})) yama.konum = v.konum ?? null; // formda konum alanı varsa yazılır (null siler)
   if (!onceki.ekleyen && ekleyen) yama.ekleyen = ekleyen;
   return yama;
 }

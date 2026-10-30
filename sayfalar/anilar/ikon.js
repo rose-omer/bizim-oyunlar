@@ -23,6 +23,8 @@ const YOLLAR = {
   cizelge: `<path d="M6 4v16"/><circle cx="6" cy="7" r="1.8"/><circle cx="6" cy="16" r="1.8"/><path d="M11 7h9M11 16h9"/>`,
   geri: `<path d="M14.5 5.5 8 12l6.5 6.5"/>`,
   saat: `<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>`,
+  harita: `<path d="M9 4.5 3.5 6.6v12.9L9 17.4l6 2.1 5.5-2.1V4.5L15 6.6z"/><path d="M9 4.5v12.9M15 6.6v12.9"/>`,
+  hedef: `<circle cx="12" cy="12" r="6.5"/><circle cx="12" cy="12" r="2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3"/>`,
 };
 
 /** Çizgi ikon. dolu: kalp gibi içi dolu çizim (stroke yerine fill). */

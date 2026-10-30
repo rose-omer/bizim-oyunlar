@@ -1009,7 +1009,9 @@ revoke execute on function public.oda_yetki_kimlikli(text, text, text, text) fro
 --   c. geçerli davet (aynı oda, süresi geçmemiş, kullanılmamış; harcanır)
 --   d. geçerli kurtarma kodu (harcanır)
 -- Hiçbiri tutmazsa yeni satır 'bekliyor'; var olan 'reddedildi' satırı reddedildi kalır.
--- Aynı cihaz farklı anahtarla gelirse 'cakisma' (satıra dokunulmaz).
+-- Aynı cihaz farklı anahtarla gelirse 'cakisma' (satıra dokunulmaz). Çakışmayı yalnız geçerli kurtarma kodu
+-- çözer (davet çözmez: başkasının kimliğini ele geçirmeye yol açar): satır yeni anahtara geçer ve onaylanır,
+-- kod harcanır. Eski anahtarın sahibi her şeyi kaybeder: push abonelikleri ve davetleri silinir, kanal yenilenir.
 -- Hız: onaylı cihazın girişi dışındaki denemeler, oda başına saatte 30. Genel: saatte 1000 yeni oda.
 -- Sınır: odada en çok 8 onaylı; onaylı + bekleyen en çok 20 satır (aşılırsa 54000; harcanan davet geri alınır).
 -- Temizlik: 30 gündür görülmeyen bekleyen ve reddedilen satırlar her katılma denemesinde; 7 günden eski
@@ -1034,6 +1036,7 @@ declare
   v_saat timestamptz := pg_catalog.date_trunc('hour', pg_catalog.now());
   v_n integer;
   v_all integer;
+  v_kurtarma boolean;
 begin
   perform public.oda_bicim('oda_katil', p_room, p_cihaz, p_anahtar);
   if pg_catalog.length(p_davet) > 64 or pg_catalog.length(p_kurtarma) > 64 then
@@ -1093,8 +1096,29 @@ begin
     raise exception 'oda_katil: cok fazla deneme' using errcode = '54000';
   end if;
 
+  v_kurtarma := coalesce(p_kurtarma is not null and v_oda.kurtarma_ozet
+    = public.oda_ozet(pg_catalog.upper(pg_catalog.replace(pg_catalog.btrim(p_kurtarma), '-', ''))), false);
+
   if v_var and v_c.anahtar_ozet <> v_ozet then
-    return public.oda_cevap('cakisma', p_room, v_oda.kanal, v_oda.zorunlu, false);
+    if not v_kurtarma then
+      return public.oda_cevap('cakisma', p_room, v_oda.kanal, v_oda.zorunlu, false);
+    end if;
+    -- Kurtarma koduyla çakışma çözülür: satır yeni anahtara geçer; eski anahtarın sahibi her şeyi kaybeder.
+    if v_c.durum <> 'onayli'
+       and (select count(*) from public.oda_cihaz as c where c.room = p_room and c.durum = 'onayli') >= 8 then
+      raise exception 'oda_katil: cok fazla cihaz' using errcode = '54000';
+    end if;
+    update public.oda as o
+    set kurtarma_ozet = null, kurtarma_olusturan = null, kanal = public.oda_rastgele('0123456789abcdef', 32)
+    where o.room = p_room
+    returning o.* into v_oda;
+    delete from public.push_sub as s where s.room = p_room and s.client = p_cihaz;
+    delete from public.oda_davet as v where v.room = p_room and v.olusturan = p_cihaz;
+    update public.oda_cihaz as c
+    set anahtar_ozet = v_ozet, durum = 'onayli', onaylayan = null, ad = coalesce(v_ad, c.ad),
+        son_gorulme = pg_catalog.now()
+    where c.room = p_room and c.cihaz = p_cihaz;
+    return public.oda_cevap('onayli', p_room, v_oda.kanal, v_oda.zorunlu, false);
   end if;
 
   -- 30 gündür görülmeyen bekleyen ve reddedilen satırlar (bu cihazınki hariç) silinir.
@@ -1120,8 +1144,7 @@ begin
       v_yol := 'davet';
     end if;
   end if;
-  if v_yol is null and p_kurtarma is not null and v_oda.kurtarma_ozet
-       = public.oda_ozet(pg_catalog.upper(pg_catalog.replace(pg_catalog.btrim(p_kurtarma), '-', ''))) then
+  if v_yol is null and v_kurtarma then
     update public.oda as o set kurtarma_ozet = null, kurtarma_olusturan = null where o.room = p_room;
     v_yol := 'kurtarma';
   end if;

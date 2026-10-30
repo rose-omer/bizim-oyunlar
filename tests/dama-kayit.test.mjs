@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createSaver, resumeSeat, handedTo, saveOp, UNKNOWN, KIND, SAVE_MS } from '../games/dama/kayit.js';
+import { createSaver, resumeSeat, handedTo, saveOp, readSaved, UNKNOWN, KIND, SAVE_MS } from '../games/dama/kayit.js';
 import { createSync } from '../games/hafiza/sync.js';
 import * as D from '../games/dama/oyun.js';
 import { bulunma, tamlayan, agoText } from '../games/dama/dil.js';
@@ -144,4 +144,55 @@ test('Türkçe ekler: bulunma ve tamlayan; kısa süre metni', () => {
   assert.equal(agoText(3 * 3600_000), '3 saat önce');
   assert.equal(agoText(26 * 3600_000), 'dün');
   assert.equal(agoText(4 * 86400_000), '4 gün önce');
+});
+
+// ---- İnceleme 3 düzeltmeleri ----
+
+// Sahte koleksiyon: önbellekte `cached`, sunucuda `server`; refresh `ms` sonra sunucuyu yerleştirir.
+function fakeCol(cached, server, ms) {
+  let doc = cached;
+  return {
+    get: (id) => (doc && doc.id === id && !doc.deleted ? doc : null),
+    refresh: () => (ms == null ? new Promise(() => {}) : new Promise((r) => setTimeout(() => { doc = server; r(); }, ms))),
+  };
+}
+const durum = (extra = {}) => ({ v: 1, kind: 'dama', seq: 5, players: ['a', 'b'], phase: 'play', ...extra });
+
+test('readSaved: önbellekteki kayıt sunucuda silinmişse sürdürülmez (tazeleme beklenir)', async () => {
+  const cached = { id: 'dama', data: durum(), deleted: false };
+  const gone = { id: 'dama', data: {}, deleted: true };
+  assert.deepEqual(await readSaved(fakeCol(cached, gone, 5), 'dama', { wait: 1000 }), { saved: null, done: false });
+  // Sunucu yanıt vermezse en çok `wait` beklenir; önbellek kullanılır (sonra 'change' ile düzelir)
+  const t0 = Date.now();
+  const r = await readSaved(fakeCol(cached, gone, null), 'dama', { wait: 30 });
+  assert.equal(r.saved.seq, 5);
+  assert.ok(Date.now() - t0 < 1000);
+  // Bitmiş kayıt: sürdürülmez, silinmesi istenir
+  const fin = { id: 'dama', data: durum({ phase: 'end' }), deleted: false };
+  assert.deepEqual(await readSaved(fakeCol(fin, fin, 1), 'dama', { finished: (d) => d.phase === 'end', wait: 100 }), { saved: null, done: true });
+  // Başka oyunun ya da geçersiz kayıt
+  assert.equal((await readSaved(fakeCol(cached, cached, 1), 'tavla', { wait: 100 })).saved, null);
+  assert.equal((await readSaved(fakeCol(cached, cached, 1), 'dama', { valid: () => false, wait: 100 })).saved, null);
+});
+
+test('dama senkron: iki taraf aynı anda Rövanş derse tek yeni oyun açılır', async () => {
+  const H = 'host', G = 'guest';
+  const h = fakeRoom(H), g = fakeRoom(G);
+  h.peer = g; g.peer = h;
+  h.present = { clientId: G, name: G, page: 'dama' };
+  g.present = { clientId: H, name: H, page: 'dama' };
+  const toAction = (i, by, s) => D.toAction(i, by, s, { hostId: H, now: 1 });
+  const host = createSync({ room: h, ns: 'dama', isHost: true, reduce: D.reduce, toAction,
+    initial: { ...D.initialState({ players: [H, G], names: {} }), phase: 'end', result: { winner: 0, reason: 'tas' } } });
+  const guest = createSync({ room: g, ns: 'dama', hostId: H, isHost: false, reduce: D.reduce, toAction });
+  host.start(); guest.start();
+  await tick();
+  const no = guest.state.no;
+  guest.dispatch({ type: 'new', no });
+  host.dispatch({ type: 'new', no });
+  await tick();
+  assert.equal(host.state.no, no + 1);
+  assert.equal(guest.state.no, no + 1);
+  assert.deepEqual(host.state.players, [G, H], 'renk bir kez döndü');
+  host.destroy(); guest.destroy();
 });

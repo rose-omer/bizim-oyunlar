@@ -2,8 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   MODLAR, modBul, bosTahta, inecegiSatir, kazananCizgi, kazananBul,
-  initialState, reduce, toAction, resultOf, yeniTaslar,
+  initialState, reduce, toAction, resultOf, yeniTaslar, seat,
 } from '../games/dorttas/oyun.js';
+import { createSync } from '../games/hafiza/sync.js';
 
 const A = 'aaa', B = 'bbb';
 const yeni = (mod = 'dort') => initialState({ players: [A, B], names: {}, mod });
@@ -130,14 +131,14 @@ test('kim başlar her oyunda değişir; skor oturum boyunca korunur', () => {
   let s = yeni();
   assert.equal(s.baslayan, 0);
   s = oyna(s, [0, 1, 0, 1, 0, 1, 0]);
-  s = reduce(s, { type: 'yeni' });
+  s = reduce(s, { type: 'yeni', oyun: s.oyun });
   assert.equal(s.oyun, 2);
   assert.equal(s.baslayan, 1);
   assert.equal(s.sira, 1);
   assert.equal(s.faz, 'oyun');
   assert.equal(s.hamle, 0);
   assert.deepEqual(s.skor.dort, [1, 0, 0]);
-  s = reduce(s, { type: 'yeni' });
+  s = reduce(s, { type: 'yeni', oyun: s.oyun });
   assert.equal(s.baslayan, 0);
 });
 
@@ -156,7 +157,7 @@ test('mod değişimi yeni oyun açar; aynı mod ya da bilinmeyen mod yok sayıl�
 test('toAction: by gönderenden; geçersiz niyet null', () => {
   assert.deepEqual(toAction({ type: 'hamle', x: 3 }, B), { type: 'hamle', by: B, x: 3 });
   assert.equal(toAction({ type: 'hamle', x: '3' }, B), null);
-  assert.deepEqual(toAction({ type: 'yeni' }, B), { type: 'yeni' });
+  assert.deepEqual(toAction({ type: 'yeni', oyun: 4 }, B), { type: 'yeni', oyun: 4 });
   assert.deepEqual(toAction({ type: 'mod', mod: 'xox' }, A), { type: 'mod', mod: 'xox' });
   assert.equal(toAction({ type: 'mod', mod: 'q' }, A), null);
   assert.equal(toAction({ type: 'hile' }, A), null);
@@ -168,7 +169,7 @@ test('resultOf ve yeniTaslar', () => {
   const once = s;
   s = oyna(s, [3, 3]);
   assert.deepEqual(yeniTaslar(once, s), [31, 38]);
-  assert.deepEqual(yeniTaslar(s, reduce(s, { type: 'yeni' })), [], 'yeni oyunda animasyon yok');
+  assert.deepEqual(yeniTaslar(s, reduce(s, { type: 'yeni', oyun: s.oyun })), [], 'yeni oyunda animasyon yok');
   s = oyna(s, [0, 1, 0, 1, 0, 1, 0]);
   assert.deepEqual(resultOf(s), { mod: 'dort', kazanan: 0, hamle: 9, skor: [1, 0, 0] });
 });
@@ -178,4 +179,77 @@ test('misafir tahmini: aynı eylem iki tarafta aynı durumu verir (deterministik
   const a = reduce(s, { type: 'hamle', by: A, x: 5 });
   const b = reduce(JSON.parse(JSON.stringify(s)), { type: 'hamle', by: A, x: 5 });
   assert.deepEqual(a, b);
+});
+
+// ---- İnceleme 3 düzeltmeleri ----
+
+test('tekrar: aynı oyun numarasıyla iki istek tek oyun açar; başlayan bir kez değişir', () => {
+  let s = oyna(yeni(), [0, 1, 0, 1, 0, 1, 0]);
+  assert.equal(s.faz, 'bitti');
+  const a = reduce(s, toAction({ type: 'yeni', oyun: s.oyun }, A));
+  const b = reduce(a, toAction({ type: 'yeni', oyun: s.oyun }, B));
+  assert.equal(b, a, 'ikinci Tekrar yok sayıldı');
+  assert.equal(a.oyun, 2);
+  assert.equal(a.baslayan, 1);
+  assert.equal(reduce(s, { type: 'yeni' }), s, 'numarasız istek yok sayılır');
+});
+
+test('seat: başka cihazdan dönen partner koltuğuna oturur; skor kalır; yalnız ev sahibi isteyebilir', () => {
+  let s = oyna(yeni(), [0, 1, 0, 1, 0, 1, 0]);
+  const t = reduce(s, toAction({ type: 'seat', ids: [A, 'yeni-cihaz'], names: { 'yeni-cihaz': 'Gül' } }, A, s, { hostId: A }));
+  assert.deepEqual(t.players, [A, 'yeni-cihaz']);
+  assert.equal(t.names['yeni-cihaz'], 'Gül');
+  assert.deepEqual(t.skor, s.skor);
+  assert.equal(toAction({ type: 'seat', ids: [B, 'x'] }, B, s, { hostId: A }), null, 'misafir koltuk değiştiremez');
+  assert.equal(toAction({ type: 'seat', ids: [A, 'x'] }, A, s), null, 'ev sahibi bilinmiyorsa yok');
+  assert.equal(seat(t, [A, 'yeni-cihaz'], { 'yeni-cihaz': 'Gül' }), t, 'değişiklik yok');
+  assert.equal(seat(t, ['x', 'y']), t, 'ev sahibi oturmuyorsa dokunmaz');
+  const p = seat(initialState({ players: [A, 'sevgilim'] }), [A, B], { [B]: 'Gül' });
+  assert.deepEqual(p.players, [A, B], 'yer tutucu');
+});
+
+// ---- iki uçlu sahte oda ----
+function fakeRoom(id) {
+  const hs = { message: [], presence: [] };
+  const room = {
+    me: { clientId: id, name: id }, roomId: 'oda', peer: null, present: null,
+    send(msg) {
+      if (!room.peer) return false;
+      const copy = JSON.parse(JSON.stringify(msg));
+      queueMicrotask(() => room.peer._emit('message', copy, room.me));
+      return true;
+    },
+    on(ev, fn) {
+      hs[ev].push(fn);
+      if (ev === 'presence') fn(room.present);
+      return () => { hs[ev] = hs[ev].filter((f) => f !== fn); };
+    },
+    partner: () => room.present,
+    _emit(ev, ...args) { for (const f of hs[ev]) f(...args); },
+  };
+  return room;
+}
+const tick = () => new Promise((r) => setTimeout(r, 5));
+
+test('senkron: yeni cihazdan katılan misafir ev sahibinin join üzerine koltuğa oturur ve oynar', async () => {
+  const H = 'host', G2 = 'gul-ikinci';
+  const h = fakeRoom(H), g = fakeRoom(G2);
+  g.me.name = 'Gül';
+  h.peer = g; g.peer = h;
+  h.present = { clientId: G2, name: 'Gül', page: 'dorttas' };
+  g.present = { clientId: H, name: H, page: 'dorttas' };
+  let host = null;
+  const fillSeat = (p) => { if (p?.clientId && p.clientId !== H) host.dispatch({ type: 'seat', ids: [H, p.clientId], names: { [p.clientId]: p.name } }); };
+  const s0 = oyna(initialState({ players: [H, 'gul-eski'], names: {} }), [3]); // oyun sürüyor, sıra misafirde
+  host = createSync({ room: h, ns: 'dorttas', isHost: true, reduce, toAction: (i, by, s) => toAction(i, by, s, { hostId: H }),
+    initial: s0, onJoin: fillSeat });
+  const guest = createSync({ room: g, ns: 'dorttas', hostId: H, isHost: false, reduce, toAction });
+  host.start(); guest.start();
+  await tick();
+  assert.deepEqual(guest.state.players, [H, G2]);
+  assert.equal(guest.state.names[G2], 'Gül');
+  guest.dispatch({ type: 'hamle', x: 4 });
+  await tick();
+  assert.equal(host.state.hamle, 2, 'yeni cihaz hamlesi kabul edildi');
+  host.destroy(); guest.destroy();
 });

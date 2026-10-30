@@ -3,6 +3,22 @@
 export const SAVE_MS = 3000;
 export const KIND = 'oyunkayit';
 export const UNKNOWN = '?';
+export const REFRESH_WAIT_MS = 2500;
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Kayıtlı oyunu okur. col: openCollection sonucu (get, refresh). Önbellek bayat olabilir (oyun öbür cihazda
+ * bitti, kayıt silindi): okumadan önce sunucudan tazeleme en çok `wait` ms beklenir.
+ * -> { saved: sürdürülebilir durum | null, done: bitmiş kayıt (eski sürümden; silinmeli) }
+ */
+export async function readSaved(col, ns, { valid = () => true, finished = () => false, wait = REFRESH_WAIT_MS } = {}) {
+  await Promise.race([col.refresh(), sleep(wait)]);
+  const d = col.get(ns)?.data;
+  if (!d || d.kind !== ns || d.v !== 1 || !valid(d)) return { saved: null, done: false };
+  if (finished(d)) return { saved: null, done: true };
+  return { saved: d, done: false };
+}
 
 /**
  * Seyreltilmiş yazıcı: en çok `ms`'de bir yazar, sondaki değeri kaçırmaz. flush() bekleyeni hemen yazar.

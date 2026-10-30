@@ -4,6 +4,9 @@
 // - Eşzamansız oyun: sayfayı tek başına açan kendi ev sahibidir; durumu `oyunkayit` belgesinden (id = oyun id)
 //   yükler, her değişimden sonra en çok SAVE_MS'de bir yazar. Partner girince kendi ev sahipliğinde kaydı görür.
 // - Kayıt değişirse (öbür cihaz yazdı) ve daha yeniyse ev sahibi onu benimser (seq karşılaştırması).
+// - Açılışta önbellek bayat olabilir (oyun öbür cihazda bitti, kayıt silindi): kayıt okunmadan önce sunucu
+//   en çok REFRESH_WAIT_MS beklenir (readSaved). Sonradan silindiği anlaşılırsa sayfaya onGone bildirilir.
+// - Kayda misafirin de görebileceği görünüm (game.view) yazılır: tavla zar tohumu kayda girmez.
 // - Bildirim adresinde oda yoksa (games/dama/) kayıtlı oda kullanılır.
 import { joinRoom } from '../../js/core/room.js';
 import { readGameParams, currentRoom, gameUrl, lobbyUrl } from '../../js/core/identity.js';
@@ -12,7 +15,7 @@ import { openCollection } from '../../js/core/veri.js';
 import { bildir } from '../../js/core/bildirim.js';
 import { createSync } from '../hafiza/sync.js';
 import { newSeed } from '../hafiza/rng.js';
-import { KIND, UNKNOWN, createSaver, resumeSeat, handedTo, saveOp } from './kayit.js';
+import { KIND, UNKNOWN, createSaver, resumeSeat, handedTo, saveOp, readSaved } from './kayit.js';
 
 export { SAVE_MS } from './kayit.js';
 export { agoText, bulunma, tamlayan } from './dil.js';
@@ -20,12 +23,14 @@ export { agoText, bulunma, tamlayan } from './dil.js';
 /**
  * Oyun sayfasını kurar. game: { reduce, toAction, schedule?, view?, seat, isNewer, fresh(players, names), finished(s) }.
  * Oyun bitince (finished) `oyunkayit` belgesi silinir; bitmiş kayıt açılışta sürdürülmez.
- * -> { room, roomId, meId, authority, sync, resumed, nameOf, partnerHere, becomeHost, start }
+ * -> { room, roomId, meId, authority, sync, resumed, nameOf, partnerHere, becomeHost, fresh, start }
  * start(handlers) çağrılınca senkron başlar; handlers: onState(s, prev, info), onPeer(here),
- * notify(s, prev) -> metin | { baslik, metin } | null (sıra partnere geçti ve partner sayfada değil)
+ * notify(s, prev) -> metin | { baslik, metin } | null (sıra partnere geçti ve partner sayfada değil),
+ * onGone() (kayıt arkada silindi: sürdürülen oyun bayat). fresh() bayat durumu bırakıp boş oyun kurar.
  */
 export async function bootMasa({ ns, title, game, valid = () => true }) {
   const finished = (s) => !!s && !!game.finished?.(s);
+  const view = game.view || ((s) => s);
   const params = readGameParams();
   const roomId = params.roomId || currentRoom();
   const hostId = params.roomId ? params.hostId : null;
@@ -48,12 +53,9 @@ export async function bootMasa({ ns, title, game, valid = () => true }) {
   if (authority) {
     try {
       col = await openCollection(room, KIND);
-      const d = col.get(ns)?.data;
-      if (d && d.kind === ns && d.v === 1 && valid(d)) saved = d;
-      if (saved && finished(saved)) {
-        saved = null;
-        col.remove(ns).catch(() => {}); // eski sürümden kalmış bitmiş kayıt
-      }
+      const r = await readSaved(col, ns, { valid, finished });
+      saved = r.saved;
+      if (r.done) col.remove(ns).catch(() => {}); // eski sürümden kalmış bitmiş kayıt
     } catch (e) {
       console.warn('[masa] kayıt açılamadı:', e?.message || e);
     }
@@ -74,7 +76,7 @@ export async function bootMasa({ ns, title, game, valid = () => true }) {
   let adopting = false;
   const saver = createSaver((s) => {
     const op = saveOp(s, finished(s), !!col?.get(ns));
-    const done = op === 'put' ? col?.put(s, ns) : op === 'remove' ? col?.remove(ns) : null;
+    const done = op === 'put' ? col?.put(view(s), ns) : op === 'remove' ? col?.remove(ns) : null;
     done?.catch((e) => console.warn('[masa] kaydedilemedi:', e?.message || e));
   });
 
@@ -87,16 +89,17 @@ export async function bootMasa({ ns, title, game, valid = () => true }) {
     room, ns, hostId, isHost: authority, solo: false,
     reduce: game.reduce,
     schedule: game.schedule || null,
-    view: game.view || ((s) => s),
+    view,
     initial,
     toAction: (intent, by, s) => game.toAction(intent, by, s, { hostId: meId, now: Date.now(), seed: newSeed() }),
     onState: (s, prev) => {
       // İlk durum yazılmaz: kayıt henüz gelmediyse boş oyun gerçek kaydın üstüne yazılmasın.
-      if (authority && col && s && prev && prev.seq !== s.seq) {
+      // Benimsenen durum (kayıttan ya da fresh) yeniden yazılmaz ve bildirim yollamaz: bu cihazın hamlesi değil.
+      if (authority && col && s && prev && prev.seq !== s.seq && !adopting) {
         saver.push(s);
         if (finished(s) && !finished(prev)) saver.flush(); // bitiş: kaydı hemen sil
       }
-      if (authority && prev && !peerHere && handlers.notify) {
+      if (authority && prev && !peerHere && !adopting && handlers.notify) {
         const to = handedTo(prev, s);
         if (to && to !== meId && to !== UNKNOWN) {
           const n = handlers.notify(s, prev);
@@ -123,6 +126,11 @@ export async function bootMasa({ ns, title, game, valid = () => true }) {
     sync.dispatch({ type: 'seat', ids: [meId, p.clientId], names: nm });
   }
 
+  function onSaved() {
+    if (!col?.get(ns)) { handlers.onGone?.(); return; }
+    adopt();
+  }
+
   function adopt() {
     const d = col?.get(ns)?.data;
     if (!d || d.kind !== ns || !valid(d) || !game.isNewer(d, sync.state)) return;
@@ -130,6 +138,14 @@ export async function bootMasa({ ns, title, game, valid = () => true }) {
     if (!s.players.includes(meId)) return;
     adopting = true;
     try { sync.dispatch({ type: 'load', s }); } finally { adopting = false; }
+  }
+
+  function fresh() {
+    const s = sync.state;
+    if (!authority || !s) return;
+    const f = game.fresh([meId, partnerId || UNKNOWN], { ...names, ...s.names });
+    adopting = true;
+    try { sync.dispatch({ type: 'load', s: { ...f, seq: s.seq + 1 } }); } finally { adopting = false; }
   }
 
   const nameOf = (id, s = sync.state) => {
@@ -141,12 +157,13 @@ export async function bootMasa({ ns, title, game, valid = () => true }) {
     room, roomId, meId, authority, sync, resumed, nameOf,
     partnerHere: () => peerHere,
     becomeHost: () => relaunch(meId),
+    fresh,
     start(h = {}) {
       handlers = h;
       sync.start();
       if (authority) {
         room.on('presence', (p) => { if (p) fillSeat(p); });
-        col?.on('change', adopt);
+        col?.on('change', onSaved);
         const save = () => saver.flush();
         window.addEventListener('pagehide', save);
         document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') save(); });

@@ -15,6 +15,7 @@
 }
 .am-body { display: flex; flex-direction: column; align-items: center; }
 .am-wait { padding: 40px 0; }
+.am-izle { max-width: 340px; margin-top: 40px; }
 .am-h {
   font-size: 1.5rem;
   font-variation-settings: 'SOFT' 100;

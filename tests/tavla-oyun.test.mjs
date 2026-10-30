@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   BAR, OFF, initialPoints, countAt, pipCount, stepsFor, applyStep, legalSteps, diceAt, openingRoll,
-  initialState, reduce, toAction, schedule, view, movable, targetsFrom, posOf, seat, isNewer, resultOf, PASS_MS,
+  initialState, reduce, toAction, schedule, view, movable, targetsFrom, posOf, seat, isNewer, resultOf, PASS_MS, notice,
 } from '../games/tavla/oyun.js';
 
 const A = 'omer', B = 'gul';
@@ -57,9 +57,9 @@ test('zar: tohuma bağlı, 1–6 arası, açılışta eşit gelmez', () => {
 test('maç: açılış zarı başlayanı seçer; geçersiz hedef ve yabancı yok sayılır', () => {
   const s0 = initialState({ players: [A, B], names: {} });
   assert.equal(s0.phase, 'setup');
-  assert.equal(reduce(s0, { type: 'match', by: A, target: 4, seed: 1 }), s0);
-  assert.equal(reduce(s0, { type: 'match', by: 'x', target: 5, seed: 1 }), s0);
-  const s = reduce(s0, { type: 'match', by: B, target: 3, seed: 77, now: 10 });
+  assert.equal(reduce(s0, { type: 'match', by: A, target: 4, seed: 1, match: 0 }), s0);
+  assert.equal(reduce(s0, { type: 'match', by: 'x', target: 5, seed: 1, match: 0 }), s0);
+  const s = reduce(s0, { type: 'match', by: B, target: 3, seed: 77, match: 0, now: 10 });
   assert.equal(s.phase, 'roll');
   assert.equal(s.target, 3);
   assert.deepEqual(s.score, [0, 0]);
@@ -68,7 +68,7 @@ test('maç: açılış zarı başlayanı seçer; geçersiz hedef ve yabancı yok
 });
 
 test('zar atma: yalnız sırası gelen; çift zar 4 hamle verir', () => {
-  const s0 = reduce(initialState({ players: [A, B] }), { type: 'match', by: A, target: 5, seed: 3 });
+  const s0 = reduce(initialState({ players: [A, B] }), { type: 'match', by: A, target: 5, seed: 3, match: 0 });
   const cur = s0.players[s0.turn], other = s0.players[1 - s0.turn];
   assert.equal(reduce(s0, { type: 'roll', by: other }), s0);
   const r = reduce(s0, { type: 'roll', by: cur, now: 2 });
@@ -258,8 +258,9 @@ test('view zar tohumunu gizler; toAction izinleri; seat ve load', () => {
   assert.equal(view(s).seed, null);
   assert.equal(s.seed, 99);
   const o = { hostId: A, now: 1, seed: 5 };
-  assert.deepEqual(toAction({ type: 'match', target: 7 }, B, s, o), { type: 'match', by: B, target: 7, seed: 5, now: 1 });
-  assert.deepEqual(toAction({ type: 'roll', dice: [6, 6] }, B, s, o), { type: 'roll', by: B, now: 1 }, 'zar istemciden gelmez');
+  assert.deepEqual(toAction({ type: 'match', target: 7, match: 2, seed: 1 }, B, s, o),
+    { type: 'match', by: B, target: 7, match: 2, restart: false, seed: 5, now: 1 }, 'tohum istemciden gelmez');
+  assert.deepEqual(toAction({ type: 'roll', dice: [6, 6], seed: 1 }, B, s, o), { type: 'roll', by: B, seed: 5, now: 1 }, 'zar istemciden gelmez');
   assert.equal(toAction({ type: 'load', s }, B, s, o), null);
   assert.equal(toAction({ type: 'seat', ids: [B, A] }, B, s, o), null);
   assert.equal(toAction({ type: 'x' }, A, s, o), null);
@@ -275,7 +276,7 @@ test('rastgele maçlar: pul sayısı korunur, maç sonunda biter', () => {
   let r = 7;
   const rnd = () => ((r = (r * 1103515245 + 12345) >>> 0) / 2 ** 32);
   for (let m = 0; m < 6; m++) {
-    let s = reduce(initialState({ players: [A, B] }), { type: 'match', by: A, target: 3, seed: 1000 + m });
+    let s = reduce(initialState({ players: [A, B] }), { type: 'match', by: A, target: 3, seed: 1000 + m, match: 0 });
     let guard = 0;
     while (s.phase !== 'matchover' && guard++ < 5000) {
       const who = s.players[s.turn];
@@ -295,4 +296,56 @@ test('rastgele maçlar: pul sayısı korunur, maç sonunda biter', () => {
     assert.equal(s.phase, 'matchover');
     assert.ok(Math.max(...s.score) >= 3);
   }
+});
+
+// ---- İnceleme 3 düzeltmeleri ----
+
+test('maç: aynı numarayla iki "Başla" tek maç açar; oyun ortasında yalnız bilerek sıfırlanır', () => {
+  const s0 = initialState({ players: [A, B] });
+  const m1 = reduce(s0, { type: 'match', by: A, target: 3, seed: 7, match: 0, now: 1 });
+  assert.equal(m1.match, 1);
+  assert.equal(reduce(m1, { type: 'match', by: B, target: 5, seed: 9, match: 0, now: 2 }), m1, 'ikinci Başla');
+  assert.equal(reduce(s0, { type: 'match', by: A, target: 3, seed: 7, now: 1 }), s0, 'numarasız');
+  const r1 = reduce(m1, { type: 'roll', by: m1.players[m1.turn], now: 3 });
+  assert.equal(r1.phase, 'move');
+  assert.equal(reduce(r1, { type: 'match', by: B, target: 5, seed: 9, match: 1, now: 4 }), r1, 'faz: oyun ortası');
+  const re = reduce(r1, { type: 'match', by: B, target: 5, seed: 9, match: 1, restart: true, now: 4 });
+  assert.equal(re.match, 2, 'Yeni maç onayıyla sıfırlanır');
+  assert.equal(re.phase, 'roll');
+  const over = { ...r1, phase: 'matchover' };
+  assert.equal(reduce(over, { type: 'match', by: A, target: 3, seed: 1, match: 1, now: 5 }).match, 2, 'maç bitince açılır');
+});
+
+test('zar tohumu: kayda giden görünümde tohum yok; tohumsuz durum ev sahibinin yeni tohumuyla sürer', () => {
+  let s = reduce(initialState({ players: [A, B] }), { type: 'match', by: A, target: 5, seed: 31, match: 0, now: 1 });
+  const kayit = view(s);
+  assert.equal(kayit.seed, null);
+  const cur = kayit.players[kayit.turn];
+  assert.equal(reduce(kayit, { type: 'roll', by: cur, now: 2 }), kayit, 'tohum yoksa ve verilmediyse atılmaz');
+  const o = { hostId: A, now: 2, seed: 4242 };
+  const r = reduce(kayit, toAction({ type: 'roll', seed: 1 }, cur, kayit, o));
+  assert.equal(r.phase, 'move');
+  assert.equal(r.seed, 4242, 'yeni tohum ev sahibinden');
+  assert.deepEqual(r.dice, diceAt(4242, kayit.rolls));
+  // Tohumlu durumda verilen tohum yok sayılır
+  const t = reduce(s, toAction({ type: 'roll' }, cur, s, o));
+  assert.equal(t.seed, 31);
+  assert.deepEqual(t.dice, diceAt(31, 0));
+});
+
+test('bildirim: yeni maçta açılış zarı, yeni oyunda ve pasta doğru metin', () => {
+  const ad = (id) => (id === A ? 'Ömer' : 'Gül');
+  const s0 = initialState({ players: [A, B] });
+  let seed = 1;
+  let m = reduce(s0, { type: 'match', by: A, target: 3, seed, match: 0, now: 1 });
+  while (m.turn !== 1) m = reduce(s0, { type: 'match', by: A, target: 3, seed: ++seed, match: 0, now: 1 });
+  const hi = Math.max(...m.opening), lo = Math.min(...m.opening);
+  assert.deepEqual(notice(s0, m, { by: A, ad }), { baslik: 'Yeni maç', metin: `Tavla: Ömer 3 puanlık maç başlattı · açılış zarı ${hi}–${lo}, ilk zar senin` });
+  const g = { ...m, phase: 'gameover', result: { winner: 0, pts: 1, mars: false } };
+  const n = reduce(g, { type: 'next', by: A, now: 2 });
+  assert.equal(notice(g, n, { by: A, ad }).metin, 'Tavla: 2. oyun başladı · ilk zar senin');
+  const pas = { ...m, phase: 'move', noMove: true, turn: 0 };
+  assert.equal(notice(pas, reduce(pas, { type: 'pass', now: 3 }), { by: A, ad }).metin, 'Tavla: Ömer oynayamadı · zar sende');
+  const oyn = { ...m, phase: 'move', noMove: false, turn: 0 };
+  assert.equal(notice(oyn, { ...oyn, turn: 1, phase: 'roll' }, { by: A, ad }).metin, 'Tavla: Ömer zarını oynadı');
 });

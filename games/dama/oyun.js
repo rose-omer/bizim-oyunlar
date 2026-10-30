@@ -15,7 +15,8 @@
 //    sürdürür; zincir son sırada biterse dama olur (mindsports: "If a man ends its capture on the back rank
 //    it is promoted to king").
 //  - Bitiş: sırası gelen oyuncunun taşı ya da yasal hamlesi yoksa kaybeder.
-//    Beraberlik (bu uygulamanın kuralı): iki tarafta da yalnız birer dama kalırsa.
+//    Beraberlik (bu uygulamanın kuralı): iki tarafta da yalnız birer dama kalırsa ve sıradaki tarafın
+//    yeme hamlesi yoksa (yiyebiliyorsa oyun sürer; yiyen kazanır).
 
 export const SIZE = 8;
 export const EMPTY = '.';
@@ -152,8 +153,10 @@ export function outcome(board, turn) {
   const n = countPieces(board);
   const total = (p) => n[p].men + n[p].kings;
   if (!total(turn)) return { winner: 1 - turn, reason: 'tas' };
-  if (n[0].men === 0 && n[1].men === 0 && n[0].kings === 1 && n[1].kings === 1) return { winner: -1, reason: 'dama' };
-  if (!legalMoves(board, turn).length) return { winner: 1 - turn, reason: 'hamle' };
+  const moves = legalMoves(board, turn);
+  const kings = n[0].men === 0 && n[1].men === 0 && n[0].kings === 1 && n[1].kings === 1;
+  if (kings && !moves[0]?.caps.length) return { winner: -1, reason: 'dama' };
+  if (!moves.length) return { winner: 1 - turn, reason: 'hamle' };
   return null;
 }
 
@@ -232,7 +235,8 @@ export function reduce(s, a) {
       return bump(s, a.now, { board: p.board, turn: p.turn, ply: p.ply, last: p.last, prev: null, undoReq: null });
     }
     case 'new': {
-      if (!s.players.includes(a.by)) return s;
+      // a.no = isteyenin gördüğü oyun: iki taraf aynı anda "Rövanş" derse ikincisi yok sayılır.
+      if (!s.players.includes(a.by) || a.no !== s.no) return s;
       return newGame({
         players: [s.players[1], s.players[0]], // renkler yer değiştirir: bu kez öbürü başlar
         names: s.names,
@@ -291,7 +295,7 @@ export function toAction(intent, by, s, { hostId, now }) {
     case 'undoReply':
       return { type: 'undoReply', by, ok: !!intent.ok, now };
     case 'new':
-      return { type: 'new', by, now };
+      return { type: 'new', by, no: intent.no, now };
     case 'seat':
       return by === hostId ? { type: 'seat', ids: intent.ids, names: intent.names } : null;
     case 'load':
@@ -299,6 +303,20 @@ export function toAction(intent, by, s, { hostId, now }) {
     default:
       return null;
   }
+}
+
+/**
+ * Sıra partnere geçince ona gidecek bildirim. by = değişikliği yapan (ev sahibi), ad(id) = görünen ad.
+ * -> { baslik, metin }
+ */
+export function notice(prev, s, { by, ad }) {
+  if (s.phase === 'end' && prev.phase !== 'end') {
+    const w = s.result?.winner;
+    return { baslik: 'Dama bitti', metin: w === -1 ? 'Berabere bitti' : `${ad(s.players[w])} kazandı` };
+  }
+  if (s.no !== prev.no) return { baslik: 'Yeni oyun', metin: `Dama: ${ad(by)} yeni oyun başlattı · ilk hamle senin` };
+  if (s.ply < prev.ply) return { baslik: 'Sıra sende', metin: `Dama: ${ad(by)} geri almayı kabul etti` };
+  return { baslik: 'Sıra sende', metin: `Dama: ${ad(by)} hamlesini yaptı` };
 }
 
 export function resultOf(s) {

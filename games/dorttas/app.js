@@ -64,7 +64,8 @@ let awayTimer = 0;
 
 const sync = createSync({
   room, ns: NS, hostId, isHost, solo: false,
-  reduce, toAction,
+  reduce,
+  toAction: (intent, by, s) => toAction(intent, by, s, { hostId: me }),
   initial: initialState({ players, names }),
   storage: sessionStore(),
   storeKey: `bizim.dorttas.${roomId || '-'}`,
@@ -75,14 +76,24 @@ const sync = createSync({
     if (here) away.classList.add('hidden');
     else awayTimer = setTimeout(() => away.classList.remove('hidden'), 1200); // kısa kopmada titremesin
   },
+  onJoin: (from) => fillSeat(from),
 });
+
+// Ev sahibi: başka cihazdan (yeni clientId) dönen partner, oyundaki koltuğuna oturur.
+function fillSeat(p) {
+  if (!isHost || !p?.clientId || p.clientId === me) return;
+  sync.dispatch({ type: 'seat', ids: [me, p.clientId], names: p.name ? { [p.clientId]: p.name } : {} });
+}
 
 fitToViewport(root, layout);
 if ('ResizeObserver' in window) new ResizeObserver(() => layout()).observe(root);
 sync.start();
+if (isHost) room.on('presence', (p) => { if (p) fillSeat(p); });
 
 // ---------- yardımcılar ----------
 function myIdx(s) { return s.players.indexOf(me); }
+// Bu cihaz oyunda değil (koltuk henüz bu clientId'ye geçmedi): yalnız izler.
+function watching(s) { return myIdx(s) < 0; }
 function nameOf(s, k) {
   const id = s.players[k];
   if (id === me) return 'Sen';
@@ -110,6 +121,13 @@ function draw(s) {
   }
   modSeg.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mod === s.mod)));
   drawScore(s);
+  if (watching(s)) {
+    statusEl.textContent = 'Bu cihaz oyunda değil · izliyorsun';
+    statusEl.dataset.state = 'wait';
+    foot.innerHTML = '';
+    drawBoard(s, prev);
+    return;
+  }
   statusEl.textContent = turnText(s);
   statusEl.dataset.state = s.faz === 'bitti' ? (s.kazanan === myIdx(s) ? 'win' : s.kazanan === -1 ? 'draw' : 'lose') : s.sira === myIdx(s) ? 'mine' : 'wait';
   drawFoot(s);
@@ -119,7 +137,7 @@ function draw(s) {
 
 function drawScore(s) {
   const sk = s.skor[s.mod];
-  const mi = myIdx(s);
+  const mi = Math.max(0, myIdx(s)); // izleyende ev sahibi solda
   const order = [mi, 1 - mi]; // ben solda
   const plate = (k) => `
     <div class="dt-plate p${k}${s.faz === 'oyun' && s.sira === k ? ' is-turn' : ''}">
@@ -363,7 +381,7 @@ foot.addEventListener('click', async (e) => {
   if (!b || !s) return;
   if (s.faz === 'oyun' && s.hamle > 0 && !(await confirmDialog('Bu oyunu bırakıp baştan başlayalım mı?', { ok: 'Baştan' }))) return;
   sfx('tap');
-  sync.dispatch({ type: 'yeni' });
+  sync.dispatch({ type: 'yeni', oyun: s.oyun }); // gördüğüm oyun: aynı anda iki istek tek oyun açar
 });
 
 // ---------- ses, duyuru, bitiş ----------
@@ -406,7 +424,7 @@ function endGame(s) {
       title,
       lines,
       buttons: [
-        { label: 'Tekrar oyna', primary: true, onClick: () => { closeCelebrate = null; sync.dispatch({ type: 'yeni' }); } },
+        { label: 'Tekrar oyna', primary: true, onClick: () => { closeCelebrate = null; sync.dispatch({ type: 'yeni', oyun: s.oyun }); } },
         { label: 'Ana sayfaya dön', onClick: () => { location.href = lobbyUrl(); } },
       ],
     });

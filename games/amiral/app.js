@@ -74,7 +74,7 @@ let lastNote = '';
 const sync = createSync({
   room, ns: NS, hostId, isHost, solo: false,
   reduce,
-  toAction: (intent, by, s) => toAction(intent, by, s, { kimlik: newSeed() }),
+  toAction: (intent, by, s) => toAction(intent, by, s, { kimlik: newSeed(), hostId: me }),
   initial: initialState({ players, names, kimlik: newSeed() }),
   storage: store,
   storeKey: `bizim.amiral.${roomId || '-'}`,
@@ -85,12 +85,21 @@ const sync = createSync({
     if (here) away.classList.add('hidden');
     else awayTimer = setTimeout(() => away.classList.remove('hidden'), 1200);
   },
+  onJoin: (from) => fillSeat(from),
 });
+
+// Ev sahibi: başka cihazdan (yeni clientId) dönen partner, oyundaki koltuğuna oturur.
+// Filo o cihazda olmadığından oyun sürüyorsa "filon bulunamadı" görür ve yeni oyun açar.
+function fillSeat(p) {
+  if (!isHost || !p?.clientId || p.clientId === me) return;
+  sync.dispatch({ t: 'seat', ids: [me, p.clientId], names: p.name ? { [p.clientId]: p.name } : {} });
+}
 
 window.addEventListener('pointermove', onDragMove, { passive: false });
 window.addEventListener('pointerup', onDragEnd);
 window.addEventListener('pointercancel', onDragEnd);
 sync.start();
+if (isHost) room.on('presence', (p) => { if (p) fillSeat(p); });
 
 // ---------- yardımcılar ----------
 const later = (fn, ms = 0) => setTimeout(fn, ms);
@@ -208,6 +217,7 @@ function paintMarks(G, shots, { pending = null, aim = null, fresh = null } = {})
 // ---------- çizim ----------
 function render(s, prev) {
   if (!s) return;
+  if (myIdx(s) < 0) { renderIzle(); return; }
   filoYukle(s.kimlik);
   atesBekliyor = false;
   const mi = myIdx(s);
@@ -222,6 +232,17 @@ function render(s, prev) {
   cevapGerekirse(s);
   filoAcGerekirse(s);
   effects(s, prev);
+}
+
+// Bu cihaz oyunda değil (koltuk henüz bu clientId'ye geçmedi): yalnız bekler.
+function renderIzle() {
+  if (view?.key === 'izle') return;
+  view = { key: 'izle' };
+  body.innerHTML = `
+    <div class="card stack center am-izle">
+      <p class="am-away-title">Bu oyun başka bir cihazda sürüyor</p>
+      <p class="muted">Sevgilin seni oyuna alınca buradan devam edersin.</p>
+    </div>`;
 }
 
 // ----- Yerleşim -----
@@ -665,8 +686,9 @@ async function onOyunClick(e) {
   if (act === 'ates') fire();
   if (act === 'yeni') {
     const s = sync.state;
-    if (s?.faz === 'oyun' && !(await confirmDialog('Bu oyunu bırakıp yeniden başlayalım mı?', { ok: 'Yeni oyun' }))) return;
-    sync.dispatch({ t: 'yeni' });
+    if (!s) return;
+    if (s.faz === 'oyun' && !(await confirmDialog('Bu oyunu bırakıp yeniden başlayalım mı?', { ok: 'Yeni oyun' }))) return;
+    sync.dispatch({ t: 'yeni', tur: s.tur }); // gördüğüm oyun: aynı anda iki istek tek oyun açar
   }
 }
 
@@ -762,7 +784,7 @@ function endGame(s) {
       title: won ? 'Kazandın! Amiral sensin ⚓' : `${pName(s)} kazandı! 🌊`,
       lines: [`Skor: Sen ${s.skor[mi]} – ${s.skor[1 - mi]} ${pName(s)}`, `${mine.length} atış, isabet %${isabet}`],
       buttons: [
-        { label: 'Tekrar oyna', primary: true, onClick: () => { closeCelebrate = null; sync.dispatch({ t: 'yeni' }); } },
+        { label: 'Tekrar oyna', primary: true, onClick: () => { closeCelebrate = null; sync.dispatch({ t: 'yeni', tur: s.tur }); } },
         { label: 'Filoları gör', onClick: () => { closeCelebrate = null; } },
         { label: 'Ana sayfaya dön', onClick: () => { location.href = lobbyUrl(); } },
       ],

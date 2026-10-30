@@ -59,6 +59,8 @@ let autoTimer = 0;
 let autoKey = '';
 let closeCelebrate = null;
 let resumeOpen = false;
+let closeResume = null;
+let quiet = false;       // bayat kayıt bırakılırken ses/duyuru yok
 let target = 5;          // kurulum ekranındaki seçim
 let choosing = false;    // oyun sürerken yeni maç için hedef seçiliyor
 let lastAnnounce = '';
@@ -219,7 +221,7 @@ function renderActions(s, mine, tlist) {
     btns.push(h('button', { type: 'button', class: 'btn primary', onclick: () => M.sync.dispatch({ type: 'next' }) }, 'Sonraki oyun'));
   }
   if (s.phase === 'matchover') {
-    btns.push(h('button', { type: 'button', class: 'btn primary', onclick: () => newMatch(s.target) }, 'Yeni maç'));
+    btns.push(h('button', { type: 'button', class: 'btn primary', onclick: () => newMatch(s.target, s) }, 'Yeni maç'));
   }
   if (s.phase === 'roll' || s.phase === 'move' || s.phase === 'gameover') {
     btns.push(h('button', { type: 'button', class: 'btn small ghost tv-new', onclick: askNewMatch }, 'Yeni maç'));
@@ -251,7 +253,10 @@ function renderCover(s) {
     h('p', { class: 'muted' }, 'Oyun 1 puan, mars 2 puan. Kaç puana kadar oynayalım?'),
     seg,
     h('div', { class: 'masa-card-actions' },
-      h('button', { type: 'button', class: 'btn primary', onclick: () => { choosing = false; newMatch(target); } }, 'Başla'),
+      h('button', {
+        type: 'button', class: 'btn primary',
+        onclick: () => { const restart = choosing; choosing = false; newMatch(target, s, restart); },
+      }, 'Başla'),
       choosing && s.phase !== 'setup'
         ? h('button', { type: 'button', class: 'btn ghost', onclick: () => { choosing = false; resetSetupCover(); render(); } }, 'Vazgeç')
         : null)));
@@ -302,9 +307,11 @@ function undo() {
   sfx('tap');
 }
 
-function newMatch(n) {
+// s = düğmenin çizildiği durum: maç numarası oradan (aynı anda iki "Başla"da ikincisi yok sayılır).
+// restart = süren maçı bilerek bırakma ("Yeni maç" onayı ya da devam kartı).
+function newMatch(n, s, restart = false) {
   if (closeCelebrate) { try { closeCelebrate(); } catch { /* kapalı */ } closeCelebrate = null; }
-  M.sync.dispatch({ type: 'match', target: n });
+  M.sync.dispatch({ type: 'match', target: n, match: s.match, restart });
 }
 
 async function askNewMatch() {
@@ -425,7 +432,7 @@ function celebrateEnd(s, info) {
     title,
     lines,
     buttons: [
-      { label: 'Yeni maç', primary: true, onClick: () => { closeCelebrate = null; newMatch(s.target); } },
+      { label: 'Yeni maç', primary: true, onClick: () => { closeCelebrate = null; newMatch(s.target, s); } },
       { label: 'Ana sayfaya dön', onClick: () => { location.href = lobbyUrl(); } },
     ],
   });
@@ -439,31 +446,44 @@ if ('ResizeObserver' in window) {
   ro.observe(footEl);
 }
 
+const RESUMABLE = ['roll', 'move', 'gameover'];
+function dropResume() {
+  if (!resumeOpen) return;
+  resumeOpen = false;
+  closeResume?.();
+  closeResume = null;
+}
+
 M.start({
   onState(s, prev, info) {
     clearOptimistic();
     if (prev && (prev.turn !== s.turn || prev.seq !== s.seq)) sel = sel != null && T.movable(s).includes(sel) ? sel : null;
+    if (!RESUMABLE.includes(s.phase)) dropResume(); // bitmiş maç "Devam et" ile sunulmaz
     render();
-    effects(s, prev, info);
+    if (!quiet) effects(s, prev, info);
   },
   onPeer(here) { away.set(here); render(); },
-  notify(s, prev) {
-    if (s.phase === 'matchover' && prev.phase !== 'matchover') return { baslik: 'Tavla bitti', metin: `${M.nameOf(s.players[s.result.winner], s)} maçı kazandı` };
-    if (s.phase === 'gameover' && prev.phase !== 'gameover') return { baslik: 'Tavla', metin: `${M.nameOf(s.players[s.result.winner], s)} oyunu aldı` };
-    return `Tavla: ${M.nameOf(me, s)} zarını oynadı`;
+  notify: (s, prev) => T.notice(prev, s, { by: me, ad: (id) => M.nameOf(id, s) }),
+  // Kayıt arkada silindi (maç öbür cihazda bitti): sunulan "devam" bayat; kuruluma dön.
+  onGone() {
+    if (!resumeOpen) return;
+    dropResume();
+    quiet = true;
+    try { M.fresh(); } finally { quiet = false; }
+    toast('Bu maç bitmiş. Yeni maç kurabilirsiniz.');
   },
 });
 
-if (M.authority && M.resumed && ['roll', 'move', 'gameover'].includes(M.sync.state?.phase)) {
+if (M.authority && M.resumed && RESUMABLE.includes(M.sync.state?.phase)) {
   const s = M.sync.state;
   resumeOpen = true;
   const turnTxt = s.players[s.turn] === me ? 'Sıra sende' : `Sıra ${bulunma(M.nameOf(s.players[s.turn], s))}`;
-  resumeCard(cover, {
+  closeResume = resumeCard(cover, {
     title: 'Kaldığımız yerden devam?',
     detail: `${s.target} puanlık maç · ${s.score[seatOf(s)]}–${s.score[1 - seatOf(s)]} · ${turnTxt}${s.at ? ` · ${agoText(Date.now() - s.at)}` : ''}`,
-    onContinue: () => { resumeOpen = false; render(); },
+    onContinue: () => { resumeOpen = false; closeResume = null; render(); },
     newLabel: 'Yeni maç',
-    onNew: () => { resumeOpen = false; resetSetupCover(); M.sync.dispatch({ type: 'match', target: s.target }); },
+    onNew: () => { resumeOpen = false; closeResume = null; resetSetupCover(); newMatch(s.target, M.sync.state, true); },
   });
 }
 render();

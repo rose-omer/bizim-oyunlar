@@ -205,7 +205,7 @@ test('tam oyun: biri bitirir, skor ve kaybedenin filosu açılır; filo bitmeden
 
 test('yeni oyun: başlayan değişir, skor kalır, atışlar ve hazırlık sıfırlanır, kimlik yenilenir', () => {
   const { s } = tamOyun(FILO_A, rastgeleFilo(mulberry32(9), KURAL));
-  const y = ev(s, { t: 'yeni' }, B);
+  const y = ev(s, { t: 'yeni', tur: s.tur }, B);
   assert.equal(y.faz, 'yerlesim');
   assert.equal(y.tur, 2);
   assert.equal(y.baslayan, 1);
@@ -224,4 +224,33 @@ test('temaslı kural kapalıyken de tam oyun biter', () => {
   const { s } = tamOyun(fa, fb, { temasYok: false });
   assert.equal(s.faz, 'bitti');
   assert.equal(s.temasYok, false);
+});
+
+// ---- İnceleme 3 düzeltmeleri ----
+
+test('tekrar: aynı oyun numarasıyla iki istek tek oyun açar', () => {
+  const { s } = tamOyun(FILO_A, rastgeleFilo(mulberry32(9), KURAL));
+  const a = ev(s, { t: 'yeni', tur: s.tur }, A);
+  const b = ev(a, { t: 'yeni', tur: s.tur }, B);
+  assert.equal(b, a, 'ikinci Tekrar yok sayıldı');
+  assert.equal(a.tur, 2);
+  assert.equal(a.baslayan, 1);
+  assert.equal(ev(s, { t: 'yeni' }, A), s, 'numarasız istek yok sayılır');
+});
+
+test('seat: başka cihazdan dönen partner koltuğuna oturur; atışlar koltukta kalır; yalnız ev sahibi', () => {
+  let s = kur();
+  s = ev(ev(s, { t: 'hazir', hazir: true }, A), { t: 'hazir', hazir: true }, B);
+  s = ev(s, { t: 'atis', x: 0, y: 0 }, A);
+  s = ev(s, { t: 'sonuc', x: 0, y: 0, vurdu: false }, B);
+  const seat = (by, ids) => reduce(s, toAction({ t: 'seat', ids, names: { yeni: 'Gül' } }, by, s, { hostId: A }));
+  const t = seat(A, [A, 'yeni']);
+  assert.deepEqual(t.players, [A, 'yeni']);
+  assert.deepEqual(t.atislar, s.atislar);
+  assert.equal(t.sira, 1);
+  // Yeni cihaz sırasını kullanabilir (atış)
+  const u = ev(t, { t: 'atis', x: 5, y: 5 }, 'yeni');
+  assert.deepEqual(u.bekleyen, { idx: 1, x: 5, y: 5 });
+  assert.equal(seat(B, [B, 'x']), s, 'misafir koltuk değiştiremez');
+  assert.equal(ev(s, { t: 'atis', x: 5, y: 5 }, 'yeni'), s, 'oturmamış cihaz oynayamaz');
 });

@@ -3,6 +3,9 @@
 // yalnız sırayı, atışları ve sonuçlarını taşır; filolar oyun bitince açılır.
 // Akış: saldıran { t:'atis', x, y } niyeti → ev sahibi `bekleyen` yapar → savunan cihaz kendi
 // filosuna bakıp { t:'sonuc', x, y, vurdu, batti? } niyeti yollar → ev sahibi işler.
+import { seat } from '../dorttas/oyun.js';
+
+export { seat };
 
 export const N = 10;
 export const FILO = [
@@ -203,6 +206,8 @@ export function reduce(s, a) {
       return { ...s, filolar };
     }
     case 'yeni': {
+      // a.tur = isteyenin gördüğü oyun: iki taraf aynı anda "Tekrar" derse ikincisi yok sayılır.
+      if (a.tur !== s.tur) return s;
       const tur = s.tur + 1;
       const baslayan = (tur - 1) % 2;
       return {
@@ -210,13 +215,16 @@ export function reduce(s, a) {
         hazir: [false, false], atislar: [[], []], bekleyen: null, kazanan: -1, filolar: [null, null],
       };
     }
+    case 'seat':
+      return seat(s, a.ids, a.names);
     default:
       return s;
   }
 }
 
 /** Ev sahibi: niyeti eyleme çevirir. by = gönderenin clientId'si. null = yok say. */
-export function toAction(intent, by, s, { kimlik } = {}) {
+export function toAction(intent, by, s, { kimlik, hostId } = {}) {
+  if (intent?.t === 'seat') return by && by === hostId ? { type: 'seat', ids: intent.ids, names: intent.names } : null;
   const idx = s.players.indexOf(by);
   if (idx < 0) return null;
   switch (intent?.t) {
@@ -226,7 +234,7 @@ export function toAction(intent, by, s, { kimlik } = {}) {
     case 'sonuc':
       return { type: 'sonuc', idx, x: intent.x, y: intent.y, vurdu: !!intent.vurdu, batti: intent.batti || null, bitti: !!intent.bitti, filo: intent.filo || null };
     case 'filo': return { type: 'filo', idx, filo: intent.filo };
-    case 'yeni': return { type: 'yeni', kimlik };
+    case 'yeni': return { type: 'yeni', kimlik, tur: intent.tur };
     default: return null;
   }
 }

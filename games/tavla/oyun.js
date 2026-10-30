@@ -9,7 +9,8 @@
 //  - Oyun 1 puan; rakip hiç pul toplamadıysa mars: 2 puan. Maç 3/5/7 puana kadar.
 //  - Açılış: iki oyuncu birer zar atar, büyük atan başlar ve kendi zarlarını atar. Sonraki oyunu
 //    önceki oyunun kazananı başlatır.
-//  - Zarlar ev sahibinde tohumlu RNG ile hesaplanır (seed durumda; misafire gönderilmez).
+//  - Zarlar ev sahibinde tohumlu RNG ile hesaplanır (seed durumda; misafire ve kayda gönderilmez).
+//    Tohumsuz durum (kayıttan sürdürülen) ilk zarda ev sahibinin verdiği yeni tohumla sürer.
 //
 // Konum: points[24] işaretli sayılar (+ oyuncu 0, − oyuncu 1). Oyuncu 0 23→0 yönünde gider,
 // iç bölgesi 0–5; oyuncu 1 0→23 yönünde gider, iç bölgesi 18–23.
@@ -208,6 +209,10 @@ export function reduce(s, a) {
   switch (a?.type) {
     case 'match': {
       if (!isPlayer(a.by) || !TARGETS.includes(a.target) || !Number.isInteger(a.seed)) return s;
+      // a.match = isteyenin gördüğü maç: iki taraf aynı anda "Başla" derse ikincisi yok sayılır.
+      if (a.match !== (s.match || 0)) return s;
+      // Süren maç yalnız bilerek ("Yeni maç" onayı) sıfırlanır.
+      if (s.phase !== 'setup' && s.phase !== 'matchover' && !a.restart) return s;
       const opening = openingRoll(a.seed);
       return bump(s, a.now, {
         ...freshBoard(),
@@ -218,11 +223,12 @@ export function reduce(s, a) {
       });
     }
     case 'roll': {
-      if (s.phase !== 'roll' || !isTurn(a.by) || s.seed == null) return s;
-      const dice = diceAt(s.seed, s.rolls);
+      const seed = s.seed ?? (Number.isInteger(a.seed) ? a.seed >>> 0 : null);
+      if (s.phase !== 'roll' || !isTurn(a.by) || seed == null) return s;
+      const dice = diceAt(seed, s.rolls);
       const left = dice[0] === dice[1] ? [dice[0], dice[0], dice[0], dice[0]] : dice.slice();
       const noMove = legalSteps(posOf(s), s.turn, left).length === 0;
-      return bump(s, a.now, { dice, left, steps: [], stack: [], noMove, rolls: s.rolls + 1, phase: 'move', opening: null });
+      return bump(s, a.now, { seed, dice, left, steps: [], stack: [], noMove, rolls: s.rolls + 1, phase: 'move', opening: null });
     }
     case 'play': {
       if (s.phase !== 'move' || s.noMove || !isTurn(a.by)) return s;
@@ -291,11 +297,11 @@ export function isNewer(x, y) {
 
 export function toAction(intent, by, s, { hostId, now, seed }) {
   switch (intent?.type) {
-    case 'roll': return { type: 'roll', by, now };
+    case 'roll': return { type: 'roll', by, seed, now };
     case 'play': return { type: 'play', by, steps: intent.steps, now };
     case 'undo': return { type: 'undo', by, now };
     case 'next': return { type: 'next', by, now };
-    case 'match': return { type: 'match', by, target: intent.target, seed, now };
+    case 'match': return { type: 'match', by, target: intent.target, match: intent.match, restart: !!intent.restart, seed, now };
     case 'seat': return by === hostId ? { type: 'seat', ids: intent.ids, names: intent.names } : null;
     case 'load': return by === hostId ? { type: 'load', s: intent.s } : null;
     default: return null;
@@ -339,6 +345,24 @@ export function targetsFrom(s, from) {
   };
   walk(posOf(s), s.left, from, []);
   return [...out].map(([to, steps]) => ({ to, steps: steps.map(({ from: f, die }) => ({ from: f, die })), hit: steps.some((x) => x.hit) }));
+}
+
+/**
+ * Sıra partnere geçince ona gidecek bildirim. by = değişikliği yapan (ev sahibi), ad(id) = görünen ad.
+ * -> { baslik, metin }
+ */
+export function notice(prev, s, { by, ad }) {
+  const winner = () => ad(s.players[s.result.winner]);
+  if (s.phase === 'matchover' && prev.phase !== 'matchover') return { baslik: 'Tavla bitti', metin: `${winner()} maçı kazandı` };
+  if (s.phase === 'gameover' && prev.phase !== 'gameover') return { baslik: 'Tavla', metin: `${winner()} oyunu aldı` };
+  if (s.match !== prev.match) {
+    const o = s.opening;
+    const open = o ? ` · açılış zarı ${Math.max(...o)}–${Math.min(...o)}, ilk zar senin` : '';
+    return { baslik: 'Yeni maç', metin: `Tavla: ${ad(by)} ${s.target} puanlık maç başlattı${open}` };
+  }
+  if (s.game !== prev.game) return { baslik: 'Sıra sende', metin: `Tavla: ${s.game}. oyun başladı · ilk zar senin` };
+  if (prev.phase === 'move' && prev.noMove) return { baslik: 'Sıra sende', metin: `Tavla: ${ad(by)} oynayamadı · zar sende` };
+  return { baslik: 'Sıra sende', metin: `Tavla: ${ad(by)} zarını oynadı` };
 }
 
 export function resultOf(s) {

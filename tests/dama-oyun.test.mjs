@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   initialBoard, boardFrom, legalMoves, applyMove, outcome, countPieces, sqOf, rowOf, ownerOf, isKing,
-  newGame, initialState, reduce, toAction, seat, isNewer, resultOf, squareName,
+  newGame, initialState, reduce, toAction, seat, isNewer, resultOf, squareName, notice,
 } from '../games/dama/oyun.js';
 
 const W = 'omer', B = 'gul';
@@ -257,8 +257,8 @@ test('geri alma: yalnız son hamleyi yapan ister, rakip onaylar ya da reddeder',
 test('yeni oyun: renkler yer değiştirir, skor korunur; yalnız oyuncular başlatır', () => {
   let s = game(place({ '4,4': 'a', '3,4': 'b' }));
   s = mv(s, W, sq(4, 4), [sq(2, 4)]);
-  assert.equal(reduce(s, { type: 'new', by: 'x' }), s);
-  const n = reduce(s, { type: 'new', by: B, now: 50 });
+  assert.equal(reduce(s, { type: 'new', by: 'x', no: s.no }), s);
+  const n = reduce(s, { type: 'new', by: B, no: s.no, now: 50 });
   assert.deepEqual(n.players, [B, W]);
   assert.equal(n.no, 2);
   assert.equal(n.phase, 'play');
@@ -323,4 +323,52 @@ test('rastgele tam oyunlar: kurallar tutarlı, taş sayısı hiç artmaz, oyun b
       s = next;
     }
   }
+});
+
+// ---- İnceleme 3 düzeltmeleri ----
+
+test('beraberlik: tek dama – tek dama, sıradaki taraf yiyebiliyorsa oyun sürer', () => {
+  // Beyaz: a8 dama + e4 taş; siyah: h4 dama, sıra siyahta. Siyah e4'ü yiyip a4'e iner.
+  const b = boardFrom(['A.......', E, E, E, '....a..B', E, E, E]);
+  const s = { ...game(b, 1), ply: 10 };
+  const m = legalMoves(b, 1).find((x) => squareName(x.path.at(-1)) === 'a4');
+  const n = mv(s, B, m.from, m.path);
+  assert.equal(n.phase, 'play', 'beyaz a4 damasını yiyebilir: berabere değil');
+  assert.equal(n.result, null);
+  assert.equal(legalMoves(n.board, 0)[0].caps.length, 1);
+  // Beyaz yer ve kazanır
+  const w = legalMoves(n.board, 0)[0];
+  const e = mv(n, W, w.from, w.path);
+  assert.equal(e.phase, 'end');
+  assert.deepEqual(e.result, { winner: 0, reason: 'tas' });
+  // Yeme yoksa beraberlik
+  assert.deepEqual(outcome(place({ '0,0': 'A', '2,7': 'B' }), 0), { winner: -1, reason: 'dama' });
+  assert.equal(outcome(place({ '0,0': 'A', '0,5': 'B' }), 0), null, 'sıradaki uzaktan yiyebilir');
+});
+
+test('yeni oyun: aynı oyun numarasıyla iki istek tek oyun açar; numarasız/eski istek yok sayılır', () => {
+  let s = game(place({ '4,4': 'a', '3,4': 'b' }));
+  s = mv(s, W, sq(4, 4), [sq(2, 4)]);
+  assert.equal(s.phase, 'end');
+  const a = reduce(s, { type: 'new', by: W, no: s.no, now: 60 });
+  const b = reduce(a, { type: 'new', by: B, no: s.no, now: 61 });
+  assert.equal(a.no, 2);
+  assert.equal(b, a, 'ikinci Rövanş yok sayıldı');
+  assert.deepEqual(b.players, [B, W], 'renk bir kez döndü');
+  assert.equal(reduce(s, { type: 'new', by: W, now: 60 }), s, 'numarasız');
+  assert.deepEqual(toAction({ type: 'new', no: 3 }, B, s, { hostId: W, now: 9 }), { type: 'new', by: B, no: 3, now: 9 });
+});
+
+test('bildirim: yeni oyun ve geri almada "hamlesini yaptı" denmez', () => {
+  const ad = (id) => (id === W ? 'Ömer' : 'Gül');
+  const s = initialState({ players: [W, B], names: {}, now: 1 });
+  const n = reduce(s, { type: 'new', by: W, no: s.no, now: 2 });
+  assert.deepEqual(notice(s, n, { by: W, ad }), { baslik: 'Yeni oyun', metin: 'Dama: Ömer yeni oyun başlattı · ilk hamle senin' });
+  const m = mv(s, W, sq(5, 0), [sq(4, 0)]);
+  assert.deepEqual(notice(s, m, { by: W, ad }), { baslik: 'Sıra sende', metin: 'Dama: Ömer hamlesini yaptı' });
+  const u = reduce(reduce(m, { type: 'undoAsk', by: W }), { type: 'undoReply', by: B, ok: true });
+  assert.match(notice(m, u, { by: B, ad }).metin, /geri almayı kabul etti/);
+  let e = game(place({ '4,4': 'a', '3,4': 'b' }));
+  const f = mv(e, W, sq(4, 4), [sq(2, 4)]);
+  assert.deepEqual(notice(e, f, { by: W, ad }), { baslik: 'Dama bitti', metin: 'Ömer kazandı' });
 });

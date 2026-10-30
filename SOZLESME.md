@@ -424,7 +424,7 @@ await fotoSecVeYukle(roomId, { coklu }) // -> [url]; games/yapboz/image.js norma
 - `author` = **son yazan**. İlk yazanı gösterecek sayfa, veriye kendi alanını koyar:
   `mesaj.kimden`, `ani.ekleyen`, `mektup.kimden`, `liste.ekleyen` (clientId).
 - Ek alanlar: `mesaj.en`, `mesaj.boy` (fotoğraf boyutu); `liste.alacak` (hediye "ben alacağım", sahibine gizli); `kisi.renk` = `#RRGGBB`.
-- `oyunkayit.data` = oyunun tam durumu `{ v, kind, seq, at, players, ... }`; `seq` büyük olan yenidir; oyun bitince belge silinir.
+- `oyunkayit.data` = oyunun misafirin görebileceği durumu (`view`; tavlada zar tohumu yok) `{ v, kind, seq, at, players, ... }`; `seq` büyük olan yenidir; oyun bitince belge silinir.
 - gunler.js ekleri: `monthGrid(y, m)`, `milestonesBetween(baslangic, from, to, { monthly })`.
   `supabase/functions/_shared/gunler.js` bunun birebir kopyasıdır (test eşitliği denetler).
 - `sayfalar/gunun-sorusu/kart.js`: `mountGununSorusuKart(el, { room, partnerAd? })` → kapatma fonksiyonu.

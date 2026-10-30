@@ -65,6 +65,8 @@ let sel = null; // { from, prefix: [] }
 let optimistic = null; // { s, timer }
 let closeCelebrate = null;
 let resumeOpen = false;
+let closeResume = null;
+let quiet = false; // bayat kayıt bırakılırken ses/duyuru yok
 let lastAnnounce = '';
 const away = mountAway(root, {
   isGuest: !M.authority,
@@ -259,7 +261,7 @@ function renderTools(s) {
     btns.push(h('button', { type: 'button', class: 'btn small ghost', onclick: () => { sel = null; render(); } }, 'Vazgeç'));
   }
   if (s.phase === 'end') {
-    btns.push(h('button', { type: 'button', class: 'btn small primary', onclick: () => M.sync.dispatch({ type: 'new' }) }, 'Rövanş'));
+    btns.push(h('button', { type: 'button', class: 'btn small primary', onclick: () => M.sync.dispatch({ type: 'new', no: s.no }) }, 'Rövanş'));
   } else {
     btns.push(h('button', { type: 'button', class: 'btn small ghost', onclick: newGame }, 'Yeni oyun'));
   }
@@ -268,9 +270,10 @@ function renderTools(s) {
 
 async function newGame() {
   const s = M.sync.state;
-  if (s?.phase === 'play' && s.ply > 0 && !(await confirmDialog('Bu oyunu bırakıp yeni oyuna başlayalım mı?', { ok: 'Yeni oyun' }))) return;
+  if (!s) return;
+  if (s.phase === 'play' && s.ply > 0 && !(await confirmDialog('Bu oyunu bırakıp yeni oyuna başlayalım mı?', { ok: 'Yeni oyun' }))) return;
   sel = null;
-  M.sync.dispatch({ type: 'new' });
+  M.sync.dispatch({ type: 'new', no: s.no });
 }
 
 function askUndo() {
@@ -467,7 +470,7 @@ function celebrateEnd(s, info) {
     title,
     lines: [why, `Skor: ${score}`],
     buttons: [
-      { label: 'Rövanş', primary: true, onClick: () => { closeCelebrate = null; M.sync.dispatch({ type: 'new' }); } },
+      { label: 'Rövanş', primary: true, onClick: () => { closeCelebrate = null; M.sync.dispatch({ type: 'new', no: s.no }); } },
       { label: 'Ana sayfaya dön', onClick: () => { location.href = lobbyUrl(); } },
     ],
   });
@@ -481,20 +484,30 @@ if ('ResizeObserver' in window) {
   ro.observe(footEl);
 }
 
+function dropResume() {
+  if (!resumeOpen) return;
+  resumeOpen = false;
+  closeResume?.();
+  closeResume = null;
+}
+
 M.start({
   onState(s, prev, info) {
     clearOptimistic();
     if (prev && (prev.no !== s.no || prev.ply !== s.ply)) sel = null;
+    if (s.phase !== 'play') dropResume(); // bitmiş oyun "Devam et" ile sunulmaz
     render();
-    effects(s, prev, info);
+    if (!quiet) effects(s, prev, info);
   },
   onPeer(here) { away.set(here); render(); },
-  notify(s, prev) {
-    if (s.phase === 'end' && prev.phase !== 'end') {
-      const w = s.result?.winner;
-      return { baslik: 'Dama bitti', metin: w === -1 ? 'Berabere bitti' : `${M.nameOf(s.players[w], s)} kazandı` };
-    }
-    return `Dama: ${M.nameOf(me, s)} hamlesini yaptı`;
+  notify: (s, prev) => D.notice(prev, s, { by: me, ad: (id) => M.nameOf(id, s) }),
+  // Kayıt arkada silindi (oyun öbür cihazda bitti): sunulan "devam" bayat; boş oyuna dön.
+  onGone() {
+    if (!resumeOpen) return;
+    dropResume();
+    quiet = true;
+    try { M.fresh(); } finally { quiet = false; }
+    toast('Bu oyun bitmiş. Yeni oyun hazır.');
   },
 });
 
@@ -502,11 +515,11 @@ if (M.authority && M.resumed && M.sync.state?.phase === 'play' && M.sync.state.p
   const s = M.sync.state;
   resumeOpen = true;
   const turnTxt = s.players[s.turn] === me ? 'Sıra sende' : `Sıra ${bulunma(M.nameOf(s.players[s.turn], s))}`;
-  resumeCard(cover, {
+  closeResume = resumeCard(cover, {
     title: 'Kaldığımız yerden devam?',
     detail: `${s.ply}. hamle · ${turnTxt}${s.at ? ` · ${agoText(Date.now() - s.at)}` : ''}`,
-    onContinue: () => { resumeOpen = false; render(); },
-    onNew: () => { resumeOpen = false; M.sync.dispatch({ type: 'new' }); },
+    onContinue: () => { resumeOpen = false; closeResume = null; render(); },
+    onNew: () => { resumeOpen = false; closeResume = null; M.sync.dispatch({ type: 'new', no: M.sync.state.no }); },
   });
 }
 render();

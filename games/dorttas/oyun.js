@@ -109,24 +109,44 @@ export function reduce(s, a) {
       return { ...s, tahta, hamle, son: i, faz: 'bitti', kazanan, cizgi: cizgi || [], skor };
     }
     case 'yeni':
+      // a.oyun = isteyenin gördüğü oyun: iki taraf aynı anda "Tekrar" derse ikincisi yok sayılır.
+      if (a.oyun !== s.oyun) return s;
       return yeniOyun(s, s.mod);
     case 'mod':
       if (!modBul(a.mod) || a.mod === s.mod) return s;
       return yeniOyun(s, a.mod);
+    case 'seat':
+      return seat(s, a.ids, a.names);
     default:
       return s;
   }
 }
 
+/**
+ * Koltuk: ids = [ev sahibi, partner]. Ev sahibi oturuyor, partner oturmuyorsa (yer tutucu ya da eski cihaz)
+ * öbür koltuğa partner oturur; skor koltukla kalır. Amiral de kullanır.
+ */
+export function seat(s, ids, names) {
+  const [a, b] = ids || [];
+  if (!a || !b || a === b || !s.players.includes(a)) return s;
+  const players = s.players.includes(b) ? s.players : s.players.map((x) => (x === a ? a : b));
+  const nm = { ...s.names, ...(names || {}) };
+  const sameNames = Object.keys(nm).every((k) => s.names?.[k] === nm[k]);
+  if (players === s.players && sameNames) return s;
+  return { ...s, players, names: nm };
+}
+
 // Ev sahibi: gelen niyeti (kendi ya da misafir) eyleme çevirir. null = yok say.
-export function toAction(intent, by) {
+export function toAction(intent, by, s, { hostId } = {}) {
   switch (intent?.type) {
     case 'hamle':
       return Number.isInteger(intent.x) ? { type: 'hamle', by, x: intent.x } : null;
     case 'yeni':
-      return { type: 'yeni' };
+      return { type: 'yeni', oyun: intent.oyun };
     case 'mod':
       return modBul(intent.mod) ? { type: 'mod', mod: intent.mod } : null;
+    case 'seat':
+      return by && by === hostId ? { type: 'seat', ids: intent.ids, names: intent.names } : null;
     default:
       return null;
   }

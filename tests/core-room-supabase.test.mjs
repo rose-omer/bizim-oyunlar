@@ -242,3 +242,110 @@ test('supabase: sekme gizlenince/öne gelince presence gorunur ile yeniden track
     if (hadDoc) globalThis.document = oldDoc; else delete globalThis.document;
   }
 });
+
+// ---------- Cihaz üyeliği (TALIMAT §5.3) ----------
+function sahteUyelik(ilk) {
+  const u = {
+    sonucDeger: ilk, tazele: 0, dinleyiciler: new Set(),
+    sonuc: async () => u.sonucDeger,
+    dinle: (fn) => { u.dinleyiciler.add(fn); return () => u.dinleyiciler.delete(fn); },
+    tazeleFn: () => { u.tazele++; },
+    yay(s) { u.sonucDeger = s; for (const fn of u.dinleyiciler) fn(s); },
+  };
+  return u;
+}
+const K1 = 'a'.repeat(32);
+const K2 = 'b'.repeat(32);
+
+test('üyelik: konu gizli kanaldan; kanal değişince eskisini bırakıp yenisine katılır; onay kalkınca ayrılır', async () => {
+  mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
+  const client = fakeClient();
+  const u = sahteUyelik({ durum: 'onayli', kanal: K1 });
+  const { room } = openSupabaseRoom({
+    roomId: 'abcdefghij', ns: 'lobby', me: ME, getClient: async () => client,
+    uyelik: { sonuc: u.sonuc, dinle: u.dinle, tazele: u.tazeleFn },
+  });
+  try {
+    await flush();
+    assert.equal(client.all[0].topic, 'realtime:oda:' + K1);
+    client.all[0].cb('SUBSCRIBED');
+    assert.equal(room.send({ t: 'x' }), true);
+
+    u.yay({ durum: 'onayli', kanal: K1 }); // aynı kanal: dokunma
+    await flush();
+    assert.equal(client.all.length, 1);
+
+    u.yay({ durum: 'onayli', kanal: K2 });
+    await flush();
+    assert.equal(client.all[0].removed, true);
+    assert.equal(client.all[1].topic, 'realtime:oda:' + K2);
+    client.all[0].cb('SUBSCRIBED'); // eski kanalın geç geri çağrısı yok sayılır
+    client.all[1].cb('SUBSCRIBED');
+
+    const st = [];
+    room.on('status', (s, d) => st.push([s, d]));
+    u.yay({ durum: 'yok', kanal: null });
+    await flush();
+    assert.equal(client.all[1].removed, true);
+    assert.deepEqual(st.at(-1), ['error', 'Bu cihaz onay bekliyor.']);
+    assert.equal(room.send({ t: 'x' }), false);
+    mock.timers.tick(120000);
+    await flush();
+    assert.equal(client.all.length, 2, 'onaysızken yeniden bağlanmaz');
+    assert.ok(u.tazele >= 2, '60 sn\'de bir durum tazelenir');
+
+    u.yay({ durum: 'onayli', kanal: K2 }); // yeniden onaylandı
+    await flush();
+    assert.equal(client.all.length, 3);
+    assert.equal(client.all[2].topic, 'realtime:oda:' + K2);
+    await room.leave();
+    const once = u.tazele;
+    mock.timers.tick(120000);
+    assert.equal(u.tazele, once, 'ayrılınca tazeleme durur');
+    assert.equal(u.dinleyiciler.size, 0);
+  } finally {
+    mock.timers.reset();
+  }
+});
+
+test('üyelik: bekleyen cihaz kanala katılmaz; eski sunucu ve çevrimdışı', async () => {
+  mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
+  try {
+    const c1 = fakeClient();
+    const u1 = sahteUyelik({ durum: 'bekliyor', kanal: null });
+    const r1 = openSupabaseRoom({ roomId: 'abcdefghij', ns: 'lobby', me: ME, getClient: async () => c1, uyelik: { sonuc: u1.sonuc, dinle: u1.dinle, tazele: u1.tazeleFn } });
+    await flush();
+    await r1.settled;
+    const st = [];
+    r1.room.on('status', (s, d) => st.push([s, d]));
+    assert.deepEqual(st, [['error', 'Bu cihaz onay bekliyor.']]);
+    assert.equal(c1.all.length, 0);
+    await r1.room.leave();
+
+    const c2 = fakeClient();
+    const u2 = sahteUyelik({ durum: 'eski-sunucu', kanal: 'abcdefghij' });
+    const r2 = openSupabaseRoom({ roomId: 'abcdefghij', ns: 'lobby', me: ME, getClient: async () => c2, uyelik: { sonuc: u2.sonuc, dinle: u2.dinle, tazele: u2.tazeleFn } });
+    await flush();
+    assert.equal(c2.all[0].topic, 'realtime:oda:abcdefghij');
+    // odadaki 'uyelik' haberi durumu tazeletir
+    c2.all[0].cb('SUBSCRIBED');
+    c2.all[0].fire('broadcast', 'm', { payload: { ns: '*', from: { clientId: 'B', name: 'Ayşe' }, m: { t: 'uyelik' } } });
+    assert.equal(u2.tazele, 1);
+    await r2.room.leave();
+
+    const c3 = fakeClient();
+    const u3 = sahteUyelik({ durum: 'cevrimdisi', onceki: null, kanal: null });
+    const r3 = openSupabaseRoom({ roomId: 'abcdefghij', ns: 'lobby', me: ME, getClient: async () => c3, uyelik: { sonuc: u3.sonuc, dinle: u3.dinle, tazele: u3.tazeleFn } });
+    await flush();
+    const st3 = [];
+    r3.room.on('status', (s) => st3.push(s));
+    assert.deepEqual(st3, ['error']);
+    u3.sonucDeger = { durum: 'cevrimdisi', onceki: 'onayli', kanal: K1 };
+    mock.timers.tick(2000); // yeniden dener
+    await flush();
+    assert.equal(c3.all[0].topic, 'realtime:oda:' + K1);
+    await r3.room.leave();
+  } finally {
+    mock.timers.reset();
+  }
+});

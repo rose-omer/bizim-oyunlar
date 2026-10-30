@@ -64,11 +64,22 @@ jobs:
             echo "::warning::$tag sürümü yok; APK ve surum.json yayına girmedi."
             exit 0
           fi
-          if ! gh release download "$tag" -R "$GITHUB_REPOSITORY" -p BizIkimiz.apk -D _site/indir; then
-            echo "::warning::$tag sürümünde BizIkimiz.apk yok; APK ve surum.json yayına girmedi."
-            exit 0
-          fi
-          if gh release download "$tag" -R "$GITHUB_REPOSITORY" -p surum.json -D _site/indir 2>/dev/null; then
+          # Yarış: Android işi biter bitmez (workflow_run) indirilen dosyalar bir süre eski sürümünkiler olabiliyor.
+          # Notta yazan sürüm kodu (sürüm A.B.N → N) ile surum.json'daki kod tutana dek birkaç kez yeniden dene.
+          not_kod=$(jq -r '.body // ""' <<<"$bilgi" | grep -oP 'sürüm [0-9]+\.[0-9]+\.\K[0-9]+' | head -1 || true)
+          for deneme in 1 2 3 4 5 6; do
+            rm -f _site/indir/BizIkimiz.apk _site/indir/surum.json
+            if ! gh release download "$tag" -R "$GITHUB_REPOSITORY" -p BizIkimiz.apk -D _site/indir; then
+              echo "::warning::$tag sürümünde BizIkimiz.apk yok; APK ve surum.json yayına girmedi."
+              exit 0
+            fi
+            gh release download "$tag" -R "$GITHUB_REPOSITORY" -p surum.json -D _site/indir 2>/dev/null || true
+            inen_kod=$(jq -r '.kod // empty' _site/indir/surum.json 2>/dev/null || true)
+            if [[ -z $not_kod || ! -f _site/indir/surum.json || $inen_kod == "$not_kod" ]]; then break; fi
+            echo "surum.json kodu $inen_kod, notta $not_kod; 20 sn sonra yeniden ($deneme/6)"
+            sleep 20
+          done
+          if [[ -f _site/indir/surum.json ]]; then
             kaynak="surum.json"
           else
             # Eski sürüm: notun ilk satırı "... sürüm A.B.N ..." (android.yml yazar; N = versionCode).

@@ -124,6 +124,7 @@ export const SAYFALAR = [
   { id: 'izle', title: 'Birlikte İzle', icon: '🎬', path: 'sayfalar/izle/', desc: 'Aynı YouTube videosunu aynı anda izleyin.' },
   { id: 'ayarlar', title: 'Ayarlar', icon: '⚙️', path: 'sayfalar/ayarlar/', desc: 'Profil, başlangıç tarihi, bildirim, kilit, tema.' },
   { id: 'daha', title: 'Daha', icon: '☰', path: 'sayfalar/daha/', desc: 'Tüm özellikler.' },
+  { id: 'gunfoto', title: 'Günün Fotoğrafı', icon: '📷', path: 'sayfalar/gunfoto/', desc: 'Her gün birer kare; ikiniz de gönderince ikisi birden açılır.' },
 ];
 
 // Alt sekme çubuğu sırası.

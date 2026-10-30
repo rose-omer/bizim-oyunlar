@@ -5,6 +5,7 @@ import { readGameParams, lobbyUrl } from '../../js/core/identity.js';
 import { mountShell, waitForPartner, celebrate, confirmDialog, toast } from '../../js/core/ui.js';
 import { sfx } from '../../js/core/sound.js';
 import { logGame } from '../../js/core/db.js';
+import { skorKaydet, toplamSatiri } from '../../js/core/skor.js';
 import { createSync, sessionStore } from '../hafiza/sync.js';
 import { mulberry32, newSeed } from '../hafiza/rng.js';
 import { esc } from '../hafiza/ekran.js';
@@ -767,9 +768,11 @@ function effects(s, prev) {
 
 function endGame(s) {
   const mi = myIdx(s);
+  let kayit = null;
   if (isHost && roomId && loggedTur !== s.tur) {
     loggedTur = s.tur;
     logGame(roomId, NS, resultOf(s));
+    kayit = skorKaydet(room, NS, { kazanan: s.players[s.kazanan] });
   }
   if (celebratedTur === s.kimlik) return;
   celebratedTur = s.kimlik;
@@ -782,7 +785,7 @@ function endGame(s) {
     if (sync.state?.faz !== 'bitti' || sync.state.kimlik !== s.kimlik) return;
     closeCelebrate = celebrate({
       title: won ? 'Kazandın! Amiral sensin ⚓' : `${pName(s)} kazandı! 🌊`,
-      lines: [`Skor: Sen ${s.skor[mi]} – ${s.skor[1 - mi]} ${pName(s)}`, `${mine.length} atış, isabet %${isabet}`],
+      lines: [`Skor: Sen ${s.skor[mi]} – ${s.skor[1 - mi]} ${pName(s)}`, `${mine.length} atış, isabet %${isabet}`, toplamSatiri(room, NS, s.players, s.names, kayit)],
       buttons: [
         { label: 'Tekrar oyna', primary: true, onClick: () => { closeCelebrate = null; sync.dispatch({ t: 'yeni', tur: s.tur }); } },
         { label: 'Filoları gör', onClick: () => { closeCelebrate = null; } },

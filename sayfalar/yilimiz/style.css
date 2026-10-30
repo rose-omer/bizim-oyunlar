@@ -1,0 +1,245 @@
+/* Yılımız — yalnız base.css değişkenleri. Kartlar bir defterin sayfaları gibi: büyük serif cümle, içinde tek vurgu. */
+
+.yl {
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 16px var(--gutter) 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.yl-yillar { align-self: flex-start; }
+
+/* ---------- Yükleme durumu ---------- */
+.yl-durum {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+.yl-durum-metin { color: var(--muted); font-weight: 700; font-variant-numeric: tabular-nums; }
+.yl-cubuk {
+  display: block;
+  height: 6px;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+}
+.yl-cubuk-dolu {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 0.4s var(--ease);
+}
+
+/* ---------- Hikâye ---------- */
+.yl-hikaye { display: flex; flex-direction: column; gap: 12px; }
+.yl-parcalar { display: flex; gap: 4px; }
+.yl-parcalar > span {
+  flex: 1 1 0;
+  height: 3px;
+  border-radius: var(--radius-pill);
+  background: var(--line);
+  transition: background-color 0.3s ease;
+}
+.yl-parcalar > span.dolu { background: var(--accent); }
+
+/* Şerit ekran kenarına taşar; yan kart kenardan görünür (kaydırılabildiğini söyler). Sayfa yana kaymaz. */
+.yl-serit {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: calc(100% - 16px);
+  gap: 12px;
+  margin-inline: calc(-1 * var(--gutter));
+  padding: 4px calc(var(--gutter) + 16px) 18px var(--gutter);
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scroll-padding-inline: var(--gutter);
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.yl-serit::-webkit-scrollbar { display: none; }
+.yl-serit:focus-visible { outline-offset: -3px; border-radius: var(--radius-lg); }
+
+.yl-kart {
+  --kart-zemin: var(--tint-1);
+  --kart-yazi: var(--text);
+  --kart-soluk: var(--muted);
+  --kart-vurgu: var(--accent-strong);
+  --kart-cizgi: color-mix(in srgb, var(--text) 12%, transparent);
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: max(420px, min(520px, calc(100dvh - var(--shell-h) - var(--tabbar-h) - 150px)));
+  padding: 26px 22px 18px;
+  border-radius: 28px;
+  background: var(--kart-zemin);
+  color: var(--kart-yazi);
+  box-shadow: var(--shadow);
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}
+.yl-kart:last-child { scroll-snap-align: end; } /* sonuncu başa hizalanamaz: sağ kenara oturur */
+.yl-kart[data-ton='2'] { --kart-zemin: var(--tint-2); }
+.yl-kart[data-ton='3'] { --kart-zemin: var(--tint-3); }
+.yl-kart[data-ton='4'] { --kart-zemin: var(--tint-4); }
+.yl-kart[data-ton='5'] { --kart-zemin: var(--tint-5); }
+.yl-kart[data-ton='6'] { --kart-zemin: var(--tint-6); }
+.yl-kart[data-ton='hero'],
+.yl-kart[data-ton='gece'] {
+  --kart-zemin: var(--hero);
+  --kart-yazi: var(--hero-ink);
+  --kart-soluk: var(--hero-muted);
+  --kart-vurgu: var(--hero-accent);
+  --kart-cizgi: color-mix(in srgb, var(--hero-ink) 16%, transparent);
+  box-shadow: var(--shadow-lg);
+}
+.yl-kart[data-ton='hero']::before,
+.yl-kart[data-ton='gece']::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: radial-gradient(100% 70% at 30% -10%, color-mix(in srgb, var(--hero-accent) 22%, transparent), transparent 70%);
+  pointer-events: none;
+}
+.yl-kart[data-ton='gece']::before {
+  background:
+    radial-gradient(2px 2px at 18% 22%, var(--hero-muted), transparent 60%),
+    radial-gradient(1.5px 1.5px at 72% 14%, var(--hero-muted), transparent 60%),
+    radial-gradient(2px 2px at 86% 38%, var(--hero-ink), transparent 60%),
+    radial-gradient(1.5px 1.5px at 40% 9%, var(--hero-ink), transparent 60%),
+    radial-gradient(120% 80% at 80% 110%, color-mix(in srgb, var(--plum) 35%, transparent), transparent 70%);
+}
+
+/* Köşede büyük, soluk çizgi motif: kartın konusu. */
+.yl-motif {
+  position: absolute;
+  right: -34px;
+  bottom: 18px;
+  z-index: -1;
+  width: 200px;
+  height: 200px;
+  color: var(--kart-yazi);
+  opacity: 0.09;
+  pointer-events: none;
+}
+.yl-motif svg { width: 100%; height: 100%; }
+
+.yl-govde { display: flex; flex: 1 1 auto; flex-direction: column; justify-content: center; gap: 18px; }
+.yl-kart-baslik {
+  font-family: var(--font-display);
+  font-variation-settings: 'SOFT' 100, 'opsz' 72;
+  font-size: clamp(1.75rem, 1.35rem + 1.8vw, 2.25rem);
+  font-weight: 560;
+  line-height: 1.14;
+  letter-spacing: -0.018em;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+.yl-vurgu {
+  display: block;
+  margin: 2px 0 4px;
+  color: var(--kart-vurgu);
+  font-size: clamp(3.75rem, 2.6rem + 6vw, 5rem);
+  font-weight: 650;
+  font-style: italic;
+  line-height: 0.95;
+  letter-spacing: -0.04em;
+  font-variant-numeric: lining-nums;
+}
+.yl-kart[data-id='tepki'] .yl-vurgu { font-style: normal; font-size: clamp(4.5rem, 3.4rem + 6vw, 6rem); letter-spacing: 0; }
+.yl-kart[data-id='kapak'] .yl-vurgu { font-size: clamp(4.75rem, 3.2rem + 9vw, 6rem); font-style: normal; }
+.yl-kart[data-id='kapak'] .pair { --av: 52px; justify-content: flex-start; }
+.yl-kart[data-id='kapak'] .avatar { box-shadow: 0 0 0 2px var(--hero); }
+.yl-kart[data-id='kapak'] .avatar.me { background: color-mix(in srgb, var(--hero-ink) 16%, var(--hero)); color: var(--hero-ink); }
+.yl-kart[data-id='kapak'] .avatar.partner { background: var(--hero-accent); color: var(--hero); }
+.yl-kart[data-id='kapak'] .pair-heart { color: var(--hero-accent); }
+
+.yl-satirlar { display: flex; flex-direction: column; }
+.yl-satirlar li {
+  padding: 9px 0;
+  color: var(--kart-yazi);
+  font-size: 1.0625rem;
+  font-weight: 650;
+  line-height: 1.4;
+}
+.yl-satirlar li + li { border-top: 1px solid var(--kart-cizgi); }
+.yl-satirlar li:first-child { padding-top: 0; }
+
+.yl-taslar { display: flex; flex-direction: column; }
+.yl-taslar li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--kart-cizgi);
+}
+.yl-tas-ad { font-weight: 750; }
+.yl-tas-tarih { color: var(--kart-soluk); font-weight: 650; white-space: nowrap; }
+
+.yl-not {
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--kart-yazi) 7%, transparent);
+  color: var(--kart-yazi);
+  font-size: 0.875rem;
+  font-weight: 650;
+}
+
+.yl-folyo {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 18px;
+  color: var(--kart-soluk);
+  font-size: 0.8125rem;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Paylaşım kartı ---------- */
+.yl-paylas { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.yl-onizleme-kap {
+  width: min(62%, 220px);
+  aspect-ratio: 4 / 5;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--hero-ink) 8%, transparent);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+.yl-onizleme { display: block; width: 100%; height: 100%; object-fit: cover; }
+.yl-kart[data-id='paylas'] .btn.primary {
+  --btn-bg: var(--hero-accent);
+  --btn-ink: var(--hero);
+  --btn-line: var(--hero-accent);
+  box-shadow: none;
+}
+.yl-kart[data-id='paylas'] .yl-govde { justify-content: flex-start; }
+.yl-btn-ikon { display: inline-flex; }
+
+/* ---------- Gezinti ---------- */
+.yl-gezinti { display: flex; align-items: center; justify-content: space-between; margin-top: -6px; }
+.yl-ok { border: 1.5px solid var(--line); background: var(--surface); }
+.yl-ok:disabled { opacity: 0.4; cursor: default; }
+
+/* ---------- Diğer sayfalar ---------- */
+.yl-baglantilar { margin-top: 8px; }
+.yl-yon-ikon { color: var(--accent-strong); }
+.yl-yon-ikon svg { width: 24px; height: 24px; }
+.yl-yon-ok { display: inline-flex; color: var(--muted); }
+.yl-yon-ok svg { width: 20px; height: 20px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .yl-cubuk-dolu, .yl-parcalar > span { transition: none; }
+}

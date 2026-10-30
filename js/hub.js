@@ -848,7 +848,9 @@ function nowSection(view) {
       h('p', { class: 'biz-mood-me', id: 'mood-me' }, 'Senin ruh hâlin', view.moodLabel),
       h('div', { class: 'biz-mood-row', role: 'group', 'aria-labelledby': 'mood-me' }, view.moodBtns),
       form));
-  return section('now-h', 'Bugün nasılız?', {}, card);
+  return section('now-h', 'Bugün nasılız?', {
+    action: h('a', { class: 'biz-link', href: pageUrl('sayfalar/ruh/'), 'aria-label': 'Ruh hâli geçmişi' }, 'Geçmiş', icon('chevron')),
+  }, card);
 }
 
 function touchSection(view) {
@@ -922,8 +924,17 @@ function setMood(m, view) {
   const not = cleanNote(view.moodNote.value);
   state.lastWrite = Date.now();
   sfx('tap');
-  col.put({ emoji: m.emoji, ...(not ? { not } : {}), at: new Date().toISOString() }, myId())
+  const data = { emoji: m.emoji, ...(not ? { not } : {}), at: new Date().toISOString() };
+  col.put(data, myId())
     .catch((e) => toast(e?.message || 'Kaydedilemedi.'));
+  ruhGecmisi(data);
+}
+
+// Ruh hâli geçmişi (sayfalar/ruh): günün son seçimi 'ruhgecmis'e de yazılır.
+function ruhGecmisi(data) {
+  const room = state.room;
+  import('../sayfalar/ruh/kayit.js').then((m) => m.ruhGecmisineYaz(room, data))
+    .catch((e) => console.warn('[biz] ruh geçmişi yazılamadı:', e));
 }
 
 function saveMoodNote(view) {
@@ -941,6 +952,7 @@ function saveMoodNote(view) {
   view.keys.moodNote = not;
   col.put(data, myId()).then(() => toast(not ? 'Notun kaydedildi' : 'Not kaldırıldı'))
     .catch((e) => toast(e?.message || 'Kaydedilemedi.'));
+  ruhGecmisi(data);
   view.moodNote.blur();
 }
 

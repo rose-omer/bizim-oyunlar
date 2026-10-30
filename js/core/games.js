@@ -124,6 +124,7 @@ export const SAYFALAR = [
   { id: 'izle', title: 'Birlikte İzle', icon: '🎬', path: 'sayfalar/izle/', desc: 'Aynı YouTube videosunu aynı anda izleyin.' },
   { id: 'ayarlar', title: 'Ayarlar', icon: '⚙️', path: 'sayfalar/ayarlar/', desc: 'Profil, başlangıç tarihi, bildirim, kilit, tema.' },
   { id: 'daha', title: 'Daha', icon: '☰', path: 'sayfalar/daha/', desc: 'Tüm özellikler.' },
+  { id: 'ruh', title: 'Ruh Hâlimiz', icon: '🌤️', path: 'sayfalar/ruh/', desc: 'İkinizin ruh hâli geçmişi: son 30 ve 90 gün, haftalık özet.' },
 ];
 
 // Alt sekme çubuğu sırası.

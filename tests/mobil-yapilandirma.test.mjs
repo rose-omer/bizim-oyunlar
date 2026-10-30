@@ -180,7 +180,7 @@ test('android.yml: secret adları, sabit indirme adı ve imza yedeği', () => {
 test('android.yml: sürüm adı SURUM_ANA.<çalıştırma no>; surum.json uygulamanın okuduğu biçimde', () => {
   const yml = readFileSync(yol('.github/workflows/android.yml'), 'utf8');
   const ana = yml.match(/^\s+SURUM_ANA: '(\d+\.\d+)'$/m)?.[1];
-  assert.equal(ana, '1.2');
+  assert.equal(ana, '1.3');
   assert.equal(json('mobil/package.json').version, `${ana}.0`, 'mobil/package.json sürümü SURUM_ANA ile aynı');
   assert.match(yml, /BIZ_SURUM_ADI: \$\{\{ env\.SURUM_ANA \}\}\.\$\{\{ github\.run_number \}\}/);
   assert.match(yml, /BIZ_SURUM_KODU: \$\{\{ github\.run_number \}\}/);

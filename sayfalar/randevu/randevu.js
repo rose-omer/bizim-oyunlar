@@ -88,6 +88,11 @@ export function cekilis(havuz, seed, { haric = [], adim = 14 } = {}) {
 }
 
 /** Kaydedilmiş fikirler: fikirId → belge (kendi fikirleri hariç). */
+/** Hazır fikrin belge id'si: aynı fikir iki kez (iki cihazdan aynı anda) kaydedilmesin. */
+export function fikirDocId(fikir) {
+  return 'f-' + fikir.id;
+}
+
 export function kayitlar(docs) {
   const m = new Map();
   for (const d of docs || []) if (d?.data?.fikirId) m.set(d.data.fikirId, d);

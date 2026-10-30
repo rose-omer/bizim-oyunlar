@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   AY_ADLARI, gunYazi, aramaMetni, filtrele, zamanCizelgesi, buGunGecmisYillar, buGunBasligi,
   tumEtiketler, yillar, albumFotolari, etiketTemizle, etiketEkle, aniDogrula, aniVerisi,
-  fotoTasi, fotoKaldir, formParametreleri, begeniDegistir, begeniSayisi, MAX_FOTO,
+  fotoTasi, fotoKaldir, formParametreleri, begeniYamasi, aniYamasi, begeniSayisi, MAX_FOTO,
 } from '../sayfalar/anilar/mantik.js';
 
 let seq = 0;
@@ -143,12 +143,21 @@ test('formParametreleri: ?yeni=1&baslik=..&tarih=..', () => {
   assert.equal(formParametreleri(`?yeni=1&baslik=${'x'.repeat(200)}`, '2026-10-30').baslik.length, 80);
 });
 
-test('begeniDegistir aç/kapa; begeniSayisi', () => {
-  const a = begeniDegistir(undefined, 'omer');
-  assert.deepEqual(a, { omer: true });
-  const b = begeniDegistir(a, 'gul');
-  assert.equal(begeniSayisi(b), 2);
-  assert.deepEqual(begeniDegistir(b, 'omer'), { gul: true });
-  assert.deepEqual(a, { omer: true }); // değişmez
+test('begeniYamasi aç/kapa yalnız kendi alanım; begeniSayisi', () => {
+  assert.deepEqual(begeniYamasi(undefined, 'omer'), { 'begeni.omer': true });
+  assert.deepEqual(begeniYamasi({ gul: true }, 'omer'), { 'begeni.omer': true });
+  assert.deepEqual(begeniYamasi({ omer: true, gul: true }, 'omer'), { 'begeni.omer': null });
+  assert.equal(begeniSayisi({ omer: true, gul: true }), 2);
   assert.equal(begeniSayisi(null), 0);
+});
+
+test('aniYamasi: yalnız form alanları, boşlar null, beğeni yok, ekleyen eksikse', () => {
+  const form = { baslik: ' Sahil ', tarih: '2025-07-04', yer: ' ', not: ' güzel ', fotolar: ['u'], etiketler: [] };
+  assert.deepEqual(aniYamasi(form, { ekleyen: 'omer', begeni: { gul: true } }, 'gul'),
+    { baslik: 'Sahil', tarih: '2025-07-04', yer: null, not: 'güzel', fotolar: ['u'], etiketler: null });
+  const y = aniYamasi({ ...form, yer: 'Kaş', etiketler: ['tatil'] }, {}, 'gul');
+  assert.equal(y.ekleyen, 'gul');
+  assert.equal(y.yer, 'Kaş');
+  assert.deepEqual(y.etiketler, ['tatil']);
+  assert.equal('begeni' in y, false);
 });

@@ -74,7 +74,7 @@ room.backend               // 'supabase' | 'local' | 'solo'
 room.send(msg)             // aynı ns'deki karşı tarafa. msg JSON nesnesi. Bağlı değilse false.
 room.sendAll(msg)          // ns '*': karşı tarafın hangi sayfada olursa olsun alması için
 room.on('message', (msg, from) => {})  // aynı ns ve '*' mesajları; from = { clientId, name }. Kendi mesajın gelmez.
-room.on('presence', (partner) => {})   // partner = { clientId, name, page } | null. Abone olunca hemen bir kez çağrılır.
+room.on('presence', (partner) => {})   // partner = { clientId, name, page, host, gorunur } | null. Abone olunca hemen bir kez çağrılır.
 room.on('status', (status, detail) => {}) // 'connecting' | 'online' | 'offline' | 'error'; detail Türkçe
 room.partner()             // şimdiki partner | null
 room.leave()
@@ -83,6 +83,10 @@ room.leave()
 - Supabase: kanal `oda:<roomId>`, broadcast olayı `m`, yük `{ ns, from, m }`. Presence anahtarı clientId,
   yük `{ clientId, name, page: ns, host }` (host = sayfanın ev sahibi id'si; lobide null).
   Partner = kendinden farklı ilk clientId. Lobiden partnerin oyununa katılırken `host: p.host || p.clientId`.
+- Presence yükünde `gorunur: document.visibilityState === 'visible'`. `visibilitychange`'de Supabase yeniden
+  `track` eder, yerel mod hemen "buradayım" yayar. Eski istemcide alan yoksa `true` sayılır.
+  `partnerGoruyor(partner, page?)` (room.js): partner o sayfada (page yoksa herhangi bir sayfada) ve sekmesi önde.
+  Anlık bildirim (`bildir`) yalnız bu `false` iken gönderilir; uygulama içi görünüm zaten gider.
 - Rol çakışması: küçük clientId ev sahibidir. İki ev sahibi → büyük olan misafir olarak yeniden yüklenir.
   İki misafir → küçük olan ev sahibi olarak yeniden yüklenir. Misafir `state`'i yalnız ev sahibinden kabul eder.
 - Yerel: BroadcastChannel `bizim:<roomId>`; presence 3 sn'de bir "buradayım", 8 sn sessizlik = yok.

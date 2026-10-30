@@ -186,21 +186,20 @@ export function partnerWhere(p, ns = pageNs()) {
   return { kind: 'on', text: 'çevrimiçi' };
 }
 
-// Profil fotoğrafı: https adresi doğrudan; 'local:' (yerel mod, IndexedDB) blob adresine çevrilir.
+// Fotoğraf: yalnız bizim kova (isAllowedPhotoUrl) doğrudan; 'local:' (yerel mod, IndexedDB) blob adresine çevrilir.
+// Başka adres (dış site, izleme pikseli) yüklenmez.
 const photoCache = new Map();
 /** -> Promise<string|null> (img src) */
 export function fotoSrc(url) {
   if (typeof url !== 'string' || !url) return Promise.resolve(null);
   if (!photoCache.has(url)) {
-    let p;
-    if (url.startsWith('local:')) {
-      p = import('./storage.js')
-        .then((m) => m.loadPhoto(url))
-        .then((blob) => URL.createObjectURL(blob))
-        .catch(() => null);
-    } else {
-      p = Promise.resolve(/^https:\/\//.test(url) ? url : null);
-    }
+    const p = import('./storage.js')
+      .then((m) => {
+        if (!m.isAllowedPhotoUrl(url)) return null;
+        if (!url.startsWith('local:')) return url;
+        return m.loadPhoto(url).then((blob) => URL.createObjectURL(blob));
+      })
+      .catch(() => null);
     photoCache.set(url, p);
   }
   return photoCache.get(url);

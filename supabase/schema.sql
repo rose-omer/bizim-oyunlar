@@ -141,6 +141,58 @@ create table if not exists public.room_rate (
 alter table public.room_rate enable row level security;
 revoke all on table public.room_rate from anon, authenticated;
 
+-- Yazılan bayt sayacı (günlük, UTC): oda başına ve genel ('*'). bytes = yazılan data'nın JSON metin uzunluğu.
+create table if not exists public.room_byte (
+  room text not null,
+  day date not null,
+  bytes bigint not null default 0,
+  primary key (room, day)
+);
+
+alter table public.room_byte enable row level security;
+revoke all on table public.room_byte from anon, authenticated;
+
+-- doc_put ve doc_patch'in ortak sınırı. Yazma sayısı: oda başına saatte 2000, genel saatte 20000.
+-- Bayt bütçesi: oda başına günde 30 MB, genel günde 150 MB. Aşılırsa '<p_fn>: cok fazla yazma' (54000);
+-- hata işlemi geri aldığından reddedilen yazma sayaçlara eklenmez. Saatin ilk genel yazması eski kayıtları siler.
+create or replace function public.doc_sinir(p_fn text, p_room text, p_bytes integer)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_hour timestamptz := pg_catalog.date_trunc('hour', pg_catalog.now());
+  v_day date := (pg_catalog.now() at time zone 'UTC')::date;
+  v_n integer;
+  v_all integer;
+  v_b bigint;
+  v_b_all bigint;
+begin
+  insert into public.room_rate as r (room, bucket, n) values (p_room, v_hour, 1)
+    on conflict (room, bucket) do update set n = r.n + 1
+    returning r.n into v_n;
+  insert into public.room_rate as r (room, bucket, n) values ('*', v_hour, 1)
+    on conflict (room, bucket) do update set n = r.n + 1
+    returning r.n into v_all;
+  insert into public.room_byte as b (room, day, bytes) values (p_room, v_day, p_bytes)
+    on conflict (room, day) do update set bytes = b.bytes + excluded.bytes
+    returning b.bytes into v_b;
+  insert into public.room_byte as b (room, day, bytes) values ('*', v_day, p_bytes)
+    on conflict (room, day) do update set bytes = b.bytes + excluded.bytes
+    returning b.bytes into v_b_all;
+  if v_n > 2000 or v_all > 20000 or v_b > 31457280 or v_b_all > 157286400 then
+    raise exception '%: cok fazla yazma', p_fn using errcode = '54000';
+  end if;
+  if v_all = 1 then
+    delete from public.room_rate as r where r.bucket < v_hour - interval '2 days';
+    delete from public.room_byte as b where b.day < v_day - 2;
+  end if;
+end;
+$$;
+
+revoke execute on function public.doc_sinir(text, text, integer) from public, anon, authenticated;
+
 create or replace function public.doc_put(
   p_room text, p_kind text, p_id text, p_data jsonb, p_author text, p_deleted boolean default false)
 returns table (id text, data jsonb, author text, deleted boolean, created_at timestamptz, updated_at timestamptz)
@@ -150,9 +202,6 @@ set search_path = ''
 as $$
 #variable_conflict use_column
 declare
-  v_hour timestamptz := pg_catalog.date_trunc('hour', pg_catalog.now());
-  v_n integer;
-  v_all integer;
   v_data jsonb := case when coalesce(p_deleted, false) then '{}'::jsonb else p_data end;
 begin
   if p_room is null or p_room !~ '^[a-z2-9]{10}$' then
@@ -174,25 +223,7 @@ begin
     raise exception 'doc_put: veri cok buyuk' using errcode = '22023';
   end if;
 
-  -- Hız sınırı: oda başına saatte 2000, toplam saatte 50000 yazma.
-  insert into public.room_rate as r (room, bucket, n) values (p_room, v_hour, 1)
-    on conflict (room, bucket) do update set n = r.n + 1
-    returning r.n into v_n;
-  if v_n > 2000 then
-    raise exception 'doc_put: cok fazla yazma' using errcode = '54000';
-  end if;
-  insert into public.room_rate as r (room, bucket, n) values ('*', v_hour, 1)
-    on conflict (room, bucket) do update set n = r.n + 1
-    returning r.n into v_all;
-  if v_all > 50000 then
-    raise exception 'doc_put: cok fazla yazma' using errcode = '54000';
-  end if;
-  if v_n = 1 then
-    delete from public.room_rate as r where r.room = p_room and r.bucket < v_hour - interval '1 day';
-  end if;
-  if v_all = 1 then
-    delete from public.room_rate as r where r.room = '*' and r.bucket < v_hour - interval '1 day';
-  end if;
+  perform public.doc_sinir('doc_put', p_room, pg_catalog.octet_length(v_data::text));
 
   return query
   insert into public.room_doc as d (room, kind, id, data, author, deleted, created_at, updated_at)
@@ -259,9 +290,6 @@ set search_path = ''
 as $$
 #variable_conflict use_column
 declare
-  v_hour timestamptz := pg_catalog.date_trunc('hour', pg_catalog.now());
-  v_n integer;
-  v_all integer;
   v_cur jsonb;
   v_del boolean;
   v_key text;
@@ -285,19 +313,6 @@ begin
   end if;
   if pg_catalog.octet_length(p_patch::text) > 32768 then
     raise exception 'doc_patch: veri cok buyuk' using errcode = '22023';
-  end if;
-
-  insert into public.room_rate as r (room, bucket, n) values (p_room, v_hour, 1)
-    on conflict (room, bucket) do update set n = r.n + 1
-    returning r.n into v_n;
-  if v_n > 2000 then
-    raise exception 'doc_patch: cok fazla yazma' using errcode = '54000';
-  end if;
-  insert into public.room_rate as r (room, bucket, n) values ('*', v_hour, 1)
-    on conflict (room, bucket) do update set n = r.n + 1
-    returning r.n into v_all;
-  if v_all > 50000 then
-    raise exception 'doc_patch: cok fazla yazma' using errcode = '54000';
   end if;
 
   select d.data, d.deleted into v_cur, v_del
@@ -332,6 +347,9 @@ begin
   if pg_catalog.octet_length(v_cur::text) > 32768 then
     raise exception 'doc_patch: veri cok buyuk' using errcode = '22023';
   end if;
+
+  -- Bayt bütçesi yazılan tam belgeyi sayar (yama değil).
+  perform public.doc_sinir('doc_patch', p_room, pg_catalog.octet_length(v_cur::text));
 
   return query
   insert into public.room_doc as d (room, kind, id, data, author, deleted, created_at, updated_at)
@@ -383,6 +401,17 @@ create table if not exists public.push_rate (
 alter table public.push_rate enable row level security;
 revoke all on table public.push_rate from anon, authenticated;
 
+-- Abonelik kaydı sayacı (saatlik): oda başına ve genel ('*'). Yalnız push_kaydet yazar.
+create table if not exists public.push_kayit_rate (
+  room text not null,
+  bucket timestamptz not null,
+  n integer not null default 0,
+  primary key (room, bucket)
+);
+
+alter table public.push_kayit_rate enable row level security;
+revoke all on table public.push_kayit_rate from anon, authenticated;
+
 -- Günlük hatırlatma kaydı: bir oda aynı gün aynı vakitte (sabah/akşam) iki kez hatırlatma almaz.
 create table if not exists public.push_gonderim (
   room text not null,
@@ -397,6 +426,7 @@ revoke all on table public.push_gonderim from anon, authenticated;
 
 -- Aboneliği kaydet ya da güncelle. p_sub = PushSubscription.toJSON(): { endpoint, keys: { p256dh, auth } }.
 -- Yalnız bilinen push servislerinin https adresleri kabul edilir (Edge Function başka adrese istek atmasın).
+-- Sınır: oda başına saatte 20, genel saatte 300 kayıt.
 create or replace function public.push_kaydet(p_room text, p_client text, p_sub jsonb, p_ua text default null)
 returns boolean
 language plpgsql
@@ -407,6 +437,9 @@ declare
   v_endpoint text;
   v_p256dh text;
   v_auth text;
+  v_saat timestamptz := pg_catalog.date_trunc('hour', pg_catalog.now());
+  v_n integer;
+  v_all integer;
 begin
   if p_room is null or p_room !~ '^[a-z2-9]{10}$' then
     raise exception 'push_kaydet: gecersiz oda' using errcode = '22023';
@@ -429,6 +462,19 @@ begin
   end if;
   if v_auth is null or v_auth !~ '^[A-Za-z0-9_+/-]{22,24}={0,2}$' then
     raise exception 'push_kaydet: gecersiz anahtar' using errcode = '22023';
+  end if;
+
+  insert into public.push_kayit_rate as r (room, bucket, n) values (p_room, v_saat, 1)
+    on conflict (room, bucket) do update set n = r.n + 1
+    returning r.n into v_n;
+  insert into public.push_kayit_rate as r (room, bucket, n) values ('*', v_saat, 1)
+    on conflict (room, bucket) do update set n = r.n + 1
+    returning r.n into v_all;
+  if v_n > 20 or v_all > 300 then
+    raise exception 'push_kaydet: cok fazla kayit' using errcode = '54000';
+  end if;
+  if v_all = 1 then
+    delete from public.push_kayit_rate as r where r.bucket < v_saat - interval '1 day';
   end if;
 
   insert into public.push_sub as s (endpoint, room, client, p256dh, auth, ua, created_at)
@@ -473,7 +519,7 @@ end;
 $$;
 
 -- Edge Function 'bildir': hız sınırını sayar, odadaki diğer cihazların aboneliklerini döner.
--- Sınır: oda başına dakikada 20, toplam dakikada 600 bildirim isteği.
+-- Sınır: oda başına dakikada 20, toplam dakikada 600 bildirim isteği. Aboneliği olmayan oda sayılmaz (boş döner).
 create or replace function public.push_hedef(p_room text, p_from text)
 returns table (endpoint text, p256dh text, auth text)
 language plpgsql
@@ -491,6 +537,9 @@ begin
   end if;
   if p_from is not null and p_from !~ '^[A-Za-z0-9_-]{1,64}$' then
     raise exception 'push_hedef: gecersiz gonderen' using errcode = '22023';
+  end if;
+  if not exists (select 1 from public.push_sub as s where s.room = p_room) then
+    return;
   end if;
 
   insert into public.push_rate as r (room, bucket, n) values (p_room, v_dk, 1)
@@ -535,8 +584,14 @@ begin
 end;
 $$;
 
--- Edge Function 'hatirlat': tüm abonelikler.
-create or replace function public.push_abonelikler()
+-- 'hatirlat' RPC'leri sayfalı (PostgREST en çok 1000 satır döner): imleçten sonraki en çok p_limit satır.
+-- Eski imzalar (sayfasız, tek oda) kaldırılır; aynı adlı iki imza PostgREST'te belirsizlik yaratır.
+drop function if exists public.push_abonelikler();
+drop function if exists public.hatirlat_belgeler(text[], integer);
+drop function if exists public.hatirlat_isaretle(text, date, text);
+
+-- Edge Function 'hatirlat': abonelikler, endpoint sırasıyla. p_after = önceki sayfanın son endpoint'i.
+create or replace function public.push_abonelikler(p_after text default null, p_limit integer default 500)
 returns table (room text, client text, endpoint text, p256dh text, auth text)
 language sql
 stable
@@ -545,11 +600,15 @@ set search_path = ''
 as $$
   select s.room, s.client, s.endpoint, s.p256dh, s.auth
   from public.push_sub as s
-  order by s.room;
+  where p_after is null or s.endpoint > p_after
+  order by s.endpoint
+  limit least(greatest(coalesce(p_limit, 500), 1), 1000);
 $$;
 
 -- Edge Function 'hatirlat': aboneliği olan odaların belgeleri. 'gs' yalnız p_gs_gun gününün cevapları.
-create or replace function public.hatirlat_belgeler(p_kinds text[], p_gs_gun integer default null)
+-- Sıra (room, kind, id) = birincil anahtar. p_after = önceki sayfanın son satırı: array[room, kind, id].
+create or replace function public.hatirlat_belgeler(
+  p_kinds text[], p_gs_gun integer default null, p_after text[] default null, p_limit integer default 500)
 returns table (room text, kind text, id text, data jsonb)
 language sql
 stable
@@ -561,28 +620,38 @@ as $$
   where d.kind = any (p_kinds)
     and not d.deleted
     and d.room in (select s.room from public.push_sub as s)
-    and (d.kind <> 'gs' or (p_gs_gun is not null and d.id like (p_gs_gun::text || '-%')));
+    and (d.kind <> 'gs' or (p_gs_gun is not null and d.id like (p_gs_gun::text || '-%')))
+    and (p_after is null or (d.room, d.kind, d.id) > (p_after[1], p_after[2], p_after[3]))
+  order by d.room, d.kind, d.id
+  limit least(greatest(coalesce(p_limit, 500), 1), 1000);
 $$;
 
--- Edge Function 'hatirlat': odayı bugün için işaretler. İlk kez işaretlendiyse true (gönder), yoksa false.
-create or replace function public.hatirlat_isaretle(p_room text, p_gun date, p_slot text)
-returns boolean
+-- Edge Function 'hatirlat': odaları bugün için toplu işaretler. -> ilk kez işaretlenen odalar (gönderilecekler).
+-- Dizi döner (satır değil): PostgREST satır sınırına takılmaz.
+create or replace function public.hatirlat_isaretle(p_rooms text[], p_gun date, p_slot text)
+returns text[]
 language plpgsql
 security definer
 set search_path = ''
 as $$
+declare
+  v_yeni text[];
 begin
-  if p_room is null or p_room !~ '^[a-z2-9]{10}$' or p_gun is null or p_slot is null
-     or p_slot not in ('sabah', 'aksam') then
+  if p_rooms is null or p_gun is null or p_slot is null or p_slot not in ('sabah', 'aksam')
+     or exists (select 1 from pg_catalog.unnest(p_rooms) as o(room) where o.room is null or o.room !~ '^[a-z2-9]{10}$') then
     raise exception 'hatirlat_isaretle: gecersiz girdi' using errcode = '22023';
   end if;
-  insert into public.push_gonderim (room, gun, slot) values (p_room, p_gun, p_slot)
-    on conflict do nothing;
-  if not found then
-    return false;
+  with eklenen as (
+    insert into public.push_gonderim as g (room, gun, slot)
+    select distinct o.room, p_gun, p_slot from pg_catalog.unnest(p_rooms) as o(room)
+    on conflict do nothing
+    returning g.room
+  )
+  select coalesce(pg_catalog.array_agg(e.room order by e.room), '{}'::text[]) into v_yeni from eklenen as e;
+  if pg_catalog.cardinality(v_yeni) > 0 then
+    delete from public.push_gonderim as g where g.gun < p_gun - 40;
   end if;
-  delete from public.push_gonderim as g where g.gun < p_gun - 40;
-  return true;
+  return v_yeni;
 end;
 $$;
 
@@ -595,14 +664,14 @@ grant execute on function public.push_sil(text) to anon, authenticated;
 -- execute verir; bu yüzden anon ve authenticated'dan açıkça geri alınır.
 revoke execute on function public.push_hedef(text, text) from public, anon, authenticated;
 revoke execute on function public.push_sonuc(text[], text[], text[]) from public, anon, authenticated;
-revoke execute on function public.push_abonelikler() from public, anon, authenticated;
-revoke execute on function public.hatirlat_belgeler(text[], integer) from public, anon, authenticated;
-revoke execute on function public.hatirlat_isaretle(text, date, text) from public, anon, authenticated;
+revoke execute on function public.push_abonelikler(text, integer) from public, anon, authenticated;
+revoke execute on function public.hatirlat_belgeler(text[], integer, text[], integer) from public, anon, authenticated;
+revoke execute on function public.hatirlat_isaretle(text[], date, text) from public, anon, authenticated;
 grant execute on function public.push_hedef(text, text) to service_role;
 grant execute on function public.push_sonuc(text[], text[], text[]) to service_role;
-grant execute on function public.push_abonelikler() to service_role;
-grant execute on function public.hatirlat_belgeler(text[], integer) to service_role;
-grant execute on function public.hatirlat_isaretle(text, date, text) to service_role;
+grant execute on function public.push_abonelikler(text, integer) to service_role;
+grant execute on function public.hatirlat_belgeler(text[], integer, text[], integer) to service_role;
+grant execute on function public.hatirlat_isaretle(text[], date, text) to service_role;
 
 notify pgrst, 'reload schema';
 

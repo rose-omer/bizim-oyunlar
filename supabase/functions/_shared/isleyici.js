@@ -33,6 +33,25 @@ export function rpcIstemcisi(env, fetchFn = fetch) {
   };
 }
 
+export const SAYFA = 500;
+const SAYFA_MAX = 2000; // 1 milyon satır: imleç ilerlemezse sonsuz döngü olmasın
+
+/**
+ * Sayfalı RPC'nin tüm satırları (PostgREST en çok 1000 satır döner). Her çağrı p_limit = boyut alır;
+ * sonraki sayfa imlec(son satır) argümanlarıyla istenir. Sayfa boyuttan kısaysa biter.
+ */
+export async function sayfala(rpc, ad, args, imlec, boyut = SAYFA) {
+  const hepsi = [];
+  let sonraki = {};
+  for (let i = 0; i < SAYFA_MAX; i++) {
+    const sayfa = (await rpc(ad, { ...args, ...sonraki, p_limit: boyut })) || [];
+    hepsi.push(...sayfa);
+    if (sayfa.length < boyut) return hepsi;
+    sonraki = imlec(sayfa[sayfa.length - 1]);
+  }
+  throw new Error(`rpc ${ad}: sayfa sınırı aşıldı`);
+}
+
 let vapidOnbellek = null;
 /** VAPID anahtarları (secret'lardan). Bir kez içe aktarılır. */
 export function vapidAl(env) {
@@ -166,18 +185,25 @@ export function hatirlatIsleyici({ env, fetchFn = fetch, simdi = () => new Date(
     }
 
     try {
-      const odalar = odayaGore(await rpc('push_abonelikler'));
+      const odalar = odayaGore(await sayfala(rpc, 'push_abonelikler', {}, (s) => ({ p_after: s.endpoint })));
       const sonuc = { ok: true, slot, bugun, oda: 0, gonderilen: 0, silinen: 0, hatali: 0 };
       if (!odalar.size) return jsonYanit(200, sonuc);
-      const belgeler = odayaGore(await rpc('hatirlat_belgeler', slot === 'sabah'
+      const belgeler = odayaGore(await sayfala(rpc, 'hatirlat_belgeler', slot === 'sabah'
         ? { p_kinds: ['gun', 'kisi', 'cift'] }
-        : { p_kinds: ['gs'], p_gs_gun: gunNo(bugun) }));
+        : { p_kinds: ['gs'], p_gs_gun: gunNo(bugun) }, (d) => ({ p_after: [d.room, d.kind, d.id] })));
 
-      const isler = [];
+      const planlar = new Map();
       for (const [room, aboneler] of odalar) {
         const plan = odaPlani({ slot, bugun, belgeler: belgeler.get(room) || [], aboneler });
-        if (!plan.length) continue;
-        if (!(await rpc('hatirlat_isaretle', { p_room: room, p_gun: bugun, p_slot: slot }))) continue;
+        if (plan.length) planlar.set(room, plan);
+      }
+      // Tek çağrıda işaretle; yalnız bugün bu vakitte ilk kez işaretlenen odalara gönderilir.
+      const isaretli = planlar.size
+        ? new Set((await rpc('hatirlat_isaretle', { p_rooms: [...planlar.keys()], p_gun: bugun, p_slot: slot })) || [])
+        : new Set();
+      const isler = [];
+      for (const [room, plan] of planlar) {
+        if (!isaretli.has(room)) continue;
         sonuc.oda++;
         for (const { abone, mesaj } of plan) {
           if (endpointIzinli(abone.endpoint)) isler.push({ abone, yuk: pushYuku(mesaj) });

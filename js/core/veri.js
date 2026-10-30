@@ -93,6 +93,29 @@ export function overlapSince(since, ms = OVERLAP_MS) {
   return new Date(Math.max(0, timeOf(since) - ms)).toISOString();
 }
 
+/**
+ * Alan düzeyinde birleştirme (sunucudaki doc_patch ile aynı kural):
+ * üst düzey anahtar tek tek yazılır; 'ana.alt' iç içe tek alanı yazar; null alanı siler.
+ */
+export function applyPatch(data, patch) {
+  const out = { ...(data && typeof data === 'object' ? data : {}) };
+  for (const [key, val] of Object.entries(patch || {})) {
+    const parts = key.split('.');
+    if (parts.length > 2 || parts.some((x) => !x)) throw new Error('Geçersiz alan: ' + key);
+    if (parts.length === 2) {
+      const [a, b] = parts;
+      const inner = out[a] && typeof out[a] === 'object' && !Array.isArray(out[a]) ? { ...out[a] } : {};
+      if (val === null) delete inner[b]; else inner[b] = val;
+      out[a] = inner;
+    } else if (val === null) {
+      delete out[key];
+    } else {
+      out[key] = val;
+    }
+  }
+  return out;
+}
+
 // ---------- Arka uç: yerel ----------
 
 const localKey = (roomId, kind) => `bizim.yerelveri.${roomId}.${kind}`;
@@ -125,6 +148,11 @@ const localBackend = {
     writeStore('local', localKey(roomId, kind), JSON.stringify(all));
     return doc;
   },
+  async patch(roomId, kind, id, patch, author) {
+    const prev = localRead(roomId, kind)[id];
+    const base = prev && !prev.deleted ? prev.data : {};
+    return localBackend.put(roomId, kind, id, applyPatch(base, patch), author, false);
+  },
   async list(roomId, kind, since, limit) {
     const s = since ? timeOf(since) : -1;
     return Object.values(localRead(roomId, kind))
@@ -147,6 +175,7 @@ function rpcError(error) {
   const msg = String(error?.message || error || '');
   if (/cok fazla/.test(msg)) return new Error('Çok hızlı kaydediyorsunuz. Biraz sonra tekrar deneyin.');
   if (/cok buyuk/.test(msg)) return new Error('Bu kayıt çok uzun.');
+  if (/gecersiz/.test(msg)) return new Error('Geçersiz kayıt.');
   return new Error('Kaydedilemedi. Bağlantını kontrol et.');
 }
 
@@ -155,6 +184,14 @@ const supabaseBackend = {
     const client = await getSupabase();
     const { data: rows, error } = await client.rpc('doc_put', {
       p_room: roomId, p_kind: kind, p_id: id, p_data: deleted ? {} : data, p_author: author, p_deleted: !!deleted,
+    });
+    if (error) throw rpcError(error);
+    return (Array.isArray(rows) ? rows[0] : rows) || null;
+  },
+  async patch(roomId, kind, id, patch, author) {
+    const client = await getSupabase();
+    const { data: rows, error } = await client.rpc('doc_patch', {
+      p_room: roomId, p_kind: kind, p_id: id, p_patch: patch, p_author: author,
     });
     if (error) throw rpcError(error);
     return (Array.isArray(rows) ? rows[0] : rows) || null;
@@ -189,6 +226,15 @@ export async function putDoc(roomId, kind, id, data, author = null) {
   const bad = checkData(data);
   if (bad) throw new Error(bad);
   return normalizeDoc(await backend().put(roomId, kind, id, data, author, false));
+}
+
+/** Alanları sunucuda birleştirerek yazar (applyPatch kuralı). -> sunucudaki belge */
+export async function patchDoc(roomId, kind, id, patch, author = null) {
+  checkArgs(roomId, kind, id);
+  const bad = checkData(patch);
+  if (bad) throw new Error(bad);
+  applyPatch({}, patch); // anahtar biçimini erken doğrula
+  return normalizeDoc(await backend().patch(roomId, kind, id, patch, author));
 }
 
 /** Belgeyi siler (iz bırakır: deleted=true). */
@@ -236,7 +282,7 @@ function readJson(key, fallback) {
 /**
  * Bir türün canlı koleksiyonu.
  * room: joinRoom sonucu (roomId, me, sendAll, on). recent > 0: yalnız son N belgeyi yükler (sohbet); loadOlder ile geri gider.
- * -> { kind, all(), get(id), put(data, id?), patch(id, partial), remove(id), on('change'|'error', fn), refresh(), loadOlder(n), hasOlder(), close(), ready }
+ * -> { kind, all(), get(id), put(data, id?), patch(id, kismi), remove(id), on('change'|'error', fn), refresh(), loadOlder(n), hasOlder(), close() }
  */
 export async function openCollection(room, kind, { recent = 0 } = {}) {
   const roomId = room?.roomId;
@@ -244,47 +290,71 @@ export async function openCollection(room, kind, { recent = 0 } = {}) {
   const meId = room.me?.clientId || null;
   const map = new Map();
   const listeners = { change: new Set(), error: new Set() };
-  let since = null;
+  let since = null; // yalnız sunucudan ÇEKİLEN belgelerle ilerler (kendi yazmalarımızla değil)
   let older = recent > 0;
+  let cursor = null; // recent: sayfalanarak yüklenmiş en eski created_at; daha eskiler loadOlder ile gelir
+  let ilkHata = null; // ilk yükleme hatası: sonradan bağlanan 'error' dinleyicisine de iletilir
   let closed = false;
 
+  // recent modunda imleçten eski "başıboş" belgeler (eski mesaja gelen tepki vb.) imlece ulaşılana dek gizli.
+  const visible = () => {
+    const docs = liveDocs(map);
+    if (!(recent > 0 && older && cursor)) return docs;
+    const c = timeOf(cursor);
+    return docs.filter((d) => d.pending || timeOf(d.created_at) >= c);
+  };
   const emit = (type, arg) => { for (const fn of listeners[type]) { try { fn(arg); } catch (e) { console.error(e); } } };
-  const changed = () => { saveCache(); emit('change', liveDocs(map)); };
+  const changed = () => { saveCache(); emit('change', visible()); };
+  const fail = (e) => { emit('error', e); };
 
-  // Önbellek: açılışta anında gösterim ve çevrimdışı okuma.
   // Önbellekte yalnız sunucuda onaylı belgeler durur; bekleyenler giden kutusundan kurulur.
   const cached = readJson(cacheKey(roomId, kind), null);
   const hadCache = !!(cached && Array.isArray(cached.docs));
   if (hadCache) {
     mergeDocs(map, cached.docs.filter((d) => d && !d.pending));
     since = cached.since || null;
+    cursor = cached.cursor || null;
+    if (recent > 0 && !cursor) cursor = liveDocs(map)[0]?.created_at || null;
   }
   function saveCache() {
     let docs = [...map.values()].filter((d) => !d.pending);
-    if (recent > 0) docs = docs.filter((d) => !d.deleted).sort((a, b) => timeOf(a.created_at) - timeOf(b.created_at)).slice(-CACHE_RECENT);
+    let cur = cursor;
+    if (recent > 0) {
+      const c = cursor && older ? timeOf(cursor) : -Infinity;
+      docs = docs.filter((d) => !d.deleted && timeOf(d.created_at) >= c)
+        .sort((a, b) => timeOf(a.created_at) - timeOf(b.created_at)).slice(-CACHE_RECENT);
+      if (older && docs.length) cur = docs[0].created_at; // kırpılınca imleç de kayar
+    }
     try {
-      writeStore('local', cacheKey(roomId, kind), JSON.stringify({ since, docs }));
+      writeStore('local', cacheKey(roomId, kind), JSON.stringify({ since, cursor: cur, docs }));
     } catch { /* kota */ }
   }
 
   // Giden kutusu: çevrimdışıyken yapılan yazmalar sırayla tekrar denenir.
+  // İşlem: { n, kind, id, at, data?, deleted?, patch? }. put/remove öncekileri geçersiz kılar; patch'ler sırayla birikir.
   const outbox = () => readJson(outboxKey(roomId, meId), []);
   const setOutbox = (list) => writeStore('local', outboxKey(roomId, meId), list.length ? JSON.stringify(list) : null);
+  const dropOp = (op) => setOutbox(outbox().filter((o) => o.n !== op.n));
+  const optimistic = (op, cur) => normalizeDoc({
+    id: op.id,
+    data: op.patch ? applyPatch(cur && !cur.deleted ? cur.data : {}, op.patch) : op.data,
+    deleted: !!op.deleted, author: meId,
+    created_at: cur?.created_at || op.at, updated_at: op.at, pending: true,
+  });
   for (const o of outbox()) {
-    if (o.kind !== kind) continue;
-    const cur = map.get(o.id);
-    mergeDocs(map, [{ id: o.id, data: o.data, deleted: o.deleted, author: meId,
-      created_at: cur?.created_at || o.at, updated_at: o.at, pending: true }]);
+    if (o.kind !== kind || !o.n) continue;
+    map.set(o.id, optimistic(o, map.get(o.id)));
   }
 
   async function send(op) {
-    const doc = op.deleted
-      ? await removeDoc(roomId, kind, op.id, meId)
-      : await putDoc(roomId, kind, op.id, op.data, meId);
+    const doc = op.patch
+      ? await patchDoc(roomId, kind, op.id, op.patch, meId)
+      : op.deleted
+        ? await removeDoc(roomId, kind, op.id, meId)
+        : await putDoc(roomId, kind, op.id, op.data, meId);
     // Aynı belge için daha yeni bir bekleyen yazma yoksa sunucu sürümü yerleşir (saat farkından bağımsız).
-    const newer = outbox().some((o) => o.kind === kind && o.id === op.id && o.at !== op.at);
+    const newer = outbox().some((o) => o.kind === kind && o.id === op.id && o.n !== op.n);
     if (!newer) map.set(doc.id, doc);
-    since = maxUpdated([doc], since);
     room.sendAll?.({ t: 'veri', kind, doc });
     return doc;
   }
@@ -294,12 +364,12 @@ export async function openCollection(room, kind, { recent = 0 } = {}) {
     if (flushing || closed) return;
     flushing = true;
     try {
-      for (const op of outbox().filter((o) => o.kind === kind)) {
+      for (const op of outbox().filter((o) => o.kind === kind && o.n)) {
         try {
           await send(op);
-          setOutbox(outbox().filter((o) => !(o.kind === kind && o.id === op.id && o.at === op.at)));
+          dropOp(op);
         } catch (e) {
-          emit('error', e);
+          fail(e);
           break;
         }
       }
@@ -309,52 +379,59 @@ export async function openCollection(room, kind, { recent = 0 } = {}) {
     }
   }
 
-  async function write(id, data, deleted) {
-    if (!deleted) {
-      const bad = checkData(data);
+  async function write(op) {
+    if (op.patch) {
+      const bad = checkData(op.patch);
+      if (bad) throw new Error(bad);
+      applyPatch({}, op.patch); // biçim hatası hemen
+    } else if (!op.deleted) {
+      const bad = checkData(op.data);
       if (bad) throw new Error(bad);
     }
-    const at = new Date().toISOString();
-    const cur = map.get(id);
-    map.set(id, normalizeDoc({ id, data, deleted, author: meId, created_at: cur?.created_at || at, updated_at: at, pending: true }));
+    const cur = map.get(op.id);
+    map.set(op.id, optimistic(op, cur));
     changed();
-    const op = { kind, id, data: deleted ? {} : data, deleted: !!deleted, at };
-    setOutbox([...outbox().filter((o) => !(o.kind === kind && o.id === id)), op]);
+    const rest = op.patch ? outbox() : outbox().filter((o) => !(o.kind === kind && o.id === op.id));
+    setOutbox([...rest, op]);
     try {
       await send(op);
-      setOutbox(outbox().filter((o) => !(o.kind === kind && o.id === id && o.at === at)));
+      dropOp(op);
       changed();
     } catch (e) {
-      emit('error', e);
+      fail(e);
       // Kalıcı hata (çok uzun / geçersiz) ise tekrar deneme anlamsız: geri al.
       if (/çok uzun|Geçersiz/i.test(e.message)) {
-        setOutbox(outbox().filter((o) => !(o.kind === kind && o.id === id && o.at === at)));
-        if (cur) map.set(id, cur); else map.delete(id);
+        dropOp(op);
+        if (cur) map.set(op.id, cur); else map.delete(op.id);
         changed();
         throw e;
       }
     }
-    return id;
+    return op.id;
   }
+  const newOp = (id, extra) => ({ n: uuid(), kind, id, at: new Date().toISOString(), ...extra });
 
   async function refresh() {
     if (closed) return;
     try {
       const docs = await listDocs(roomId, kind, { since: overlapSince(since) });
       since = maxUpdated(docs, since);
+      ilkHata = null;
       if (mergeDocs(map, docs)) changed();
       else saveCache();
     } catch (e) {
-      emit('error', e);
+      fail(e);
+      throw e;
     }
   }
 
   async function loadOlder(n = 50) {
-    const live = liveDocs(map).filter((d) => !d.pending);
-    const before = live.length ? live[0].created_at : null;
+    const before = cursor || liveDocs(map).filter((d) => !d.pending)[0]?.created_at || null;
     const docs = await pageDocs(roomId, kind, { before, limit: n });
     if (docs.length < n) older = false;
-    if (mergeDocs(map, docs)) changed();
+    if (docs.length) cursor = docs[docs.length - 1].created_at; // yeniden eskiye: son eleman en eski
+    mergeDocs(map, docs);
+    changed();
     return docs.length;
   }
 
@@ -364,15 +441,16 @@ export async function openCollection(room, kind, { recent = 0 } = {}) {
       const docs = await pageDocs(roomId, kind, { limit: recent });
       if (docs.length < recent) older = false;
       mergeDocs(map, docs);
-      since = maxUpdated(docs, since) || new Date(Date.now() - OVERLAP_MS).toISOString();
+      cursor = docs.length ? docs[docs.length - 1].created_at : null;
+      since = maxUpdated(docs, null); // boşsa null kalır (istemci saati kullanılmaz)
       saveCache();
     } else if (hadCache) {
-      refresh();
+      refresh().catch((e) => { ilkHata = e; });
     } else {
       await refresh();
     }
   } catch (e) {
-    emit('error', e);
+    ilkHata = e;
   }
   flush();
 
@@ -383,35 +461,38 @@ export async function openCollection(room, kind, { recent = 0 } = {}) {
     if (mergeDocs(map, [doc])) changed();
   });
   // Bağlantı geri gelince ve sekme öne gelince eksikleri çek.
-  const offStatus = room.on?.('status', (s) => { if (s === 'online') { refresh(); flush(); } });
-  const onVisible = () => { if (document.visibilityState === 'visible') { refresh(); flush(); } };
-  const onOnline = () => { refresh(); flush(); };
+  const quiet = () => { refresh().catch(() => {}); flush(); };
+  const offStatus = room.on?.('status', (st) => { if (st === 'online') quiet(); });
+  const onVisible = () => { if (document.visibilityState === 'visible') quiet(); };
   if (typeof document !== 'undefined') document.addEventListener('visibilitychange', onVisible);
-  if (typeof window !== 'undefined') window.addEventListener('online', onOnline);
+  if (typeof window !== 'undefined') window.addEventListener('online', quiet);
   const poll = setInterval(() => {
-    if (typeof document === 'undefined' || document.visibilityState === 'visible') refresh();
+    if (typeof document === 'undefined' || document.visibilityState === 'visible') refresh().catch(() => {});
   }, POLL_MS);
   const retry = setInterval(() => { if (outbox().some((o) => o.kind === kind)) flush(); }, RETRY_MS);
 
   return {
     kind,
-    all: () => liveDocs(map),
+    all: visible,
     get: (id) => { const d = map.get(id); return d && !d.deleted ? d : null; },
-    put: (data, id = uuid()) => write(id, data, false),
-    patch: (id, partial) => write(id, { ...(map.get(id)?.data || {}), ...partial }, false),
-    remove: (id) => write(id, {}, true),
+    put: (data, id = uuid()) => write(newOp(id, { data })),
+    /** Alan düzeyinde birleştirir (sunucuda): { a: 1 }, { 'ana.alt': x }; null alanı siler. */
+    patch: (id, partial) => write(newOp(id, { patch: partial })),
+    remove: (id) => write(newOp(id, { deleted: true, data: {} })),
     on(type, fn) {
       listeners[type]?.add(fn);
+      if (type === 'error' && ilkHata) { const e = ilkHata; queueMicrotask(() => fn(e)); }
       return () => listeners[type]?.delete(fn);
     },
-    refresh,
+    /** Sunucudan eksikleri çeker. Hata fırlatmaz (error olayı gelir). */
+    refresh: () => refresh().catch(() => {}),
     loadOlder,
     hasOlder: () => older,
     close() {
       closed = true;
       offMsg?.(); offStatus?.();
       if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', onVisible);
-      if (typeof window !== 'undefined') window.removeEventListener('online', onOnline);
+      if (typeof window !== 'undefined') window.removeEventListener('online', quiet);
       clearInterval(poll); clearInterval(retry);
       listeners.change.clear(); listeners.error.clear();
     },

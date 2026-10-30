@@ -7,6 +7,7 @@ import { openProfil } from '../../js/core/profil.js';
 import { uploadPhoto, isAllowedPhotoUrl } from '../../js/core/storage.js';
 import { readStore, writeStore } from '../../js/core/identity.js';
 import { bildir } from '../../js/core/bildirim.js';
+import { partnerGoruyor } from '../../js/core/room.js';
 import { h, toast, confirmDialog, knownPartner, fotoSrc } from '../../js/core/ui.js';
 import { sfx } from '../../js/core/sound.js';
 import { titret } from '../../js/core/mobil.js';
@@ -456,10 +457,25 @@ async function duzenlemeKaydet(metin) {
 }
 
 function bildirGerekirse(data) {
-  if (room.partner()?.page === 'sohbet') return;
+  if (partnerGoruyor(room.partner(), 'sohbet')) return; // sohbette ve sekmesi önde: mesajı zaten görüyor
   Promise.resolve(bildir(roomId, { tur: 'mesaj', baslik: benimAdim() || 'Sevgilin', metin: M.ozet(data, 80), url: 'sayfalar/sohbet/' }))
     .catch(() => {});
 }
+
+// Çevrimdışı gönderilen mesaj giden kutusunda bekler: bildirim, sunucu onaylayınca (pending kalkınca) bir kez gider.
+const bildirimBekleyen = new Map(); // mesajId -> data
+function gonderildiBildir(id, data) {
+  if (col.get(id)?.pending) bildirimBekleyen.set(id, data);
+  else bildirGerekirse(data);
+}
+col.on('change', () => {
+  for (const [id, data] of bildirimBekleyen) {
+    const d = col.get(id);
+    if (d?.pending) continue;
+    bildirimBekleyen.delete(id);
+    if (d) bildirGerekirse(data); // silindiyse bildirim yok
+  }
+});
 
 async function gonder() {
   const metin = M.metniTemizle(ta.value);
@@ -474,14 +490,15 @@ async function gonder() {
   girisDegisti();
   sonYaziyor = 0;
   zorlaAlta = true;
+  let id;
   try {
-    await col.put(data);
+    id = await col.put(data);
   } catch (e) {
     toast(e.message);
     if (!ta.value) { ta.value = metin; girisDegisti(); }
     return;
   }
-  bildirGerekirse(data);
+  gonderildiBildir(id, data);
 }
 
 // ---------- Fotoğraf ----------
@@ -520,13 +537,14 @@ async function fotoGonder(y) {
     if (y.yanit && col.get(y.yanit)) data.yanit = y.yanit;
     yuklemeler = yuklemeler.filter((x) => x !== y);
     zorlaAlta = true;
+    let id;
     try {
-      await col.put(data);
+      id = await col.put(data);
     } catch (e) {
       toast(e.message);
       return;
     }
-    bildirGerekirse(data);
+    gonderildiBildir(id, data);
   } catch (e) {
     if (!yuklemeler.includes(y)) return;
     y.durum = 'hata';
@@ -556,12 +574,8 @@ async function tepkiVer(id, emoji, { yalnizEkle = false } = {}) {
   const d = col.get(id);
   if (!d) return;
   if (yalnizEkle && d.data.tepki?.[benId] === emoji) return;
-  const data = { ...d.data };
-  if (!data.kimden) data.kimden = M.gonderen(d); // karşı taraf yazınca 'author' değişir; gönderen korunur
-  const t = M.tepkiDegistir(data.tepki, benId, emoji);
-  if (t) data.tepki = t; else delete data.tepki;
   try {
-    await col.put(data, id);
+    await col.patch(id, M.tepkiYamasi(d, benId, emoji)); // yalnız kendi tepkim: partnerinkini ezmez
   } catch (e) {
     toast(e.message);
   }

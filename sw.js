@@ -4,7 +4,7 @@
 // - Supabase, YouTube ve diğer dış adresler önbelleğe alınmaz (yalnız Google Fonts alınır).
 // - push → bildirim gösterir; bildirime dokununca açık pencereyi odaklar ya da sayfayı açar.
 // Tüm önbelleği atmak için SURUM'u değiştir.
-const SURUM = '2026-10-30.1';
+const SURUM = '2026-10-30.2';
 const ONBELLEK = `biz-${SURUM}`;
 const KOK = new URL('./', self.location.href).href;
 const ON_YUKLE = ['./', 'css/base.css', 'assets/favicon.svg', 'manifest.webmanifest', 'assets/icons/icon-192.png', 'assets/icons/rozet-96.png'];

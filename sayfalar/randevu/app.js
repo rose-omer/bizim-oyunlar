@@ -39,6 +39,8 @@ const tarihUzun = (gun) => {
 };
 const aniUrl = (metin, iso) => pageUrl('sayfalar/anilar/', aniParametreleri(metin, toDay(new Date(iso))));
 const yaz = (data, id) => col.put(data, id).catch((e) => toast(e.message));
+/** Yalnız verilen alanları yazar (alan düzeyinde birleşir); null alanı siler. */
+const yamala = (id, kismi) => col.patch(id, kismi).catch((e) => toast(e.message));
 const katAdlari = (f) => f.kategoriler.map((k) => R.kategoriById(k)?.ad).filter(Boolean).join(', ');
 
 // ---------- İskelet ----------
@@ -326,7 +328,7 @@ function kayitEl(d, tur) {
     rozet(d, tur),
     h('div', { class: 'rv-kayit-govde' }, h('p', { class: 'rv-kayit-metin' }, d.data.metin), meta),
     h('div', { class: 'rv-kayit-eylem' }, eylem),
-    acik ? planFormu(`k:${d.id}`, d.data.plan, (gun) => { yaz({ ...d.data, plan: gun }, d.id); toast(`Takvimde: ${tarihUzun(gun)}`); }) : null);
+    acik ? planFormu(`k:${d.id}`, d.data.plan, (gun) => { yamala(d.id, { plan: gun }); toast(`Takvimde: ${tarihUzun(gun)}`); }) : null);
 }
 
 // ---------- Eylemler ----------
@@ -383,7 +385,7 @@ async function cek() {
 async function kaydetDegistir(f) {
   const k = R.kayitlar(col.all()).get(f.id);
   if (!k) {
-    yaz(R.yeniRandevu({ fikir: f }).data);
+    yamala(R.fikirDocId(f), R.yeniRandevu({ fikir: f }).data); // sabit id + alan yaması: iki cihaz aynı anda kaydetse de tek kayıt
     sfx('pop');
     toast('Kaydedildi. Planladıklarımız’da sizi bekliyor.');
     return;
@@ -395,8 +397,8 @@ async function kaydetDegistir(f) {
 
 function planla(f, gun) {
   const k = R.kayitlar(col.all()).get(f.id);
-  if (k) yaz({ ...k.data, plan: gun }, k.id);
-  else yaz(R.yeniRandevu({ fikir: f, plan: gun }).data);
+  if (k) yamala(k.id, { plan: gun });
+  else yamala(R.fikirDocId(f), R.yeniRandevu({ fikir: f, plan: gun }).data);
   sfx('pop');
   toast(`Takvimde: ${tarihUzun(gun)}`);
 }
@@ -404,7 +406,7 @@ function planla(f, gun) {
 function yaptik(d) {
   const guncel = col.get(d.id)?.data || d.data;
   const yapildi = new Date().toISOString();
-  yaz({ ...guncel, yapildi }, d.id);
+  yamala(d.id, { yapildi });
   sfx('win');
   toast('Ne güzel! Anı olarak ekleyelim mi?', {
     ms: 8000,
@@ -413,8 +415,7 @@ function yaptik(d) {
 }
 
 function geriAl(d) {
-  const { yapildi, ...kalan } = col.get(d.id)?.data || d.data;
-  yaz(kalan, d.id);
+  yamala(d.id, { yapildi: null });
   sfx('tap');
 }
 

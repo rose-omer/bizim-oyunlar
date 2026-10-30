@@ -7,6 +7,7 @@ import { readStore, writeStore } from '../../js/core/identity.js';
 import { h, icon, toast, confirmDialog, celebrate } from '../../js/core/ui.js';
 import { sfx } from '../../js/core/sound.js';
 import { bildir } from '../../js/core/bildirim.js';
+import { partnerGoruyor } from '../../js/core/room.js';
 import { yerelHatirlaticilar } from '../../js/core/mobil.js';
 import { toDay, parseDay, daysBetween, daysTogether, durationParts, countdown, monthGrid } from '../../js/core/gunler.js';
 import * as M from './mantik.js';
@@ -56,6 +57,7 @@ const pad = (n) => String(n).padStart(2, '0');
 const benimAdim = () => profil.ben()?.ad || me.name || '';
 
 function haberVer(baslik, metin) {
+  if (partnerGoruyor(room.partner(), 'gunler')) return; // Günler'de ve sekmesi önde: değişikliği zaten görüyor
   try {
     Promise.resolve(bildir(roomId, { tur: 'gun', baslik, metin, url: 'sayfalar/gunler/' })).catch(() => {});
   } catch { /* bildirim isteğe bağlı */ }
@@ -240,14 +242,12 @@ function tick() {
   sayac.sn.textContent = pad(c.seconds);
 }
 
-async function ciftYaz(yeni) {
-  await profil.ciftKoleksiyon.put(yeni, 'cift');
-}
+// 'cift' belgesine yalnız değişen alanlar yazılır (setCift = alan yaması); null alanı siler.
+const BULUSMA_YOK = { bulusma: null, bulusmaNotu: null };
 
 async function bulustuk() {
-  const { bulusma, bulusmaNotu, ...kalan } = profil.cift();
   try {
-    await ciftYaz(kalan);
+    await profil.setCift(BULUSMA_YOK);
   } catch (x) {
     toast(x.message || 'Kaydedilemedi.');
     return;
@@ -275,7 +275,7 @@ function bulusmaFormu() {
       h('div', { class: 'gn-field' }, h('label', { class: 'gn-label', for: 'gn-b-not' }, 'Not ', h('span', { class: 'gn-opt' }, '(isteğe bağlı)')), not),
     ],
     altlik: [
-      c.bulusma ? h('button', { type: 'button', class: 'btn ghost danger gn-del', onclick: async () => { s.kapat(); const { bulusma, bulusmaNotu, ...kalan } = profil.cift(); try { await ciftYaz(kalan); toast('Buluşma kaldırıldı'); } catch (x) { toast(x.message); } } }, 'Kaldır') : null,
+      c.bulusma ? h('button', { type: 'button', class: 'btn ghost danger gn-del', onclick: async () => { s.kapat(); try { await profil.setCift(BULUSMA_YOK); toast('Buluşma kaldırıldı'); } catch (x) { toast(x.message); } } }, 'Kaldır') : null,
       kaydet,
     ],
   });
@@ -283,13 +283,10 @@ function bulusmaFormu() {
     e.preventDefault();
     const { hata, iso } = M.bulusmaDogrula(tarih.value, saat.value);
     if (hata) { hataYaz(tarih, err, hata, true); sfx('wrong'); return; }
-    const { bulusmaNotu, ...kalan } = profil.cift();
-    const yeni = { ...kalan, bulusma: iso };
     const n = not.value.trim();
-    if (n) yeni.bulusmaNotu = n;
     kaydet.disabled = true;
     try {
-      await ciftYaz(yeni);
+      await profil.setCift({ bulusma: iso, bulusmaNotu: n || null });
     } catch (x) {
       toast(x.message || 'Kaydedilemedi.');
       kaydet.disabled = false;

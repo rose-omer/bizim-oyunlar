@@ -39,6 +39,8 @@ const adOf = (id) => profil.kisiler?.get(id)?.data?.ad || partnerAdi();
 const kim = (id) => (id === myId ? { ben: true } : { ad: adOf(id) });
 const aniUrl = (metin, iso) => pageUrl('sayfalar/anilar/', L.aniParametreleri(metin, toDay(new Date(iso))));
 const yaz = (data, id) => col.put(data, id).catch((e) => toast(e.message));
+/** Yalnız verilen alanları yazar (alan düzeyinde birleşir); data'da olmayan alan silinir. */
+const yamala = (id, data, alanlar) => col.patch(id, L.yama(data, alanlar)).catch((e) => toast(e.message));
 
 // ---------- İskelet ----------
 const app = document.getElementById('app');
@@ -305,7 +307,7 @@ function degistir(d, btn) {
     const guncel = col.get(d.id);
     if (!guncel) return;
     const veri = simdi ? L.isaretle(guncel.data, myId) : L.geriAl(guncel.data);
-    yaz(veri, d.id);
+    yamala(d.id, veri, ['yapildi', 'yapan']);
     if (simdi && veri.liste === 'yapilacak') {
       toast('Bunu anı olarak ekleyelim mi?', {
         ms: 8000,
@@ -352,7 +354,7 @@ function duzenAc(d) {
         toast(r.hata);
         return;
       }
-      yaz(r.data, d.id);
+      yamala(d.id, r.data, ['metin', 'not']);
       kapat();
     },
   },
@@ -375,7 +377,7 @@ function alacak(d) {
     toast(r.hata);
     return;
   }
-  yaz(r.data, d.id);
+  yamala(d.id, r.data, ['alacak']);
   sfx('pop');
   if (r.data.alacak) toast('Sır aramızda 🤫');
 }

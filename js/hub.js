@@ -3,7 +3,7 @@
 // Sözleşme §11 ve v2 §14–§18. Saf yardımcılar dışa aktarılır (tests/hub-biz.test.mjs); DOM yalnız tarayıcıda kurulur.
 import { GAMES, gameById } from './core/games.js';
 import { me, setName, currentRoom, setRoom, newRoomId, inviteUrl, gameUrl, pageUrl, isLocalMode } from './core/identity.js';
-import { joinRoom } from './core/room.js';
+import { joinRoom, partnerGoruyor } from './core/room.js';
 import { roomStats } from './core/db.js';
 import { openCollection } from './core/veri.js';
 import { openProfil, pickPartnerDoc } from './core/profil.js';
@@ -900,10 +900,13 @@ function sendTouch(t, btn, view) {
   state.lastWrite = now;
   state.data.dokunus?.put({ tur: t.tur, kime: pi.id, at: new Date(now).toISOString() })
     .catch((e) => toast(e?.message || 'Gönderilemedi.'));
-  const myName = cleanName(me().name) || 'Sevgilin';
-  import('./core/bildirim.js')
-    .then((m) => m.bildir(state.roomId, { tur: 'dokunus', baslik: 'Biz İkimiz', metin: t.cumle(myName), url: '' }))
-    .catch(() => {});
+  // Partner herhangi bir sayfada ve sekmesi öndeyse push yok: uygulama içi patlama zaten gidiyor.
+  if (!partnerGoruyor(state.partner)) {
+    const myName = cleanName(me().name) || 'Sevgilin';
+    import('./core/bildirim.js')
+      .then((m) => m.bildir(state.roomId, { tur: 'dokunus', baslik: 'Biz İkimiz', metin: t.cumle(myName), url: '' }))
+      .catch(() => {});
+  }
   const who = pi.name || 'Sevgilin';
   view.touchStatus.textContent = state.partner
     ? `${t.emoji} gönderildi`

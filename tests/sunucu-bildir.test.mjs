@@ -5,7 +5,7 @@ import {
   istegiDogrula, goreliUrl, kisalt, kokIzinli, corsBasliklari, endpointIzinli, esitMi,
   publishableAnahtarlar, servisAnahtari, restBasliklari, gunNo,
 } from '../supabase/functions/_shared/mantik.js';
-import { bildirIsleyici, hatirlatIsleyici, sonucOzeti } from '../supabase/functions/_shared/isleyici.js';
+import { bildirIsleyici, hatirlatIsleyici, sonucOzeti, sayfala, SAYFA } from '../supabase/functions/_shared/isleyici.js';
 import { b64uKodla } from '../supabase/functions/_shared/webpush.js';
 
 const ODA = 'abcdefgh23';
@@ -200,12 +200,12 @@ test('hatirlat: anahtar; sabah planı; oda bir kez işaretlenir', async () => {
         { room: ODA, kind: 'kisi', id: 'omer', data: { ad: 'Ömer', dogum: '1998-10-30' } },
         { room: ODA, kind: 'cift', id: 'cift', data: { baslangic: '2020-01-01' } },
       ],
-      hatirlat_isaretle: ({ p_room, p_gun, p_slot }) => {
-        const k = `${p_room}/${p_gun}/${p_slot}`;
+      hatirlat_isaretle: ({ p_rooms, p_gun, p_slot }) => p_rooms.filter((room) => {
+        const k = `${room}/${p_gun}/${p_slot}`;
         if (isaretli.has(k)) return false;
         isaretli.add(k);
         return true;
-      },
+      }),
       push_sonuc: () => null,
     },
   });
@@ -216,8 +216,10 @@ test('hatirlat: anahtar; sabah planı; oda bir kez işaretlenir', async () => {
 
   const r = await h(hIstek({ slot: 'sabah' }));
   assert.deepEqual(await r.json(), { ok: true, slot: 'sabah', bugun: '2026-10-30', oda: 1, gonderilen: 2, silinen: 0, hatali: 0 });
-  assert.deepEqual(cagri.rpc.find((c) => c[0] === 'hatirlat_belgeler')[1], { p_kinds: ['gun', 'kisi', 'cift'] });
-  assert.deepEqual(cagri.rpc.filter((c) => c[0] === 'hatirlat_isaretle').map((c) => c[1].p_room), [ODA], 'olaysız oda işaretlenmez');
+  assert.deepEqual(cagri.rpc.find((c) => c[0] === 'push_abonelikler')[1], { p_limit: SAYFA });
+  assert.deepEqual(cagri.rpc.find((c) => c[0] === 'hatirlat_belgeler')[1], { p_kinds: ['gun', 'kisi', 'cift'], p_limit: SAYFA });
+  assert.deepEqual(cagri.rpc.filter((c) => c[0] === 'hatirlat_isaretle').map((c) => c[1]), [{ p_rooms: [ODA], p_gun: '2026-10-30', p_slot: 'sabah' }],
+    'olaysız oda işaretlenmez; tek toplu çağrı');
   assert.deepEqual(cagri.push.map((p) => p.url).sort(), [gul.endpoint, omer.endpoint].sort());
 
   // Tekrar çalışırsa aynı gün ikinci kez gönderilmez.
@@ -233,7 +235,7 @@ test('hatirlat: akşam günün sorusu; vakit ve gün gövdeden ya da saatten', a
     rpcYanit: {
       push_abonelikler: () => [omer, gul],
       hatirlat_belgeler: ({ p_gs_gun }) => [{ room: ODA, kind: 'gs', id: `${p_gs_gun}-omer`, data: { gun: p_gs_gun, cevap: 'evet' } }],
-      hatirlat_isaretle: () => true,
+      hatirlat_isaretle: ({ p_rooms }) => p_rooms,
       push_sonuc: () => null,
     },
   });
@@ -243,7 +245,7 @@ test('hatirlat: akşam günün sorusu; vakit ve gün gövdeden ya da saatten', a
   const j = await r.json();
   assert.equal(j.slot, 'aksam');
   assert.equal(j.gonderilen, 1);
-  assert.deepEqual(cagri.rpc.find((c) => c[0] === 'hatirlat_belgeler')[1], { p_kinds: ['gs'], p_gs_gun: gunNo('2026-10-30') });
+  assert.deepEqual(cagri.rpc.find((c) => c[0] === 'hatirlat_belgeler')[1], { p_kinds: ['gs'], p_gs_gun: gunNo('2026-10-30'), p_limit: SAYFA });
   assert.deepEqual(cagri.push.map((p) => p.url), [gul.endpoint], 'cevaplayan Ömer\'e gitmez');
 
   const r2 = await h(hIstek({ slot: 'aksam', bugun: '2026-11-02' }));
@@ -256,4 +258,45 @@ test('hatirlat: abonelik yoksa belge okunmaz', async () => {
   const j = await (await h(hIstek({ slot: 'sabah' }))).json();
   assert.equal(j.oda, 0);
   assert.deepEqual(cagri.rpc.map((c) => c[0]), ['push_abonelikler']);
+});
+
+test('sayfala: imleçle tüm sayfalar; kısa sayfada biter; imleç ilerlemezse hata', async () => {
+  const satirlar = Array.from({ length: 7 }, (_, i) => ({ k: `s${i}` }));
+  const cagrilar = [];
+  const rpc = async (ad, args) => {
+    cagrilar.push(args);
+    return satirlar.filter((s) => !args.p_after || s.k > args.p_after).slice(0, args.p_limit);
+  };
+  assert.deepEqual(await sayfala(rpc, 'x', { a: 1 }, (s) => ({ p_after: s.k }), 3), satirlar);
+  assert.deepEqual(cagrilar, [{ a: 1, p_limit: 3 }, { a: 1, p_after: 's2', p_limit: 3 }, { a: 1, p_after: 's5', p_limit: 3 }]);
+  cagrilar.length = 0;
+  assert.deepEqual(await sayfala(rpc, 'x', {}, (s) => ({ p_after: s.k }), 7), satirlar);
+  assert.equal(cagrilar.length, 2, 'tam dolu sayfadan sonra boş sayfa istenir');
+  await assert.rejects(() => sayfala(async () => [{ k: 'a' }], 'x', {}, () => ({}), 1), /sayfa sınırı/);
+});
+
+test('hatirlat: 500 üstü abonelik sayfalarla okunur; belgeler imleçle', async () => {
+  const omer = await abone('https://fcm.googleapis.com/fcm/send/zz-omer', 'omer');
+  // 500 olaysız oda (bildirim gitmez) + son sırada ODA (doğum günü): ODA yalnız 2. sayfada gelir.
+  const bos = Array.from({ length: SAYFA }, (_, i) => ({
+    room: `oda${String(i).padStart(7, '0')}`, client: 'c', endpoint: `https://fcm.googleapis.com/fcm/send/a${String(i).padStart(4, '0')}`, p256dh: 'x', auth: 'y',
+  }));
+  const hepsi = [...bos, omer];
+  const belge = { room: ODA, kind: 'kisi', id: 'omer', data: { ad: 'Ömer', dogum: '1998-10-30' } };
+  const { fn, cagri } = sahteFetch({
+    rpcYanit: {
+      push_abonelikler: ({ p_after, p_limit }) => hepsi.filter((s) => !p_after || s.endpoint > p_after).slice(0, p_limit),
+      hatirlat_belgeler: ({ p_after }) => (p_after ? [] : [belge]),
+      hatirlat_isaretle: ({ p_rooms }) => p_rooms,
+      push_sonuc: () => null,
+    },
+  });
+  const h = hatirlatIsleyici({ env: await ortam(), fetchFn: fn, simdi: () => new Date('2026-10-30T06:00:05Z') });
+  const j = await (await h(hIstek({ slot: 'sabah' }))).json();
+  assert.equal(j.oda, 1);
+  assert.equal(j.gonderilen, 1);
+  const ab = cagri.rpc.filter((c) => c[0] === 'push_abonelikler').map((c) => c[1]);
+  assert.deepEqual(ab, [{ p_limit: SAYFA }, { p_after: bos[SAYFA - 1].endpoint, p_limit: SAYFA }]);
+  assert.equal(cagri.rpc.filter((c) => c[0] === 'hatirlat_belgeler').length, 1, 'kısa sayfadan sonra istenmez');
+  assert.deepEqual(cagri.push.map((p) => p.url), [omer.endpoint]);
 });

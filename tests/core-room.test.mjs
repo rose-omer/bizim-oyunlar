@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   joinRoom, openLocalRoom, pickPartner, samePartner, acceptEnvelope,
-  applyLocalPresence, expirePeers, backoffDelay,
+  applyLocalPresence, expirePeers, backoffDelay, partnerGoruyor,
 } from '../js/core/room.js';
 
 const ROOM = 'test123456';
@@ -27,12 +27,27 @@ test('pickPartner: kendini atlar, ilk farklı kişiyi ve son meta\'yı alır', (
     ],
     C: [{ clientId: 'C', name: 'Üçüncü', page: 'lobby' }],
   };
-  assert.deepEqual(pickPartner(state, 'A'), { clientId: 'B', name: 'Ayşe', page: 'yapboz', host: null });
-  assert.deepEqual(pickPartner({ K: [{ name: 'Adsız' }] }, 'A'), { clientId: 'K', name: 'Adsız', page: '', host: null });
+  assert.deepEqual(pickPartner(state, 'A'), { clientId: 'B', name: 'Ayşe', page: 'yapboz', host: null, gorunur: true });
+  assert.deepEqual(pickPartner({ K: [{ name: 'Adsız' }] }, 'A'), { clientId: 'K', name: 'Adsız', page: '', host: null, gorunur: true });
   // host: partnerin oyun sayfasındaki ev sahibi (misafirse başkası)
   assert.deepEqual(pickPartner({ B: [{ clientId: 'B', name: 'Ayşe', page: 'yapboz', host: 'A' }] }, 'A'),
-    { clientId: 'B', name: 'Ayşe', page: 'yapboz', host: 'A' });
+    { clientId: 'B', name: 'Ayşe', page: 'yapboz', host: 'A', gorunur: true });
   assert.equal(pickPartner({ B: [] }, 'A'), null);
+  // gorunur: sekme arkadaysa false; eski istemcide alan yoksa true
+  assert.equal(pickPartner({ B: [{ clientId: 'B', name: 'Ayşe', page: 'sohbet', gorunur: false }] }, 'A').gorunur, false);
+  assert.equal(pickPartner({ B: [{ clientId: 'B', name: 'Ayşe', page: 'sohbet' }] }, 'A').gorunur, true);
+});
+
+test('partnerGoruyor: aynı sayfa (ya da herhangi) ve sekme önde', () => {
+  const p = { clientId: 'B', name: 'Ayşe', page: 'sohbet', host: null, gorunur: true };
+  assert.equal(partnerGoruyor(null, 'sohbet'), false);
+  assert.equal(partnerGoruyor(p, 'sohbet'), true);
+  assert.equal(partnerGoruyor(p, 'anilar'), false);
+  assert.equal(partnerGoruyor(p), true);
+  assert.equal(partnerGoruyor({ ...p, gorunur: false }, 'sohbet'), false);
+  assert.equal(partnerGoruyor({ ...p, gorunur: false }), false);
+  const { gorunur, ...eski } = p;
+  assert.equal(partnerGoruyor(eski, 'sohbet'), true); // eski istemci
 });
 
 test('samePartner', () => {
@@ -43,6 +58,7 @@ test('samePartner', () => {
   assert.equal(samePartner(p, { ...p, page: 'ciz' }), false);
   assert.equal(samePartner({ ...p, host: null }, { ...p, host: 'A' }), false);
   assert.equal(samePartner({ ...p, host: 'A' }, { ...p, host: 'A' }), true);
+  assert.equal(samePartner({ ...p, gorunur: true }, { ...p, gorunur: false }), false);
 });
 
 test('acceptEnvelope: aynı ns ya da *, kendi mesajın değil', () => {
@@ -67,6 +83,10 @@ test('applyLocalPresence: yeni eşe hemen yanıt, bilinen eşe yanıt yok', () =
   assert.equal(peers.get('B').host, null);
   assert.deepEqual(applyLocalPresence(peers, { ...here, page: 'ciz', host: 'A' }, 'A', 2150), { changed: true, reply: false });
   assert.equal(peers.get('B').host, 'A');
+  assert.equal(peers.get('B').gorunur, true);
+  // sekme arka plana gitti: değişim var, yanıt yok
+  assert.deepEqual(applyLocalPresence(peers, { ...here, page: 'ciz', host: 'A', gorunur: false }, 'A', 2160), { changed: true, reply: false });
+  assert.equal(peers.get('B').gorunur, false);
   // aynı kişi yeni sayfada (yeni inst): yeni eş gibi
   assert.deepEqual(applyLocalPresence(peers, { ...here, inst: 'i2' }, 'A', 2200), { changed: true, reply: true });
   // eski sayfanın geç gelen 'bye'ı yeni sayfayı silmez
@@ -136,8 +156,8 @@ test('yerel arka uç: presence, ns süzme, *, kendi mesajın gelmez, ayrılma', 
   let a3 = null;
   try {
     await until(() => a.partner() && b.partner());
-    assert.deepEqual(a.partner(), { clientId: 'B', name: 'Ayşe', page: 'yapboz', host: null });
-    assert.deepEqual(b.partner(), { clientId: 'A', name: 'Ali', page: 'yapboz', host: null });
+    assert.deepEqual(a.partner(), { clientId: 'B', name: 'Ayşe', page: 'yapboz', host: null, gorunur: true });
+    assert.deepEqual(b.partner(), { clientId: 'A', name: 'Ali', page: 'yapboz', host: null, gorunur: true });
 
     const seen = [];
     b.on('presence', (p) => seen.push(p && p.clientId));
@@ -206,7 +226,7 @@ test('yerel arka uç: presence host taşır', async () => {
   const guest = openLocalRoom({ roomId: ROOM + 'h', ns: 'yapboz', me: { clientId: 'B', name: 'Ayşe' }, host: 'A' });
   try {
     await until(() => lobby.partner() && guest.partner());
-    assert.deepEqual(lobby.partner(), { clientId: 'B', name: 'Ayşe', page: 'yapboz', host: 'A' });
+    assert.deepEqual(lobby.partner(), { clientId: 'B', name: 'Ayşe', page: 'yapboz', host: 'A', gorunur: true });
     assert.equal(guest.partner().host, null); // lobide host yok
   } finally {
     lobby.leave();
@@ -232,5 +252,33 @@ test("joinRoom: oyun sayfası URL'deki host'u yollar, lobi null yollar", async (
   } finally {
     delete globalThis.location;
     watcher.leave();
+  }
+});
+
+test('yerel arka uç: sekme gizlenince hemen gorunur:false yayınlanır', async () => {
+  const hadDoc = 'document' in globalThis;
+  const oldDoc = globalThis.document;
+  const fakeDoc = new EventTarget();
+  fakeDoc.visibilityState = 'visible';
+  globalThis.document = fakeDoc;
+  const id = ROOM + 'v';
+  const a = openLocalRoom({ roomId: id, ns: 'sohbet', me: { clientId: 'A', name: 'Ali' }, heartbeatMs: 60000 });
+  const raw = new BroadcastChannel('bizim:' + id);
+  const got = [];
+  raw.onmessage = (e) => { if (e.data?._p === 'here') got.push(e.data.gorunur); };
+  try {
+    raw.postMessage({ _p: 'here', clientId: 'B', name: 'Ayşe', page: 'sohbet', inst: 'b' }); // A yanıtlar
+    await until(() => got.length >= 1);
+    assert.equal(got.at(-1), true);
+    fakeDoc.visibilityState = 'hidden';
+    fakeDoc.dispatchEvent(new Event('visibilitychange'));
+    await until(() => got.at(-1) === false);
+    fakeDoc.visibilityState = 'visible';
+    fakeDoc.dispatchEvent(new Event('visibilitychange'));
+    await until(() => got.at(-1) === true);
+  } finally {
+    raw.close();
+    a.leave();
+    if (hadDoc) globalThis.document = oldDoc; else delete globalThis.document;
   }
 });

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   LISTELER, listeById, yeniOge, duzenle, sahibi, grubu, ogeler, sayac, tumSayaclar,
   ekleyen, isaretle, geriAl, isaretleyebilir, duzenleyebilir, gizliIsaret, sahibeGoster, alacakDegistir,
-  yapildiMetni, bildirimZamaniMi, BILDIRIM_ARALIK, aniParametreleri, MAX_METIN,
+  yapildiMetni, bildirimZamaniMi, BILDIRIM_ARALIK, aniParametreleri, MAX_METIN, yama,
 } from '../sayfalar/listeler/liste.js';
 
 const BEN = 'omer-id';
@@ -168,4 +168,15 @@ test('bildirimZamaniMi: 5 dakikada en çok bir bildirim', () => {
 test('aniParametreleri: başlık kısaltılır, tarih gün olarak', () => {
   assert.deepEqual(aniParametreleri('  Kapadokya balon  ', '2026-10-12'), { yeni: 1, baslik: 'Kapadokya balon', tarih: '2026-10-12' });
   assert.equal(aniParametreleri('a'.repeat(200), '2026-10-12').baslik.length, 80);
+});
+
+test('yama: yalnız verilen alanlar; olmayan alan null (silinir)', () => {
+  const d = { liste: 'yapilacak', metin: 'Kahve', not: 'n', alacak: 'x' };
+  assert.deepEqual(yama(isaretle(d, BEN, new Date(0)), ['yapildi', 'yapan']),
+    { yapildi: '1970-01-01T00:00:00.000Z', yapan: BEN });
+  assert.deepEqual(yama(geriAl({ ...d, yapildi: 'z', yapan: BEN }), ['yapildi', 'yapan']), { yapildi: null, yapan: null });
+  assert.deepEqual(yama(duzenle(d, { metin: 'Çay', not: '' }).data, ['metin', 'not']), { metin: 'Çay', not: null });
+  const h = { id: 'h', author: O, data: { liste: 'hediye', metin: 'Kitap', kimin: O } };
+  assert.deepEqual(yama(alacakDegistir(h, BEN).data, ['alacak']), { alacak: BEN });
+  assert.deepEqual(yama(alacakDegistir({ ...h, data: { ...h.data, alacak: BEN } }, BEN).data, ['alacak']), { alacak: null });
 });

@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import {
   pinHatasi, kayitCoz, denemeCoz, yanlisSay, beklemeKalan, kalanHak, oturumGecerli,
-  unutulacakAnahtarlar, sha256Saf, ozetle, pinDogrula, kilitAyarla, kilitVarMi, hexYap,
-  MAX_YANLIS, BEKLEME_MS, ARKA_PLAN_MS, K_PIN,
+  unutulacakAnahtarlar, sha256Saf, ozetle, pinDogrula, kilitAyarla, kilitVarMi, hexYap, cihazdanUnut,
+  MAX_YANLIS, BEKLEME_MS, ARKA_PLAN_MS, BILDIRIM_BEKLE_MS, K_PIN,
 } from '../js/core/kilit.js';
-import { readStore } from '../js/core/identity.js';
+import { readStore, writeStore, setRoom, currentRoom } from '../js/core/identity.js';
 
 test('pinHatasi: yalnız 4–6 rakamlı dize geçer', () => {
   for (const ok of ['1234', '0000', '12345', '098765']) assert.equal(pinHatasi(ok), null, ok);
@@ -61,16 +61,87 @@ test('oturumGecerli: 5 dk arka plan sınırı', () => {
   assert.equal(oturumGecerli({ acik: true, son: 'x' }, t), false);
 });
 
-test('unutulacakAnahtarlar: yalnız o odanın önbelleği', () => {
-  const keys = [
-    'bizim.veri.odaaaaaaa2.mesaj', 'bizim.veri.odaaaaaaa2.kisi', 'bizim.veri.giden.odaaaaaaa2',
-    'bizim.partner.odaaaaaaa2.abc', 'bizim.veri.baskaoda22.mesaj', 'bizim.yerelveri.odaaaaaaa2.mesaj',
-    'bizim.room', 'bizim.kilit', 'bizim.tema',
-  ];
-  assert.deepEqual(unutulacakAnahtarlar(keys, 'odaaaaaaa2'), [
-    'bizim.veri.odaaaaaaa2.mesaj', 'bizim.veri.odaaaaaaa2.kisi', 'bizim.veri.giden.odaaaaaaa2', 'bizim.partner.odaaaaaaa2.abc',
-  ]);
-  assert.deepEqual(unutulacakAnahtarlar(keys, null), []);
+const ODA = 'pdaaaaaaa2';
+const ODA_ANAHTARLARI = [
+  `bizim.veri.${ODA}.mesaj`, `bizim.veri.giden.${ODA}.cli-1`, `bizim.partner.${ODA}.abc`,
+  `bizim.sohbet.taslak.${ODA}.cli-1`, `bizim.mektup.taslak.${ODA}.cli-1`, `bizim.sevgidili.taslak.${ODA}.cli-1`,
+  `bizim.gunler.kutlama.${ODA}.cli-1`, `bizim.dokunusGordu.${ODA}.cli-1`, `bizim.baslangicGec.${ODA}`,
+  `bizim.izle.son.${ODA}`, `bizim.hafiza.${ODA}.duo`, `bizim.soru.kimdaha.${ODA}`, `bizim.log.${ODA}`,
+  'bizim.room', 'bizim.bildirim.tazelendi',
+];
+const KALACAKLAR = [
+  'bizim.veri.baskaoda22.mesaj', `bizim.yerelveri.${ODA}.mesaj`, 'bizim.kilit', 'bizim.kilit.oturum', 'bizim.tema',
+  'bizim.client', 'bizim.name', 'bizim.yerel', 'bizim.hafiza.-.solo', `baska.${ODA}`,
+];
+
+test('unutulacakAnahtarlar: oda kodunu içeren tüm bizim.* + oda kaydı; yerel mod verisi kalır', () => {
+  assert.deepEqual(unutulacakAnahtarlar([...KALACAKLAR, ...ODA_ANAHTARLARI], ODA), ODA_ANAHTARLARI);
+  assert.deepEqual(unutulacakAnahtarlar(ODA_ANAHTARLARI, null), []);
+  assert.deepEqual(unutulacakAnahtarlar(ODA_ANAHTARLARI, 'a'), [], 'geçersiz oda kodu hiçbir şey silmez');
+});
+
+/** Web Storage benzeri sahte depo (Node). */
+function sahteDepo(anahtarlar) {
+  const m = new Map(anahtarlar.map((k) => [k, '1']));
+  return {
+    m,
+    get length() { return m.size; },
+    key: (i) => [...m.keys()][i] ?? null,
+    getItem: (k) => (m.has(k) ? m.get(k) : null),
+    setItem: (k, v) => m.set(k, String(v)),
+    removeItem: (k) => m.delete(k),
+  };
+}
+
+async function unutOrtami(abonelik, fn) {
+  const eski = { ls: globalThis.localStorage, ss: globalThis.sessionStorage, nav: globalThis.navigator };
+  const ls = sahteDepo([...KALACAKLAR, ...ODA_ANAHTARLARI]);
+  const ss = sahteDepo([`bizim.sohbet.taslak.${ODA}.x`, 'bizim.bildirim.tazelendi', 'bizim.yerel', 'bizim.kilit.oturum']);
+  const def = (ad, v) => Object.defineProperty(globalThis, ad, { value: v, configurable: true, writable: true });
+  def('localStorage', ls);
+  def('sessionStorage', ss);
+  def('navigator', { serviceWorker: { getRegistration: async () => ({ pushManager: { getSubscription: async () => abonelik } }) } });
+  writeStore('session', 'bizim.yerel', '1'); // yerel mod: bildirimKapat sunucuya gitmez
+  try {
+    await fn(ls, ss);
+  } finally {
+    writeStore('session', 'bizim.yerel', null);
+    def('localStorage', eski.ls);
+    def('sessionStorage', eski.ss);
+    def('navigator', eski.nav);
+  }
+}
+
+test('cihazdanUnut: önce bildirim kapanır, sonra oda anahtarları (local + session) silinir', async () => {
+  let kapatildiginda = null;
+  const abonelik = { endpoint: 'https://fcm.googleapis.com/fcm/send/x', unsubscribe: async () => { kapatildiginda = [...globalThis.localStorage.m.keys()]; return true; } };
+  await unutOrtami(abonelik, async (ls, ss) => {
+    setRoom(ODA);
+    await cihazdanUnut(ODA);
+    assert.ok(kapatildiginda, 'bildirim aboneliği kapatılmalı');
+    assert.ok(kapatildiginda.includes(`bizim.veri.${ODA}.mesaj`), 'bildirim, anahtarlar silinmeden önce kapanır');
+    assert.deepEqual([...ls.m.keys()], KALACAKLAR);
+    assert.deepEqual([...ss.m.keys()], ['bizim.yerel', 'bizim.kilit.oturum']);
+    assert.equal(currentRoom(), null);
+  });
+});
+
+test('cihazdanUnut: bildirim kapatma takılırsa en çok 5 sn beklenir; hata yutulur', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const takili = { endpoint: 'https://fcm.googleapis.com/fcm/send/y', unsubscribe: () => new Promise(() => {}) };
+  await unutOrtami(takili, async (ls) => {
+    let bitti = false;
+    const s = cihazdanUnut(ODA).then(() => { bitti = true; });
+    for (let i = 0; i < 20; i++) await new Promise((r) => setImmediate(r));
+    assert.equal(bitti, false, '5 sn dolmadan bitmemeli');
+    t.mock.timers.tick(BILDIRIM_BEKLE_MS);
+    await s;
+    assert.deepEqual([...ls.m.keys()], KALACAKLAR);
+  });
+  await unutOrtami({ endpoint: 'x', unsubscribe: async () => { throw new Error('ağ yok'); } }, async (ls) => {
+    await cihazdanUnut(ODA);
+    assert.deepEqual([...ls.m.keys()], KALACAKLAR);
+  });
 });
 
 test('sha256Saf node:crypto ile aynı (tek ve çok blok)', () => {

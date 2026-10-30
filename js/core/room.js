@@ -1,8 +1,9 @@
 // Oda: iki kişi arasında gerçek zamanlı mesaj ve "kim burada" (presence).
 // Arka uçlar: 'supabase' (Realtime kanalı), 'local' (BroadcastChannel, aynı tarayıcı), 'solo' (no-op).
 // Node'da içe aktarılabilir: tarayıcı nesnelerine yalnız fonksiyon içinde, korumalı erişilir.
-// Presence yükü: { clientId, name, page: ns, host }. host = oyun sayfasının ev sahibi (URL'deki host);
+// Presence yükü: { clientId, name, page: ns, host, gorunur }. host = oyun sayfasının ev sahibi (URL'deki host);
 // lobide ya da URL'de yoksa null. Lobi, partnerin oyununa doğru ev sahibiyle katılmak için kullanır.
+// gorunur = sekme öndeyse true (document.visibilityState). Eski istemcide alan yoksa true sayılır.
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../config.js';
 import { me as whoAmI, isLocalMode, uuid, readGameParams } from './identity.js';
 
@@ -23,6 +24,7 @@ export function pickPartner(state, myClientId) {
       name: String(meta.name || ''),
       page: String(meta.page || ''),
       host: meta.host ? String(meta.host) : null,
+      gorunur: meta.gorunur !== false,
     };
   }
   return null;
@@ -30,7 +32,16 @@ export function pickPartner(state, myClientId) {
 
 export function samePartner(a, b) {
   if (!a || !b) return a === b;
-  return a.clientId === b.clientId && a.name === b.name && a.page === b.page && a.host === b.host;
+  return a.clientId === b.clientId && a.name === b.name && a.page === b.page && a.host === b.host
+    && a.gorunur === b.gorunur;
+}
+
+/**
+ * Partner şu an bakıyor mu? page verilirse o sayfada, verilmezse herhangi bir sayfada; sekmesi önde.
+ * true ise anlık bildirim (push) gereksizdir: uygulama içinden zaten görür.
+ */
+export function partnerGoruyor(partner, page = null) {
+  return !!partner && partner.gorunur !== false && (page == null || partner.page === page);
 }
 
 /** Zarf { ns, from, m } bu sayfaya mı? Aynı ns ya da '*'; kendi mesajım değil. */
@@ -42,8 +53,8 @@ export function acceptEnvelope(env, ns, myClientId) {
 }
 
 /**
- * Yerel presence mesajını işler: { _p:'here'|'bye', clientId, name, page, host, inst }.
- * peers: Map<clientId, { clientId, name, page, host, inst, seen }>. reply = yeni eş: hemen "buradayım" de.
+ * Yerel presence mesajını işler: { _p:'here'|'bye', clientId, name, page, host, gorunur, inst }.
+ * peers: Map<clientId, { clientId, name, page, host, gorunur, inst, seen }>. reply = yeni eş: hemen "buradayım" de.
  */
 export function applyLocalPresence(peers, d, myClientId, now) {
   const none = { changed: false, reply: false };
@@ -61,12 +72,14 @@ export function applyLocalPresence(peers, d, myClientId, now) {
     name: String(d.name || ''),
     page: String(d.page || ''),
     host: d.host ? String(d.host) : null,
+    gorunur: d.gorunur !== false,
     inst: String(d.inst || ''),
     seen: now,
   };
   peers.set(d.clientId, next);
   const isNew = !prev || prev.inst !== next.inst;
-  const changed = isNew || prev.name !== next.name || prev.page !== next.page || prev.host !== next.host;
+  const changed = isNew || prev.name !== next.name || prev.page !== next.page || prev.host !== next.host
+    || prev.gorunur !== next.gorunur;
   return { changed, reply: isNew };
 }
 
@@ -155,6 +168,8 @@ function listen(target, type, fn) {
 
 const win = () => (typeof window !== 'undefined' ? window : null);
 const doc = () => (typeof document !== 'undefined' ? document : null);
+/** Sekme önde mi? Belge yoksa (Node) true. */
+const visible = () => { const d = doc(); return d ? d.visibilityState === 'visible' : true; };
 
 // ---- Yalnız oda ----
 
@@ -191,7 +206,7 @@ export function openLocalRoom({ roomId, ns, me, host = null, heartbeatMs = 3000,
       return false;
     }
   };
-  const hello = () => post({ _p: 'here', clientId: me.clientId, name: me.name, page: ns, host: host || null, inst });
+  const hello = () => post({ _p: 'here', clientId: me.clientId, name: me.name, page: ns, host: host || null, gorunur: visible(), inst });
   const bye = () => post({ _p: 'bye', clientId: me.clientId, inst });
   const recompute = () => {
     const state = Object.fromEntries([...peers].map(([id, p]) => [id, [p]]));
@@ -233,7 +248,8 @@ export function openLocalRoom({ roomId, ns, me, host = null, heartbeatMs = 3000,
   const offs = [
     listen(win(), 'pagehide', bye),
     listen(win(), 'pageshow', (e) => { if (e.persisted) tick(); }),
-    listen(doc(), 'visibilitychange', () => { if (doc().visibilityState === 'visible') tick(); }),
+    // Öne gelince ve arka plana gidince hemen yayın: partner "görünür" bilgisini beklemeden alır.
+    listen(doc(), 'visibilitychange', tick),
   ];
 
   room.send = (m) => sendEnv(ns, m);
@@ -325,6 +341,13 @@ export function openSupabaseRoom({ roomId, ns, me, host = null, getClient = getS
   const updatePresence = () => {
     base.setPartner(joined && ch ? pickPartner(ch.presenceState(), me.clientId) : null);
   };
+  const payload = () => ({ clientId: me.clientId, name: me.name, page: ns, host: host || null, gorunur: visible() });
+  const track = () => {
+    if (!joined || !ch) return;
+    try {
+      Promise.resolve(ch.track(payload())).catch(() => {});
+    } catch { /* kanal kapanıyor */ }
+  };
 
   const scheduleRetry = () => {
     if (left || retryTimer) return;
@@ -391,7 +414,7 @@ export function openSupabaseRoom({ roomId, ns, me, host = null, getClient = getS
         clearTimeout(retryTimer);
         retryTimer = null;
         base.setStatus('online');
-        Promise.resolve(channel.track({ clientId: me.clientId, name: me.name, page: ns, host: host || null })).catch(() => {});
+        track();
         updatePresence();
       } else if (s === 'CHANNEL_ERROR') {
         lost('error', 'Bağlantıda sorun var. Yeniden deneniyor…');
@@ -432,7 +455,10 @@ export function openSupabaseRoom({ roomId, ns, me, host = null, getClient = getS
     connect();
   };
   const offs = [
-    listen(doc(), 'visibilitychange', () => { if (doc().visibilityState === 'visible') refresh(false); }),
+    listen(doc(), 'visibilitychange', () => {
+      track(); // gorunur değişti: presence yükünü yenile
+      if (visible()) refresh(false);
+    }),
     listen(win(), 'online', () => refresh(true)),
     listen(win(), 'offline', () => { if (!left) lost('offline', 'İnternet bağlantısı yok.'); }),
     listen(win(), 'pageshow', (e) => { if (e.persisted) refresh(true); }),

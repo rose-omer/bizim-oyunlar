@@ -125,6 +125,14 @@
 }
 .gs-sayac[data-yakin='true'] { color: var(--accent-strong); }
 .gs-hata { color: var(--bad); font-size: 0.9375rem; font-weight: 700; }
+.gs-tasindi {
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  color: var(--text);
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
 .gs-dugmeler { display: flex; justify-content: flex-end; gap: 10px; margin-top: 4px; }
 @media (max-width: 480px) {
   .gs-dugmeler .btn.primary { flex: 1 1 auto; }

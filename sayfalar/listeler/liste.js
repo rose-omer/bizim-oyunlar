@@ -87,6 +87,14 @@ export function duzenle(data, { metin, not }) {
   return { data: out };
 }
 
+/**
+ * Yalnız değişen alanların yaması (veri.js patch). data'da olmayan alan null olur (silinir).
+ * Böylece iki kişi aynı öğeye aynı anda farklı alan yazınca biri diğerini ezmez.
+ */
+export function yama(data, alanlar) {
+  return Object.fromEntries(alanlar.map((k) => [k, data?.[k] ?? null]));
+}
+
 /** Öğeyi ilk ekleyen; eski belgelerde yazana düşer. */
 export function ekleyen(doc) {
   return doc?.data?.ekleyen || doc?.author || null;

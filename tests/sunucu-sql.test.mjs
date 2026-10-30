@@ -151,6 +151,11 @@ test('push_hedef: gönderen hariç, hız sınırı; push_sonuc', { skip: !pglite
   await db.exec(`update public.push_rate set n = 600 where room = '*'`);
   assert.equal((await hata('select * from public.push_hedef($1, $2)', [ODA2, null])).code, '54000');
 
+  // Aboneliği olmayan oda: boş döner, sayaç artmaz (genel sınır dolu olsa da hata yok).
+  assert.deepEqual(await hedef('yyyyyyyy22', null), []);
+  assert.equal((await q(`select count(*)::int as n from public.push_rate where room = 'yyyyyyyy22'`))[0].n, 0);
+  assert.equal((await q(`select n from public.push_rate where room = '*'`))[0].n, 600);
+
   // Eski sayaçlar temizlenir (dakikanın ilk genel çağrısında).
   await db.exec(`insert into public.push_rate values ('eskioda222', now() - interval '3 hours', 5)`);
   await db.exec(`delete from public.push_rate where room = '*'`);
@@ -189,13 +194,111 @@ test('hatirlat_belgeler ve hatirlat_isaretle', { skip: !pgliteVar && 'PGlite yok
   assert.equal(gs[0].data.cevap, 'a');
   assert.equal((await q('select * from public.hatirlat_belgeler($1)', [['gs']])).length, 0);
 
-  const isaretle = (oda, gun, slot) => q('select public.hatirlat_isaretle($1, $2, $3) as ok', [oda, gun, slot]);
-  assert.equal((await isaretle(ODA, '2026-10-30', 'sabah'))[0].ok, true);
-  assert.equal((await isaretle(ODA, '2026-10-30', 'sabah'))[0].ok, false);
-  assert.equal((await isaretle(ODA, '2026-10-30', 'aksam'))[0].ok, true);
-  assert.equal((await isaretle(ODA, '2026-12-30', 'sabah'))[0].ok, true);
+  // Sayfalama: (room, kind, id) sırası; p_after = son satır.
+  const s1 = await q('select room, kind, id from public.hatirlat_belgeler($1, null, null, 2)', [['gun', 'kisi', 'cift']]);
+  assert.deepEqual(s1.map((x) => x.id), ['cift', 'g1']);
+  const son = s1[1];
+  const s2 = await q('select id from public.hatirlat_belgeler($1, null, $2, 2)', [['gun', 'kisi', 'cift'], [son.room, son.kind, son.id]]);
+  assert.deepEqual(s2.map((x) => x.id), ['omer']);
+
+  // Toplu işaretleme: yalnız ilk kez işaretlenen odalar döner.
+  const isaretle = async (odalar, gun, slot) => (await q('select public.hatirlat_isaretle($1, $2, $3) as yeni', [odalar, gun, slot]))[0].yeni;
+  assert.deepEqual(await isaretle([ODA2, ODA, ODA], '2026-10-30', 'sabah'), [ODA, ODA2].sort());
+  assert.deepEqual(await isaretle([ODA, ODA2], '2026-10-30', 'sabah'), []);
+  assert.deepEqual(await isaretle([ODA], '2026-10-30', 'aksam'), [ODA]);
+  assert.deepEqual(await isaretle([], '2026-10-30', 'aksam'), []);
+  assert.deepEqual(await isaretle([ODA], '2026-12-30', 'sabah'), [ODA]);
   assert.equal((await q('select count(*)::int as n from public.push_gonderim'))[0].n, 1, '40 günden eski kayıtlar silinir');
-  assert.equal((await hata('select public.hatirlat_isaretle($1, $2, $3)', [ODA, '2026-10-30', 'gece'])).code, '22023');
+  for (const [odalar, slot] of [[[ODA], 'gece'], [['BAD'], 'sabah'], [[ODA, null], 'sabah'], [null, 'sabah']]) {
+    assert.equal((await hata('select public.hatirlat_isaretle($1, $2, $3)', [odalar, '2026-10-30', slot])).code, '22023', JSON.stringify(odalar));
+  }
+});
+
+test('push_abonelikler: endpoint sırasıyla sayfalı', { skip: !pgliteVar && 'PGlite yok' }, async () => {
+  const { q } = await kur();
+  for (let i = 0; i < 5; i++) await q('select public.push_kaydet($1, $2, $3::jsonb)', [i < 3 ? ODA : ODA2, `c${i}`, JSON.stringify(ab(i))]);
+  assert.equal((await q('select * from public.push_abonelikler()')).length, 5);
+  const s1 = await q('select endpoint from public.push_abonelikler(null, 2)');
+  const s2 = await q('select endpoint from public.push_abonelikler($1, 2)', [s1[1].endpoint]);
+  const s3 = await q('select endpoint from public.push_abonelikler($1, 2)', [s2[1].endpoint]);
+  assert.deepEqual([...s1, ...s2, ...s3].map((x) => x.endpoint), [0, 1, 2, 3, 4].map((i) => ab(i).endpoint));
+  assert.equal(s3.length, 1);
+});
+
+test('doc_put / doc_patch: saatlik sınırlar, günlük bayt bütçesi, reddedilen yazma sayılmaz', { skip: !pgliteVar && 'PGlite yok' }, async () => {
+  const { db, q, hata } = await kur();
+  const put = (oda, id, data) => q('select * from public.doc_put($1, $2, $3, $4::jsonb, null)', [oda, 'liste', id, JSON.stringify(data)]);
+  const patch = (oda, id, data) => q('select * from public.doc_patch($1, $2, $3, $4::jsonb, null)', [oda, 'liste', id, JSON.stringify(data)]);
+  const sayac = async (tablo, oda) => (await q(`select coalesce(sum(${tablo === 'room_rate' ? 'n' : 'bytes'}), 0)::int as n from public.${tablo} where room = $1`, [oda]))[0].n;
+
+  await put(ODA, 'a', { metin: 'selam' });
+  await patch(ODA, 'a', { not: 'x' });
+  assert.equal(await sayac('room_rate', ODA), 2);
+  assert.equal(await sayac('room_rate', '*'), 2);
+  const beklenen = (await q(`select (octet_length('{"metin":"selam"}'::jsonb::text) + octet_length(data::text))::int as n
+    from public.room_doc where id = 'a'`))[0].n;
+  assert.equal(await sayac('room_byte', ODA), beklenen, 'doc_patch yazılan tam belgeyi sayar');
+  assert.equal(await sayac('room_byte', '*'), beklenen);
+
+  // Oda başına saatte 2000.
+  await db.exec(`update public.room_rate set n = 2000 where room = '${ODA}'`);
+  let e = await hata('select * from public.doc_put($1, $2, $3, $4::jsonb, null)', [ODA, 'liste', 'b', '{}']);
+  assert.equal(e.code, '54000');
+  assert.match(e.message, /doc_put: cok fazla yazma/);
+  assert.equal((await hata('select * from public.doc_patch($1, $2, $3, $4::jsonb, null)', [ODA, 'liste', 'a', '{"x":1}'])).code, '54000');
+  assert.equal(await sayac('room_rate', ODA), 2000, 'reddedilen yazma sayaca eklenmez');
+  await put(ODA2, 'b', {});
+
+  // Genel saatte 20000.
+  await db.exec(`update public.room_rate set n = 20000 where room = '*'`);
+  assert.equal((await hata('select * from public.doc_put($1, $2, $3, $4::jsonb, null)', [ODA2, 'liste', 'c', '{}'])).code, '54000');
+  await db.exec(`update public.room_rate set n = 19999 where room = '*'`);
+  await put(ODA2, 'c', {});
+
+  // Oda başına günde 30 MB.
+  await db.exec(`delete from public.room_rate`);
+  await db.exec(`update public.room_byte set bytes = 31457280 - 10 where room = '${ODA2}'`);
+  await put(ODA2, 'd', { a: 1 }); // 8 bayt: sığar
+  e = await hata('select * from public.doc_put($1, $2, $3, $4::jsonb, null)', [ODA2, 'liste', 'e', '{"a":1}']);
+  assert.equal(e.code, '54000');
+  assert.equal((await hata('select * from public.doc_patch($1, $2, $3, $4::jsonb, null)', [ODA2, 'liste', 'd', '{"b":2}'])).code, '54000');
+  await put(ODA, 'f', { a: 1 }); // başka oda etkilenmez
+
+  // Genel günde 150 MB.
+  await db.exec(`update public.room_byte set bytes = 157286400 where room = '*'`);
+  assert.equal((await hata('select * from public.doc_put($1, $2, $3, $4::jsonb, null)', [ODA, 'liste', 'g', '{}'])).code, '54000');
+});
+
+test('room_rate / room_byte temizliği: saatin ilk genel yazması 2 günden eski kayıtları siler', { skip: !pgliteVar && 'PGlite yok' }, async () => {
+  const { db, q } = await kur();
+  await db.exec(`
+    insert into public.room_rate values ('eskioda222', now() - interval '3 days', 5), ('yenioda222', now() - interval '1 day', 5);
+    insert into public.room_byte values ('eskioda222', current_date - 5, 100), ('yenioda222', current_date - 1, 100);
+  `);
+  await q('select * from public.doc_put($1, $2, $3, $4::jsonb, null)', [ODA, 'liste', 'a', '{}']);
+  assert.deepEqual((await q(`select room from public.room_rate where room like '%oda222'`)).map((x) => x.room), ['yenioda222']);
+  assert.deepEqual((await q(`select room from public.room_byte where room like '%oda222'`)).map((x) => x.room), ['yenioda222']);
+  // Saatin ikinci yazması silmez.
+  await db.exec(`insert into public.room_rate values ('eskioda222', now() - interval '3 days', 5)`);
+  await q('select * from public.doc_patch($1, $2, $3, $4::jsonb, null)', [ODA, 'liste', 'a', '{"x":1}']);
+  assert.equal((await q(`select count(*)::int as n from public.room_rate where room = 'eskioda222'`))[0].n, 1);
+});
+
+test('push_kaydet: oda başına saatte 20, genel saatte 300 kayıt', { skip: !pgliteVar && 'PGlite yok' }, async () => {
+  const { db, q, hata } = await kur();
+  const kaydet = (oda, n) => q('select public.push_kaydet($1, $2, $3::jsonb)', [oda, `c${n}`, JSON.stringify(ab(n))]);
+  for (let i = 0; i < 20; i++) await kaydet(ODA, i);
+  const e = await hata('select public.push_kaydet($1, $2, $3::jsonb)', [ODA, 'c99', JSON.stringify(ab(99))]);
+  assert.equal(e.code, '54000');
+  assert.match(e.message, /cok fazla kayit/);
+  await kaydet(ODA2, 1);
+  await db.exec(`update public.push_kayit_rate set n = 300 where room = '*'`);
+  assert.equal((await hata('select public.push_kaydet($1, $2, $3::jsonb)', ['yyyyyyyy22', 'c1', JSON.stringify(ab(500))])).code, '54000');
+  // Eski kovalar saatin ilk genel kaydında silinir.
+  await db.exec(`delete from public.push_kayit_rate where room = '*';
+    insert into public.push_kayit_rate values ('eskioda222', now() - interval '2 days', 5)`);
+  await kaydet(ODA2, 2);
+  assert.equal((await q(`select count(*)::int as n from public.push_kayit_rate where room = 'eskioda222'`))[0].n, 0);
 });
 
 test('yetkiler: anon yalnız push_kaydet/push_sil; tablolar kapalı; sunucu RPC yalnız service_role', { skip: !pgliteVar && 'PGlite yok' }, async () => {
@@ -203,15 +306,23 @@ test('yetkiler: anon yalnız push_kaydet/push_sil; tablolar kapalı; sunucu RPC 
   await db.exec('set role anon');
   await q('select public.push_kaydet($1, $2, $3::jsonb)', [ODA, 'omer', JSON.stringify(ab(1))]);
   await q('select public.push_sil($1)', [ab(9).endpoint]);
+  // anon belge yazar (sınır fonksiyonu tanımlayıcı yetkisiyle çalışır).
+  await q('select * from public.doc_put($1, $2, $3, $4::jsonb, null)', [ODA, 'liste', 'a', '{"x":1}']);
+  await q('select * from public.doc_patch($1, $2, $3, $4::jsonb, null)', [ODA, 'liste', 'a', '{"y":2}']);
   for (const s of [
     'select * from public.push_sub',
     'select * from public.push_rate',
     'select * from public.push_gonderim',
+    'select * from public.push_kayit_rate',
+    'select * from public.room_rate',
+    'select * from public.room_byte',
+    'select * from public.room_doc',
+    `select public.doc_sinir('doc_put', '${ODA}', 1)`,
     `select * from public.push_hedef('${ODA}', null)`,
     'select public.push_sonuc(null, null, null)',
     'select * from public.push_abonelikler()',
     `select * from public.hatirlat_belgeler(array['gun'])`,
-    `select public.hatirlat_isaretle('${ODA}', '2026-10-30', 'sabah')`,
+    `select public.hatirlat_isaretle(array['${ODA}'], '2026-10-30', 'sabah')`,
     `select public.hatirlat_cagir('sabah')`,
   ]) {
     const e = await hata(s);

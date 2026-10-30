@@ -12,9 +12,10 @@ import { kilitAyarla, kilitVarMi, pinHatasi, pinDogruMu, cihazdanUnut } from '..
 import { daysTogether, toDay } from '../../js/core/gunler.js';
 import { isNative } from '../../js/core/mobil.js';
 import { IOS_ADIMLARI, apkGoster } from '../daha/mantik.js';
+import { bulusmaDogrula } from '../gunler/mantik.js';
 import {
   SURUM, K_TEMA, TEMA_RENKLERI, TEMA_MODLARI, KISI_RENKLERI,
-  bulusmaIso, bulusmaAyir, bulusmaMetni, konumVerisi, mesafeKm, mesafeMetni,
+  bulusmaAyir, bulusmaMetni, konumVerisi, mesafeKm, mesafeMetni,
   bildirimGorunum, YEDEK_TURLERI, yedekVerisi, yedekSayisi, yedekDosyaAdi,
 } from './mantik.js';
 
@@ -329,8 +330,10 @@ const bulusmaAlan = h('form', {
   class: 'ayar-alan ayar-bulusma', novalidate: true, 'aria-labelledby': 'ayar-bulusma-e',
   onsubmit: async (e) => {
     e.preventDefault();
-    const iso = bulusmaIso(bTarih.value, bSaat.value);
-    if (!iso) {
+    // Günler sayfasıyla aynı kural: geçmiş zaman kabul edilmez.
+    const { hata, iso } = bulusmaDogrula(bTarih.value, bSaat.value);
+    if (hata) {
+      bHata.textContent = hata;
       bHata.hidden = false;
       bTarih.setAttribute('aria-invalid', 'true');
       bTarih.focus();

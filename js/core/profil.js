@@ -13,8 +13,14 @@ export function pickPartnerDoc(docs, myId, presenceId = null) {
   return others.sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at))[0] || null;
 }
 
+/** Saf: alan yaması; undefined değer null olur (sunucuda alan silinir, JSON'da düşmez). */
+export function yamaOf(patch) {
+  return Object.fromEntries(Object.entries(patch || {}).map(([k, v]) => [k, v === undefined ? null : v]));
+}
+
 /**
  * -> { ben(), partner(), cift(), setBen(patch), setCift(patch), on('change', fn), close() }
+ * setBen/setCift yalnız verilen alanları yazar (veri.js patch); { alan: null } alanı siler.
  * ben()/partner() -> { clientId, ad, foto, dogum, renk } | null (partner yoksa null)
  */
 export async function openProfil(room) {
@@ -29,8 +35,9 @@ export async function openProfil(room) {
     ben: () => asPerson(kisi.get(myId)) || { clientId: myId, ad: room.me.name || '' },
     partner: () => asPerson(pickPartnerDoc(kisi.all(), myId, presenceId)),
     cift: () => ({ ...(cift.get('cift')?.data || {}) }),
-    setBen: (patch) => kisi.put({ ...(kisi.get(myId)?.data || {}), ...patch }, myId),
-    setCift: (patch) => cift.put({ ...(cift.get('cift')?.data || {}), ...patch }, 'cift'),
+    // Alan düzeyinde yazar: iki kişinin aynı anda farklı alanı değiştirmesi birbirini ezmez. null/undefined alanı siler.
+    setBen: (patch) => kisi.patch(myId, yamaOf(patch)),
+    setCift: (patch) => cift.patch('cift', yamaOf(patch)),
     on(type, fn) {
       if (type !== 'change') return () => {};
       listeners.add(fn);

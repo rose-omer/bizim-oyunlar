@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   KATEGORILER, BUTCELER, MIN_FIKIR, fikirleriDogrula, filtrele, cekilis, kayitlar,
-  planlananlar, yapilanlar, planMetni, yeniRandevu, butceMetni,
+  planlananlar, yapilanlar, planMetni, yeniRandevu, butceMetni, fikirDocId,
 } from '../sayfalar/randevu/randevu.js';
 import { FIKIRLER } from '../sayfalar/randevu/fikirler.js';
 
@@ -129,4 +129,10 @@ test('yeniRandevu: fikirden ya da kendi metninden; tarih doğrulanır', () => {
 test('butceMetni: ücretsiz kategorisi öne çıkar', () => {
   assert.equal(butceMetni(f('a', ['evde', 'ucretsiz'], '₺')), 'Ücretsiz');
   assert.equal(butceMetni(f('b', ['evde'], '₺₺')), '₺₺');
+});
+
+test('fikirDocId: hazır fikir için sabit, geçerli, tekil belge id', () => {
+  assert.equal(fikirDocId({ id: 'f001' }), 'f-f001');
+  for (const fk of FIKIRLER) assert.match(fikirDocId(fk), /^[A-Za-z0-9_-]{1,64}$/);
+  assert.equal(new Set(FIKIRLER.map(fikirDocId)).size, FIKIRLER.length);
 });

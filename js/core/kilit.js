@@ -3,7 +3,7 @@
 // Açılışta tam ekran tuş takımı; arka plan içerik görünmez ve `inert`. 5 yanlışta 30 sn bekleme.
 // Oturum: sayfalar arası geçişte yeniden sormaz; sekme 5 dk arka planda kalırsa ya da sayfa yenilenirse sorar.
 // Üst kısım saf (Node'da test edilir); DOM yalnız fonksiyonların içinde kullanılır.
-import { readStore, writeStore, clearRoom, lobbyUrl } from './identity.js';
+import { readStore, writeStore, clearRoom, lobbyUrl, isValidRoomId } from './identity.js';
 
 export const K_PIN = 'bizim.kilit';
 export const K_DENEME = 'bizim.kilit.deneme';
@@ -11,6 +11,7 @@ export const K_OTURUM = 'bizim.kilit.oturum'; // sessionStorage
 export const MAX_YANLIS = 5;
 export const BEKLEME_MS = 30_000;
 export const ARKA_PLAN_MS = 5 * 60_000;
+export const BILDIRIM_BEKLE_MS = 5000; // odadan çıkarken bildirim kapatma en çok bu kadar beklenir
 
 const PIN_RE = /^\d{4,6}$/;
 const HEX_RE = (n) => new RegExp(`^[0-9a-f]{${n}}$`);
@@ -66,11 +67,18 @@ export function oturumGecerli(oturum, simdi, sure = ARKA_PLAN_MS) {
   return fark >= -60_000 && fark < sure; // küçük saat kaymasına tolerans
 }
 
-/** "Bu cihazdan odayı unut": odanın önbellek anahtarları (veri, giden kutusu, son partner). */
+// Odaya bağlı ama adında oda kodu olmayan anahtarlar: oda kaydı, bildirim tazeleme işareti (session).
+const ODA_GENEL = new Set(['bizim.room', 'bizim.bildirim.tazelendi']);
+
+/**
+ * "Bu cihazdan odayı unut" (localStorage ve sessionStorage için ayrı ayrı çağrılır):
+ * adında oda kodu geçen tüm bizim.* anahtarları (önbellek, giden kutusu, taslaklar, oyun durumları)
+ * + ODA_GENEL. Yerel mod verisi (bizim.yerelveri.*) kalır: orada sunucunun yerini tutar.
+ */
 export function unutulacakAnahtarlar(anahtarlar, roomId) {
-  if (!roomId) return [];
-  const onekler = [`bizim.veri.${roomId}.`, `bizim.veri.giden.${roomId}`, `bizim.partner.${roomId}.`];
-  return [...anahtarlar].filter((k) => onekler.some((o) => k.startsWith(o)));
+  if (!isValidRoomId(roomId)) return [];
+  return [...anahtarlar].filter((k) => typeof k === 'string' && k.startsWith('bizim.')
+    && !k.startsWith('bizim.yerelveri.') && (ODA_GENEL.has(k) || k.includes(roomId)));
 }
 
 export function hexYap(bytes) {
@@ -180,14 +188,29 @@ export async function kilitAyarla(pin) {
   oturumAc(); // PIN'i yeni giren kişi bu oturumda yeniden sorulmaz
 }
 
-/** Bu cihazdan odayı unut: oda kaydı, odanın önbelleği ve PIN silinir. */
+/**
+ * Bu cihazdan odayı unut. Önce bu cihazın bildirim aboneliği kapanır (sunucudan da silinir; hata yutulur,
+ * en çok BILDIRIM_BEKLE_MS beklenir). Sonra odanın tüm yerel anahtarları ve oda kaydı silinir.
+ * PIN kalır (cihaz ayarı); "PIN'i unuttum" ayrıca kilitAyarla(null) çağırır.
+ */
 export async function cihazdanUnut(roomId) {
+  let zaman;
   try {
-    const ls = globalThis.localStorage;
-    const keys = [];
-    for (let i = 0; i < (ls?.length || 0); i++) keys.push(ls.key(i));
-    for (const k of unutulacakAnahtarlar(keys, roomId)) ls.removeItem(k);
-  } catch { /* depo yok */ }
+    await Promise.race([
+      import('./bildirim.js').then((m) => m.bildirimKapat(roomId)),
+      new Promise((r) => { zaman = setTimeout(r, BILDIRIM_BEKLE_MS); }),
+    ]);
+  } catch { /* bildirim kapatılamadı: yine de unut */ } finally {
+    clearTimeout(zaman);
+  }
+  for (const ad of ['localStorage', 'sessionStorage']) {
+    try {
+      const depo = globalThis[ad];
+      const keys = [];
+      for (let i = 0; i < (depo?.length || 0); i++) keys.push(depo.key(i));
+      for (const k of unutulacakAnahtarlar(keys, roomId)) depo.removeItem(k);
+    } catch { /* depo yok */ }
+  }
   clearRoom();
 }
 
@@ -196,14 +219,24 @@ export async function cihazdanUnut(roomId) {
 let kapak = null; // kaplama kökü (açıkken)
 let kurulum = null; // kilitle() sözü (aynı anda iki kaplama olmasın)
 let dinleniyor = false;
+let ilkKarar = null; // bu sayfa yüklemesinin kilit kararı (bootPage ve mountShell aynı sözü paylaşır)
 
 function yenilendi() {
   try { return globalThis.performance?.getEntriesByType?.('navigation')?.[0]?.type === 'reload'; } catch { return false; }
 }
 
-/** PIN ayarlıysa kilit ekranı gösterir; doğru PIN girilince çözülür. Her sayfada mountShell çağırır. */
-export async function kilitKontrol() {
-  if (typeof document === 'undefined') return;
+/**
+ * PIN ayarlıysa kilit ekranı gösterir; doğru PIN girilince çözülür. PIN yoksa hemen döner.
+ * bootPage odaya katılmadan önce bekler; mountShell de çağırır. Sayfa başına bir karar verilir
+ * (yenilenen sayfada PIN iki kez sorulmasın); sonraki kilitlemeleri görünürlük dinleyicisi yapar.
+ */
+export function kilitKontrol() {
+  if (typeof document === 'undefined') return Promise.resolve();
+  if (!ilkKarar) ilkKarar = ilkKontrol();
+  return ilkKarar;
+}
+
+async function ilkKontrol() {
   dinle();
   if (!kilitVarMi()) return perdeKaldir();
   if (!yenilendi() && oturumGecerli(oku('session', K_OTURUM), Date.now())) {
@@ -214,8 +247,10 @@ export async function kilitKontrol() {
 }
 
 // erken.js PIN varken içeriği gizler ('kilit-bekle'); karar verilince ya da kaplama kurulunca kalkar.
+// Geç yüklenince erken.js'in "Kilit yüklenemedi" kartı da kalkar.
 function perdeKaldir() {
   document.documentElement.classList.remove('kilit-bekle');
+  document.getElementById('kilit-yuklenemedi')?.remove();
 }
 
 function dinle() {
@@ -399,6 +434,7 @@ async function kapakKur() {
         'PIN\'i unuttuysan bu cihaz odanızı unutur ve PIN silinir. Odanıza davet linkini yeniden açarak dönersin. Devam edilsin mi?',
         { ok: 'Odayı bu cihazdan unut', cancel: 'Vazgeç' });
       if (!ok) return;
+      unuttum.disabled = true; // bildirim kapatılırken (en çok 5 sn) ikinci tıklama olmasın
       const { currentRoom } = await import('./identity.js');
       await cihazdanUnut(currentRoom());
       await kilitAyarla(null);

@@ -62,14 +62,14 @@ test('supabase: kanal ayarı, durumlar, presence, zarf, yeniden bağlanma', asyn
     c.cb('SUBSCRIBED');
     await settled;
     assert.deepEqual(statuses.at(-1), ['online', '']);
-    assert.deepEqual(c.tracked, { clientId: 'A', name: 'Ali', page: 'yapboz', host: null });
+    assert.deepEqual(c.tracked, { clientId: 'A', name: 'Ali', page: 'yapboz', host: null, gorunur: true });
 
     c.state = {
       A: [{ clientId: 'A', name: 'Ali', page: 'yapboz' }],
       B: [{ clientId: 'B', name: 'Ayşe', page: 'lobby' }],
     };
     c.fire('presence', 'sync');
-    assert.deepEqual(room.partner(), { clientId: 'B', name: 'Ayşe', page: 'lobby', host: null });
+    assert.deepEqual(room.partner(), { clientId: 'B', name: 'Ayşe', page: 'lobby', host: null, gorunur: true });
     c.state.B = [{ clientId: 'B', name: 'Ayşe', page: 'yapboz' }];
     c.fire('presence', 'join');
     assert.equal(room.partner().page, 'yapboz');
@@ -163,10 +163,10 @@ test("supabase: presence yükünde host; partnerin host'u okunur", async () => {
     await flush();
     const c = client.all[0];
     c.cb('SUBSCRIBED');
-    assert.deepEqual(c.tracked, { clientId: 'A', name: 'Ali', page: 'yapboz', host: 'B' });
+    assert.deepEqual(c.tracked, { clientId: 'A', name: 'Ali', page: 'yapboz', host: 'B', gorunur: true });
     c.state = { B: [{ clientId: 'B', name: 'Ayşe', page: 'yapboz', host: 'A' }] };
     c.fire('presence', 'sync');
-    assert.deepEqual(room.partner(), { clientId: 'B', name: 'Ayşe', page: 'yapboz', host: 'A' });
+    assert.deepEqual(room.partner(), { clientId: 'B', name: 'Ayşe', page: 'yapboz', host: 'A', gorunur: true });
     await room.leave();
   } finally {
     mock.timers.reset();
@@ -203,5 +203,42 @@ test('supabase: ağ dönünce hemen kalp atışı, 4 sn sonra bir daha', async (
   } finally {
     mock.timers.reset();
     if (!hadWindow) delete globalThis.window;
+  }
+});
+
+test('supabase: sekme gizlenince/öne gelince presence gorunur ile yeniden track', async () => {
+  mock.timers.enable({ apis: ['setTimeout'] });
+  const hadDoc = 'document' in globalThis;
+  const oldDoc = globalThis.document;
+  const fakeDoc = new EventTarget();
+  fakeDoc.visibilityState = 'visible';
+  globalThis.document = fakeDoc;
+  const client = fakeClient();
+  const { room } = openSupabaseRoom({ roomId: 'abcdefghij', ns: 'sohbet', me: ME, getClient: async () => client });
+  try {
+    await flush();
+    const c = client.all[0];
+    fakeDoc.dispatchEvent(new Event('visibilitychange')); // bağlanmadan: track yok
+    assert.equal(c.tracked, null);
+    c.cb('SUBSCRIBED');
+    assert.equal(c.tracked.gorunur, true);
+    fakeDoc.visibilityState = 'hidden';
+    fakeDoc.dispatchEvent(new Event('visibilitychange'));
+    assert.deepEqual(c.tracked, { clientId: 'A', name: 'Ali', page: 'sohbet', host: null, gorunur: false });
+    fakeDoc.visibilityState = 'visible';
+    fakeDoc.dispatchEvent(new Event('visibilitychange'));
+    assert.equal(c.tracked.gorunur, true);
+    // partnerin gorunur değişimi presence olayı doğurur
+    const seen = [];
+    room.on('presence', (p) => seen.push(p?.gorunur));
+    c.state = { B: [{ clientId: 'B', name: 'Ayşe', page: 'sohbet', gorunur: false }] };
+    c.fire('presence', 'join');
+    c.state = { B: [{ clientId: 'B', name: 'Ayşe', page: 'sohbet', gorunur: true }] };
+    c.fire('presence', 'join');
+    assert.deepEqual(seen, [undefined, false, true]);
+    await room.leave();
+  } finally {
+    mock.timers.reset();
+    if (hadDoc) globalThis.document = oldDoc; else delete globalThis.document;
   }
 });

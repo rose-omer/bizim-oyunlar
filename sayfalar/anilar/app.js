@@ -6,6 +6,7 @@ import { openProfil } from '../../js/core/profil.js';
 import { h, toast, confirmDialog, formatDay, knownPartner } from '../../js/core/ui.js';
 import { sfx } from '../../js/core/sound.js';
 import { bildir } from '../../js/core/bildirim.js';
+import { partnerGoruyor } from '../../js/core/room.js';
 import { toDay, parseDay } from '../../js/core/gunler.js';
 import { fotoYukle, fotoImg } from '../../js/core/foto.js';
 import * as M from './mantik.js';
@@ -334,7 +335,7 @@ function ayrintiGorunumu(id) {
         void btn.offsetWidth;
         if (!begendim) { btn.classList.add('patla'); sfx('pop'); }
         const guncel = col.get(id)?.data?.begeni;
-        try { await col.patch(id, { begeni: M.begeniDegistir(guncel, me.clientId) }); } catch (err) { toast(err.message); }
+        try { await col.patch(id, M.begeniYamasi(guncel, me.clientId)); } catch (err) { toast(err.message); }
       },
     }, ikon('kalp', { dolu: begendim }), h('span', {}, begSayi ? String(begSayi) : 'Beğen'));
 
@@ -626,13 +627,16 @@ function formGorunumu(id) {
       return;
     }
     const onceki = id ? (col.get(id)?.data || {}) : {};
-    const data = M.aniVerisi(girdi, onceki, me.clientId);
     kaydetBtn.disabled = true;
     try {
-      const yeniId = await col.put(data, id || undefined);
+      // Düzenlemede yalnız formdaki alanlar yazılır (beğeni ezilmez); yeni anı tam belge.
+      const data = id ? M.aniYamasi(girdi, onceki, me.clientId) : M.aniVerisi(girdi, {}, me.clientId);
+      const yeniId = id ? await col.patch(id, data) : await col.put(data);
       sfx('pop');
       if (!id) {
-        bildir(roomId, { tur: 'ani', baslik: 'Yeni anı', metin: data.baslik, url: 'sayfalar/anilar/' }).catch(() => {});
+        if (!partnerGoruyor(room.partner(), 'anilar')) {
+          bildir(roomId, { tur: 'ani', baslik: 'Yeni anı', metin: data.baslik, url: 'sayfalar/anilar/' }).catch(() => {});
+        }
         toast('Anı kaydedildi');
       } else {
         toast('Değişiklikler kaydedildi');

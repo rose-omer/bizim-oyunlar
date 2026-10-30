@@ -181,6 +181,25 @@ export function aniVerisi(form, onceki = {}, ekleyen = null) {
   return out;
 }
 
+/**
+ * Düzenleme yaması (veri.js patch): yalnız formdaki alanlar; boş alan null (silinir).
+ * Beğeniye dokunmaz: partnerin aynı anda verdiği beğeni ezilmez. ekleyen yalnız eksikse yazılır.
+ */
+export function aniYamasi(form, onceki = {}, ekleyen = null) {
+  const v = aniVerisi(form, {}, null);
+  const yama = {
+    baslik: v.baslik, tarih: v.tarih, yer: v.yer ?? null, not: v.not ?? null,
+    fotolar: v.fotolar, etiketler: v.etiketler ?? null,
+  };
+  if (!onceki.ekleyen && ekleyen) yama.ekleyen = ekleyen;
+  return yama;
+}
+
+/** Beğeni yaması: { 'begeni.<clientId>': true | null } (aç/kapa, yalnız kendi alanım). */
+export function begeniYamasi(begeni, clientId) {
+  return { [`begeni.${clientId}`]: begeni?.[clientId] ? null : true };
+}
+
 /** i'deki fotoğrafı yon (-1 / +1) kadar kaydırır. Yeni dizi. */
 export function fotoTasi(liste, i, yon) {
   const l = [...(liste || [])];
@@ -203,14 +222,6 @@ export function formParametreleri(search, bugun) {
     baslik: [...String(p.get('baslik') || '').trim()].slice(0, MAX_BASLIK).join(''),
     tarih: parseDay(tarih) ? tarih : bugun,
   };
-}
-
-/** Beğeniyi aç/kapa. Yeni nesne döner. */
-export function begeniDegistir(begeni, clientId) {
-  const b = { ...(begeni && typeof begeni === 'object' ? begeni : {}) };
-  if (b[clientId]) delete b[clientId];
-  else b[clientId] = true;
-  return b;
 }
 
 export function begeniSayisi(begeni) {

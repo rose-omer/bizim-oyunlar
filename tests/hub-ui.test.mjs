@@ -109,3 +109,17 @@ test('TOUCHES: sözleşmedeki 5 tür, cümleler', () => {
   }
   assert.doesNotThrow(() => ui.touchBurst('💗')); // Node: sessizce geçer
 });
+
+test('fotoSrc: yalnız bizim kova ya da local:; dış adres ve bozuk değer null', async () => {
+  const { SUPABASE_URL, PHOTO_BUCKET } = await import('../js/config.js');
+  assert.equal(await ui.fotoSrc('https://kotu.example/iz.png'), null);
+  assert.equal(await ui.fotoSrc('http://kotu.example/a.jpg'), null);
+  assert.equal(await ui.fotoSrc('javascript:alert(1)'), null);
+  assert.equal(await ui.fotoSrc(''), null);
+  assert.equal(await ui.fotoSrc(null), null);
+  if (SUPABASE_URL) {
+    const ok = `${SUPABASE_URL.replace(/\/*$/, '')}/storage/v1/object/public/${PHOTO_BUCKET}/odaabcdefg/x.jpg`;
+    assert.equal(await ui.fotoSrc(ok), ok);
+    assert.equal(await ui.fotoSrc(`${SUPABASE_URL}/storage/v1/object/public/${PHOTO_BUCKET}/../baska/x.jpg`), null);
+  }
+});

@@ -7,6 +7,7 @@ import { openProfil } from '../../js/core/profil.js';
 import { h, toast, confirmDialog, formatDay, knownPartner } from '../../js/core/ui.js';
 import { sfx } from '../../js/core/sound.js';
 import { bildir } from '../../js/core/bildirim.js';
+import { partnerGoruyor } from '../../js/core/room.js';
 import * as M from './mantik.js';
 import { ikon } from '../anilar/ikon.js';
 
@@ -455,7 +456,9 @@ function yazGorunumu() {
     gonderBtn.disabled = true;
     try {
       await col.put(data);
-      bildir(roomId, { tur: 'mektup', baslik: 'Sana bir mektup var 💌', metin: M.bildirimMetni(data), url: 'sayfalar/mektup/' }).catch(() => {});
+      if (!partnerGoruyor(room.partner(), 'mektup')) { // Mektuplar'da ve sekmesi önde: zaten görüyor
+        bildir(roomId, { tur: 'mektup', baslik: 'Sana bir mektup var 💌', metin: M.bildirimMetni(data), url: 'sayfalar/mektup/' }).catch(() => {});
+      }
       clearTimeout(taslakZaman);
       yaz(TASLAK, null);
       sfx('pop');

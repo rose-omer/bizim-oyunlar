@@ -131,7 +131,7 @@ body.sohbet-sayfa .toasts { bottom: calc(var(--sh-tab-h, var(--tabbar-h, 68px)) 
   font-size: 1rem;
   line-height: 1.4;
   overflow-wrap: anywhere;
-  touch-action: pan-y;
+  touch-action: pan-y pinch-zoom;
   -webkit-touch-callout: none;
   transition: transform 0.16s var(--ease), box-shadow 0.16s ease;
 }

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   MAX_METIN, gunAnahtari, gunEtiketi, saatEtiketi, gonderen, satirlar, baglantilar, kisalt, ozet,
-  metniTemizle, metinHatasi, tepkiDegistir, tepkiOzeti, okunduHedefi, gorulduBilgisi, sadeceEmoji,
+  metniTemizle, metinHatasi, tepkiYamasi, tepkiOzeti, okunduHedefi, gorulduBilgisi, sadeceEmoji,
   yaziyorGonderilsinMi, altaYakinMi,
 } from '../sayfalar/sohbet/mantik.js';
 
@@ -113,17 +113,16 @@ test('metin temizleme ve sınırlar', () => {
   assert.equal(MAX_METIN, 4000);
 });
 
-test('tepki değiştir: ekle, değiştir, aynısıyla kaldır; özet', () => {
-  let t = tepkiDegistir(undefined, 'a', '❤️');
-  assert.deepEqual(t, { a: '❤️' });
-  t = tepkiDegistir(t, 'b', '❤️');
-  assert.deepEqual(t, { a: '❤️', b: '❤️' });
-  t = tepkiDegistir(t, 'a', '😂');
-  assert.deepEqual(t, { a: '😂', b: '❤️' });
-  assert.deepEqual(tepkiOzeti(t, 'a'), [{ emoji: '😂', sayi: 1, benim: true }, { emoji: '❤️', sayi: 1, benim: false }]);
+test('tepki yaması: yalnız kendi alanım; aynısıyla kaldır; eski belgede gönderen korunur; özet', () => {
+  const d = (tepki, kimden = 'a') => ({ id: 'm', author: 'b', data: { metin: 'x', kimden, ...(tepki ? { tepki } : {}) } });
+  assert.deepEqual(tepkiYamasi(d(undefined), 'a', '❤️'), { 'tepki.a': '❤️' });
+  assert.deepEqual(tepkiYamasi(d({ a: '❤️', b: '❤️' }), 'b', '😂'), { 'tepki.b': '😂' });
+  assert.deepEqual(tepkiYamasi(d({ a: '❤️', b: '😂' }), 'a', '❤️'), { 'tepki.a': null }); // kaldır
+  // kimden yoksa (eski belge): gönderen = author, yamaya eklenir
+  assert.deepEqual(tepkiYamasi({ id: 'm', author: 'a', data: { metin: 'x' } }, 'b', '❤️'), { 'tepki.b': '❤️', kimden: 'a' });
+  assert.deepEqual(tepkiOzeti({ a: '😂', b: '❤️' }, 'a'), [{ emoji: '😂', sayi: 1, benim: true }, { emoji: '❤️', sayi: 1, benim: false }]);
   assert.deepEqual(tepkiOzeti({ a: '❤️', b: '❤️' }, 'b'), [{ emoji: '❤️', sayi: 2, benim: true }]);
-  t = tepkiDegistir({ a: '❤️' }, 'a', '❤️');
-  assert.equal(t, null);
+  assert.deepEqual(tepkiOzeti({}, 'a'), []);
   assert.deepEqual(tepkiOzeti(null, 'a'), []);
   assert.deepEqual(tepkiOzeti({ a: 5, b: '' }, 'a'), []); // bozuk değerler yok sayılır
 });

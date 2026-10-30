@@ -157,12 +157,17 @@ export function metinHatasi(metin) {
   return null;
 }
 
-/** Aynı emojiyle tekrar dokununca kaldırır. -> yeni nesne | null (hiç tepki kalmadıysa) */
-export function tepkiDegistir(tepki, benId, emoji) {
-  const t = { ...(tepki && typeof tepki === 'object' ? tepki : {}) };
-  if (t[benId] === emoji) delete t[benId];
-  else t[benId] = emoji;
-  return Object.keys(t).length ? t : null;
+/**
+ * Tepki yaması (veri.js patch, alan düzeyinde): { 'tepki.<benId>': emoji | null }. Aynı emoji kaldırır.
+ * Yalnız kendi tepkimi yazar; partnerin aynı anda verdiği tepki ezilmez. Eski belgede gönderen korunur.
+ */
+export function tepkiYamasi(doc, benId, emoji) {
+  const yama = { [`tepki.${benId}`]: doc?.data?.tepki?.[benId] === emoji ? null : emoji };
+  if (doc && !doc.data?.kimden) {
+    const kimden = gonderen(doc);
+    if (kimden) yama.kimden = kimden; // yazan değişince 'author' değişir
+  }
+  return yama;
 }
 
 /** -> [{ emoji, sayi, benim }] ilk görülme sırasıyla */

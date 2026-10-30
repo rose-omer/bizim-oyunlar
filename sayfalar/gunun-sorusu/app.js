@@ -50,12 +50,15 @@ const alan = h('textarea', {
 const sayac = h('span', { id: 'gs-sayac', class: 'gs-sayac' });
 const ipucu = h('p', { id: 'gs-ipucu', class: 'gs-ipucu' }, 'İkiniz de yazınca cevaplar birlikte açılır.');
 const hataEl = h('p', { id: 'gs-hata', class: 'gs-hata', role: 'alert', hidden: true });
+const tasindiEl = h('p', { class: 'gs-tasindi', role: 'status', hidden: true },
+  'Gün değişti; cevabın yeni soruya taşındı, istersen düzenle.');
 const gonderBtn = h('button', { type: 'submit', class: 'btn primary' }, 'Gönder');
 const vazgecBtn = h('button', { type: 'button', class: 'btn ghost', hidden: true, onclick: () => duzenlemeBitir(true) }, 'Vazgeç');
 const formEl = h('form', { class: 'gs-form', novalidate: true, onsubmit: gonder },
   h('label', { class: 'gs-etiket', for: 'gs-cevap' }, 'Senin cevabın'),
   alan,
   h('div', { class: 'gs-form-alt' }, ipucu, sayac),
+  tasindiEl,
   hataEl,
   h('div', { class: 'gs-dugmeler' }, vazgecBtn, gonderBtn));
 const cevaplarEl = h('div', { class: 'gs-cevaplar', tabindex: '-1', 'aria-label': 'Bugünün cevapları' });
@@ -269,6 +272,7 @@ function hataGoster(metin) {
 
 function duzenlemeBasla(cevap) {
   duzenliyor = true;
+  tasindiEl.hidden = true;
   alan.value = cevap;
   sayacGuncelle();
   hataGoster(null);
@@ -280,6 +284,7 @@ function duzenlemeBasla(cevap) {
 function duzenlemeBitir(vazgec) {
   duzenliyor = false;
   alan.value = '';
+  tasindiEl.hidden = true;
   sayacGuncelle();
   hataGoster(null);
   ciz();
@@ -289,7 +294,10 @@ function duzenlemeBitir(vazgec) {
 function yeniGun() {
   bugun = gunNo();
   duzenliyor = false;
-  alan.value = '';
+  // Yazılmış metin silinmez: yeni soruya taşınır; kullanıcı bakıp düzenlesin.
+  const tasindi = !!alan.value.trim();
+  if (!tasindi) alan.value = '';
+  tasindiEl.hidden = !tasindi;
   sayacGuncelle();
   hataGoster(null);
   limit = 20;

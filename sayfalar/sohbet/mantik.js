@@ -1,5 +1,6 @@
 // Sohbet: saf mantık (DOM yok; Node'da test edilir).
-// Mesaj belgesi: { id, author, data: { metin?, foto?, en?, boy?, yanit?, tepki?, duzenlendi?, kimden }, created_at, pending? }
+// Mesaj belgesi: { id, author, data: { metin?, foto?, en?, boy?, ses?, yanit?, tepki?, yildiz?, duzenlendi?, kimden }, created_at, pending? }
+// ses = { url, sure (sn), tur }; yildiz = { [clientId]: true }.
 // data.kimden = gönderenin clientId'si. Gerekli: karşı taraf tepki yazınca belge 'author'u değişir.
 
 export const MAX_METIN = 4000;
@@ -136,11 +137,15 @@ export function kisalt(metin, n) {
   return h.slice(0, Math.max(0, n - 1)).join('').trimEnd() + '…';
 }
 
-/** Bildirim / yanıt önizlemesi: metnin ilk n harfi ya da '📷 Fotoğraf'. */
+/** Bildirim / yanıt önizlemesi: metnin ilk n harfi, '📷 Fotoğraf' ya da '🎤 Sesli mesaj (0:07)'. */
 export function ozet(data, n = 80) {
   if (!data) return '';
   const metin = typeof data.metin === 'string' ? data.metin : '';
   if (data.foto) return metin.trim() ? kisalt(`📷 ${metin}`, n) : '📷 Fotoğraf';
+  if (data.ses) {
+    const sn = Number(data.ses.sure);
+    return sn > 0 ? `🎤 Sesli mesaj (${Math.floor(sn / 60)}:${iki(Math.floor(sn % 60))})` : '🎤 Sesli mesaj';
+  }
   return kisalt(metin, n);
 }
 
@@ -157,17 +162,26 @@ export function metinHatasi(metin) {
   return null;
 }
 
+// Başkasının yazması belgenin 'author'unu değiştirir: kimden'i olmayan eski belgede gönderen yamaya eklenir.
+function gonderenKoru(doc, yama) {
+  if (doc && !doc.data?.kimden) {
+    const kimden = gonderen(doc);
+    if (kimden) yama.kimden = kimden;
+  }
+  return yama;
+}
+
 /**
  * Tepki yaması (veri.js patch, alan düzeyinde): { 'tepki.<benId>': emoji | null }. Aynı emoji kaldırır.
  * Yalnız kendi tepkimi yazar; partnerin aynı anda verdiği tepki ezilmez. Eski belgede gönderen korunur.
  */
 export function tepkiYamasi(doc, benId, emoji) {
-  const yama = { [`tepki.${benId}`]: doc?.data?.tepki?.[benId] === emoji ? null : emoji };
-  if (doc && !doc.data?.kimden) {
-    const kimden = gonderen(doc);
-    if (kimden) yama.kimden = kimden; // yazan değişince 'author' değişir
-  }
-  return yama;
+  return gonderenKoru(doc, { [`tepki.${benId}`]: doc?.data?.tepki?.[benId] === emoji ? null : emoji });
+}
+
+/** Yıldız yaması: { 'yildiz.<benId>': true | null } (yıldızlıysa kaldırır). Partnerin yıldızına dokunmaz. */
+export function yildizYamasi(doc, benId) {
+  return gonderenKoru(doc, { [`yildiz.${benId}`]: doc?.data?.yildiz?.[benId] === true ? null : true });
 }
 
 /** -> [{ emoji, sayi, benim }] ilk görülme sırasıyla */

@@ -15,11 +15,13 @@ import {
 const yol = (p) => fileURLToPath(new URL(`../${p}`, import.meta.url));
 const oku = (p) => readFileSync(yol(p), 'utf8');
 const ORNEK = 'tests/mobil-ornek/capacitor8';
+// Windows'ta git (autocrlf) örnekleri CRLF açabilir; CI'daki üretilen proje LF'dir. CRLF ayrıca denenir.
+const ornek = (ad) => oku(`${ORNEK}/${ad}`).replace(/\r\n/g, '\n');
 const APP_ID = JSON.parse(oku('mobil/capacitor.config.json')).appId;
 const EK = yol('mobil/android-ek');
 
 /** `npx cap add android` MainActivity paketini appId yapar (@capacitor/cli dist/android/common.js). */
-const sablonEtkinlik = () => oku(`${ORNEK}/MainActivity.java`).replace(/package ([^;]*)/, `package ${APP_ID}`);
+const sablonEtkinlik = () => ornek('MainActivity.java').replace(/package ([^;]*)/, `package ${APP_ID}`);
 
 function dosyalar(kok) {
   const out = [];
@@ -65,7 +67,7 @@ function javaDengeli(java) {
 // ---------- Yama: Capacitor 8 şablonu üzerinde ----------
 
 test('widgetManifestYamala: iki alıcı <application> içinde, tek sefer', () => {
-  const sablon = oku(`${ORNEK}/AndroidManifest.xml`);
+  const sablon = ornek('AndroidManifest.xml');
   const bir = widgetManifestYamala(manifestYamala(sablon));
   assert.ok(xmlDengeli(bir), 'manifest XML dengeli olmalı');
   const uygulama = bir.slice(bir.indexOf('<application'), bir.indexOf('</application>'));
@@ -86,6 +88,9 @@ test('widgetManifestYamala: iki alıcı <application> içinde, tek sefer', () =>
   assert.match(bir, /androidx\.core\.content\.FileProvider/);
   assert.match(bir, /SCHEDULE_EXACT_ALARM" tools:node="remove"/);
   assert.equal(widgetManifestYamala(bir), bir);
+  const crlf = widgetManifestYamala(sablon.replace(/\n/g, '\r\n'));
+  assert.ok(xmlDengeli(crlf));
+  assert.doesNotMatch(crlf.replace(/\r\n/g, ''), /\n/, 'CRLF dosyada satır sonları karışmamalı');
   assert.throws(() => widgetManifestYamala('<manifest><application android:label="x" /></manifest>'), /<\/application>/);
 });
 
@@ -114,10 +119,10 @@ test('hazirla: Capacitor 8 projesinde Java, kaynak, manifest, MainActivity; iki 
     mkdirSync(join(ana, 'res', 'values'), { recursive: true });
     cpSync(yol('mobil/capacitor.config.json'), join(kok, 'capacitor.config.json'));
     cpSync(EK, join(kok, 'android-ek'), { recursive: true });
-    writeFileSync(join(ana, 'AndroidManifest.xml'), oku(`${ORNEK}/AndroidManifest.xml`));
+    writeFileSync(join(ana, 'AndroidManifest.xml'), ornek('AndroidManifest.xml'));
     writeFileSync(join(paket, 'MainActivity.java'), sablonEtkinlik());
-    writeFileSync(join(ana, 'res', 'values', 'strings.xml'), oku(`${ORNEK}/strings.xml`));
-    writeFileSync(join(kok, 'android', 'app', 'build.gradle'), oku(`${ORNEK}/build.gradle`));
+    writeFileSync(join(ana, 'res', 'values', 'strings.xml'), ornek('strings.xml'));
+    writeFileSync(join(kok, 'android', 'app', 'build.gradle'), ornek('build.gradle'));
 
     hazirla(kok, { BIZ_SURUM_KODU: '12' });
     const anlik = () => Object.fromEntries(dosyalar(join(kok, 'android')).map((p) => [relative(kok, p), readFileSync(p, 'utf8')]));

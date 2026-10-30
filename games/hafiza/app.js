@@ -4,6 +4,7 @@ import { readGameParams, lobbyUrl } from '../../js/core/identity.js';
 import { mountShell, waitForPartner, celebrate, toast, confirmDialog } from '../../js/core/ui.js';
 import { sfx } from '../../js/core/sound.js';
 import { logGame } from '../../js/core/db.js';
+import { skorKaydet, toplamSatiri } from '../../js/core/skor.js';
 import { THEMES, themeById } from './temalar.js';
 import { SIZES, sizeById, initialState, reduce, toAction, schedule, resultOf, winnerOf, bestLayout } from './oyun.js';
 import { createSync, sessionStore } from './sync.js';
@@ -332,6 +333,11 @@ function celebrateEnd(s) {
   }
   announce(`${title} ${lines.join('. ')}`);
   if (authority && roomId) logGame(roomId, 'hafiza', r);
+  if (s.players.length > 1) {
+    const w = winnerOf(s); // puanı yüksek olan kazanır
+    const kayit = authority && roomId ? skorKaydet(room, NS, { kazanan: w === -1 ? null : s.players[w] }) : null;
+    lines.push(toplamSatiri(room, NS, s.players, s.names, kayit));
+  }
   closeCelebrate = celebrate({
     title,
     lines,

@@ -3,6 +3,7 @@ import { celebrate, toast, confirmDialog, h } from '../../js/core/ui.js';
 import { lobbyUrl } from '../../js/core/identity.js';
 import { sfx } from '../../js/core/sound.js';
 import { logGame } from '../../js/core/db.js';
+import { skorKaydet, toplamSatiri } from '../../js/core/skor.js';
 import { fitToViewport } from '../hafiza/ekran.js';
 import { bootMasa, agoText, bulunma, mountAway, resumeCard, boardSpace } from '../dama/masa.js';
 import * as T from './oyun.js';
@@ -427,10 +428,14 @@ function celebrateEnd(s, info) {
   const score = s.players.map((id, k) => `${nameOf(s, id)} ${s.score[k]}`).join(' · ');
   const lines = [`${s.target} puanlık maç · ${score}`, s.result.mars ? 'Son oyun mars bitti!' : `${s.game}. oyunda bitti.`];
   announce(`${title} ${lines.join('. ')}`);
-  if (M.authority && !info?.adopted) logGame(M.roomId, NS, T.resultOf(s));
+  let kayit = null;
+  if (M.authority && !info?.adopted) {
+    logGame(M.roomId, NS, T.resultOf(s));
+    kayit = skorKaydet(M.room, NS, { kazanan: s.players[w] });
+  }
   closeCelebrate = celebrate({
     title,
-    lines,
+    lines: [...lines, toplamSatiri(M.room, NS, s.players, s.names, kayit)],
     buttons: [
       { label: 'Yeni maç', primary: true, onClick: () => { closeCelebrate = null; newMatch(s.target, s); } },
       { label: 'Ana sayfaya dön', onClick: () => { location.href = lobbyUrl(); } },

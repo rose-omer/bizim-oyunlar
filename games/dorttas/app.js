@@ -5,6 +5,7 @@ import { readGameParams, lobbyUrl } from '../../js/core/identity.js';
 import { mountShell, waitForPartner, celebrate, confirmDialog } from '../../js/core/ui.js';
 import { sfx } from '../../js/core/sound.js';
 import { logGame } from '../../js/core/db.js';
+import { skorKaydet, toplamSatiri } from '../../js/core/skor.js';
 import { createSync, sessionStore } from '../hafiza/sync.js';
 import { fitToViewport, esc } from '../hafiza/ekran.js';
 import { MODLAR, initialState, reduce, toAction, resultOf, yeniTaslar, inecegiSatir } from './oyun.js';
@@ -404,9 +405,11 @@ function effects(s, prev) {
 function endGame(s) {
   const mi = myIdx(s);
   const sk = s.skor[s.mod];
+  let kayit = null;
   if (isHost && roomId && loggedGame !== s.oyun) {
     loggedGame = s.oyun;
     logGame(roomId, NS, resultOf(s));
+    kayit = skorKaydet(room, NS, { kazanan: s.kazanan === -1 ? null : s.players[s.kazanan] });
   }
   if (s.kazanan === mi) sfx('win');
   else if (s.kazanan === -1) sfx('match');
@@ -422,7 +425,7 @@ function endGame(s) {
     if (shown?.faz !== 'bitti' || shown.oyun !== s.oyun) return;
     closeCelebrate = celebrate({
       title,
-      lines,
+      lines: [...lines, toplamSatiri(room, NS, s.players, s.names, kayit)],
       buttons: [
         { label: 'Tekrar oyna', primary: true, onClick: () => { closeCelebrate = null; sync.dispatch({ type: 'yeni', oyun: s.oyun }); } },
         { label: 'Ana sayfaya dön', onClick: () => { location.href = lobbyUrl(); } },

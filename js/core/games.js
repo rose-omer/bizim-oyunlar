@@ -125,6 +125,7 @@ export const SAYFALAR = [
   { id: 'ayarlar', title: 'Ayarlar', icon: '⚙️', path: 'sayfalar/ayarlar/', desc: 'Profil, başlangıç tarihi, bildirim, kilit, tema.' },
   { id: 'daha', title: 'Daha', icon: '☰', path: 'sayfalar/daha/', desc: 'Tüm özellikler.' },
   { id: 'gunfoto', title: 'Günün Fotoğrafı', icon: '📷', path: 'sayfalar/gunfoto/', desc: 'Her gün birer kare; ikiniz de gönderince ikisi birden açılır.' },
+  { id: 'haftalik', title: 'Haftalık Kontrol', icon: '🌡️', path: 'sayfalar/haftalik/', desc: 'Haftada bir dakika: iletişim, yakınlık, eğlence, destek.' },
 ];
 
 // Alt sekme çubuğu sırası.

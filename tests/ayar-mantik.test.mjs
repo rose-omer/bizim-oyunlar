@@ -84,7 +84,7 @@ test('yedekVerisi: silinenler çıkar, eksik türler not edilir, oda kodu yazıl
   assert.deepEqual(y.eksik, ['ani']);
   assert.equal(yedekSayisi(y), 2);
   assert.ok(!JSON.stringify(y).includes('roomId'));
-  assert.equal(YEDEK_TURLERI.length, 16);
+  assert.equal(YEDEK_TURLERI.length, 17);
 });
 
 test('yedekDosyaAdi', () => {

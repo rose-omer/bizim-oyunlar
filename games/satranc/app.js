@@ -225,9 +225,13 @@ function renderStatus(s, { mine, checked }) {
     statusEl.textContent = 'Beraberlik teklifin bekliyor…';
     return;
   }
-  if (mine) {
+  if (s.players[s.turn] === me) {
     statusEl.classList.add('is-turn');
-    if (checked >= 0) {
+    if (promoOpen) {
+      statusEl.textContent = 'Piyonun yeni taşını seç';
+    } else if (!mine) {
+      statusEl.textContent = 'Sıra sende';
+    } else if (checked >= 0) {
       statusEl.classList.add('is-alert');
       statusEl.textContent = 'Şah! Şahını korumalısın.';
     } else {

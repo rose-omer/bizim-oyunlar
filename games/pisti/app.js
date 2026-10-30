@@ -29,7 +29,7 @@ app.innerHTML = `
     <div class="ps-plate is-opp" id="ps-opp"></div>
     <div class="ps-table" id="ps-table">
       <div class="ps-deck" id="ps-deck"></div>
-      <div class="ps-pile" id="ps-pile" aria-live="off"></div>
+      <div class="ps-pile" id="ps-pile" role="img"></div>
       <p class="ps-flash" id="ps-flash" aria-hidden="true"></p>
       <div class="masa-cover ps-cover hidden" id="ps-cover"></div>
     </div>
@@ -234,9 +234,9 @@ function renderStatus(s, mine) {
     statusEl.textContent = 'Kart atılıyor…';
     return;
   }
-  if (mine) {
+  if (s.players[s.turn] === me) {
     statusEl.classList.add('is-turn');
-    statusEl.textContent = sel ? 'Atmak için karta yeniden dokun' : 'Sıra sende · bir kart seç';
+    statusEl.textContent = !mine ? 'Sıra sende' : sel ? 'Atmak için karta yeniden dokun' : 'Sıra sende · bir kart seç';
     return;
   }
   const other = nameOf(s, s.players[s.turn]);

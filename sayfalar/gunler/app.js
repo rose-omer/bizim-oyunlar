@@ -11,6 +11,7 @@ import { partnerGoruyor } from '../../js/core/room.js';
 import { yerelHatirlaticilar } from '../../js/core/mobil.js';
 import { toDay, parseDay, daysBetween, daysTogether, durationParts, countdown, monthGrid } from '../../js/core/gunler.js';
 import * as M from './mantik.js';
+import { takvimeEkleAlani, takvimeAktarCubugu } from './ics-arayuz.js'; // ics:
 
 // ---------- Simgeler (ui.js çizgisiyle aynı) ----------
 const STROKE = 'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"';
@@ -115,6 +116,7 @@ const calEl = h('section', { class: 'gn-sec', 'aria-labelledby': 'gn-cal-h' },
 const tasEl = h('section', { class: 'gn-sec', 'aria-labelledby': 'gn-tas-h' });
 
 app.replaceChildren(h('div', { class: 'gn-wrap' }, heroEl, meetEl, upEl, calEl, tasEl));
+app.firstElementChild.prepend(takvimeAktarCubugu(() => ({ ...veri(), cift: profil.cift() }))); // ics: sayfa üstünde "Tümünü takvime aktar"
 
 // ---------- 1. Kaçıncı gün ----------
 let heroKey = null;
@@ -532,6 +534,7 @@ function gunFormu({ doc = null, tarih = '' } = {}) {
       kaydet,
     ],
   });
+  if (!yeni) s.form.querySelector('.gn-sheet-body').append(takvimeEkleAlani(() => col.get(doc.id) || doc)); // ics: özel günün penceresinde "Takvime ekle"
 
   async function sil() {
     const ok = await confirmDialog(`“${d.baslik || 'Bu gün'}” silinsin mi?`, { ok: 'Sil', cancel: 'Vazgeç' });

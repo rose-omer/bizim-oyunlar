@@ -449,7 +449,8 @@ v3 bölümleri v1 ve v2'nin üstüne gelir. Çatışmada v3 geçerli.
 - **Onay yolları** (`oda_katil`): kurucu (veri olmayan yeni oda), geçiş (koruma başlamadan önce, odada `kisi` belgesi olan eski cihaz), tek kullanımlık davet (7 gün), kurtarma kodu (tek kullanım; çakışmayı da çözer). Başka cihaz Ayarlar › Cihazlar'dan onaylar.
 - **Koruma** (`oda.zorunlu`): yeni odada hemen; eski odada ilk girişten 3 gün sonra; bir cihaz çıkarılınca hemen. Koruma öncesinde kimliksiz çağrı çalışır, geçersiz kimlik her zaman reddedilir (42501).
 - **Kanal:** gerçek zamanlı konu `'oda:' + kanal`. Koruma öncesinde kanal = oda kodu; sonra gizli. Cihaz çıkarılınca yenilenir. İstemci 60 sn'de bir ve öne gelince `durumTazele` ile yakalar.
-- **Çıkarma:** cihazın satırı, push abonelikleri ve davetleri silinir; kanal yenilenir; o cihazın oluşturduğu kurtarma kodu silinir.
+- **Çıkarma:** cihazın satırı, Web Push abonelikleri, FCM belirteçleri ve davetleri silinir; kanal yenilenir; o cihazın oluşturduğu kurtarma kodu silinir.
+- **Bildirim kaydı:** `push_kaydet` ve `fcm_kaydet` sona `p_anahtar` alır; koruma altındaki odada hedef yalnız anahtarla kaydedilmiş onaylı cihazdır (`push_sayilir`). FCM şemada 8. bölüm.
 - **42501:** yazma giden kutusunda kalır, eşitleme durur, `kapi.js` tam ekran kapıyı gösterir.
 - Modüller: `js/core/uyelik.js` (API), `uyelik-mantik.js` (saf; yerel sıkı öykünme), `kapi.js` (onay bekleme ekranı). Yerel modda varsayılan gevşek (herkes onaylı); sessionStorage `bizim.yerel.uyelik` = `'1'` ise sıkı öykünme.
 - Davet linki: `inviteUrl(roomId, davet)` → `<kök>/#oda=<id>&davet=<kod>`.

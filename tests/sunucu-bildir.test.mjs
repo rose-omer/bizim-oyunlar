@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   istegiDogrula, goreliUrl, kisalt, kokIzinli, corsBasliklari, endpointIzinli, esitMi,
-  publishableAnahtarlar, servisAnahtari, restBasliklari, gunNo,
+  publishableAnahtarlar, servisAnahtari, restBasliklari, gunNo, pushYuku,
 } from '../supabase/functions/_shared/mantik.js';
 import { bildirIsleyici, hatirlatIsleyici, sonucOzeti, sayfala, SAYFA } from '../supabase/functions/_shared/isleyici.js';
 import { b64uKodla } from '../supabase/functions/_shared/webpush.js';
@@ -23,6 +23,19 @@ test('istegiDogrula: alanlar, kısaltma, varsayılan başlık', () => {
     { room: ODA, from: 'x', tur: 'reklam' }, { room: ODA, tur: 'mesaj' }]) {
     assert.ok(istegiDogrula(kotu).hata, JSON.stringify(kotu));
   }
+});
+
+const ANAHTAR = 'A'.repeat(41) + '-_';
+
+test('istegiDogrula: isteğe bağlı cihaz anahtarı (43 karakter base64url); yüke girmez', () => {
+  const temel = { room: ODA, from: 'omer', tur: 'gun' };
+  assert.equal(istegiDogrula({ ...temel, anahtar: ANAHTAR }).deger.anahtar, ANAHTAR);
+  assert.ok(!('anahtar' in istegiDogrula(temel).deger));
+  assert.ok(!('anahtar' in istegiDogrula({ ...temel, anahtar: null }).deger));
+  for (const kotu of ['', 'kisa', ANAHTAR + 'x', 'A'.repeat(42) + '=', 'A'.repeat(42) + ' ', 42, {}, true]) {
+    assert.equal(istegiDogrula({ ...temel, anahtar: kotu }).hata, 'geçersiz anahtar', JSON.stringify(kotu));
+  }
+  assert.ok(!pushYuku(istegiDogrula({ ...temel, anahtar: ANAHTAR }).deger).includes(ANAHTAR));
 });
 
 test('goreliUrl: yalnız site içi göreli adres', () => {
@@ -180,6 +193,28 @@ test('bildir: hız sınırı 429, veritabanı hatası 502, hedef yoksa 200', asy
   const r = await bildirIsleyici({ env, fetchFn: bos.fn })(istek(GOVDE));
   assert.deepEqual(await r.json(), { ok: true, gonderilen: 0, silinen: 0, hatali: 0 });
   assert.deepEqual(bos.cagri.rpc.map((c) => c[0]), ['push_hedef'], 'sonuç yoksa push_sonuc çağrılmaz');
+});
+
+test('bildir: cihaz anahtarı push_hedef\'e p_anahtar olarak gider; yetki yoksa 403; bozuk anahtar 400', async () => {
+  const env = await ortam();
+  const gul = await abone('https://web.push.apple.com/gul');
+  const ok = sahteFetch({ rpcYanit: { push_hedef: () => [gul], push_sonuc: () => null } });
+  const r = await bildirIsleyici({ env, fetchFn: ok.fn })(istek({ ...GOVDE, anahtar: ANAHTAR }));
+  assert.equal(r.status, 200);
+  assert.deepEqual(ok.cagri.rpc[0], ['push_hedef', { p_room: ODA, p_from: 'omer', p_anahtar: ANAHTAR }]);
+
+  const yetkisiz = sahteFetch({ rpcYanit: { push_hedef: () => ({ hata: { code: '42501', message: 'push_hedef: yetki yok' }, status: 403 }) } });
+  const r2 = await bildirIsleyici({ env, fetchFn: yetkisiz.fn })(istek(GOVDE));
+  assert.equal(r2.status, 403);
+  assert.deepEqual(await r2.json(), { hata: 'yetki yok' });
+  assert.equal(r2.headers.get('access-control-allow-origin'), 'https://rose-omer.github.io');
+  assert.equal(yetkisiz.cagri.push.length, 0);
+  assert.deepEqual(yetkisiz.cagri.rpc.map((c) => c[0]), ['push_hedef']);
+
+  const bozuk = sahteFetch();
+  const r3 = await bildirIsleyici({ env, fetchFn: bozuk.fn })(istek({ ...GOVDE, anahtar: 'kisa' }));
+  assert.equal(r3.status, 400);
+  assert.equal(bozuk.cagri.rpc.length + bozuk.cagri.push.length, 0);
 });
 
 const hIstek = (govde, anahtar = 'gizli-hatirlat') => new Request('https://test.supabase.co/functions/v1/hatirlat', {

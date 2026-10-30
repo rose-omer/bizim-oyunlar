@@ -321,9 +321,11 @@ export async function openCollection(room, kind, { recent = 0 } = {}) {
     let cur = cursor;
     if (recent > 0) {
       const c = cursor && older ? timeOf(cursor) : -Infinity;
-      docs = docs.filter((d) => !d.deleted && timeOf(d.created_at) >= c)
-        .sort((a, b) => timeOf(a.created_at) - timeOf(b.created_at)).slice(-CACHE_RECENT);
-      if (older && docs.length) cur = docs[0].created_at; // kırpılınca imleç de kayar
+      const tum = docs.filter((d) => !d.deleted && timeOf(d.created_at) >= c)
+        .sort((a, b) => timeOf(a.created_at) - timeOf(b.created_at));
+      docs = tum.slice(-CACHE_RECENT);
+      // Kırpılınca imleç de kayar; hepsi yüklenmiş olsa bile (önbellek aradakileri tutmaz, sonra yeniden yüklenir).
+      if ((older || tum.length > docs.length) && docs.length) cur = docs[0].created_at;
     }
     try {
       writeStore('local', cacheKey(roomId, kind), JSON.stringify({ since, cursor: cur, docs }));

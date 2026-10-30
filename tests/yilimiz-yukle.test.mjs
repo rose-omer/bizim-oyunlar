@@ -10,10 +10,10 @@ writeStore('session', 'bizim.yerel', '1');
 const room = (roomId) => ({ roomId, me: { clientId: 'ali', name: 'Ömer' }, on: () => () => {}, sendAll: () => true, partner: () => null });
 
 // Yerel depoya tarihli mesajlar: her gün bir mesaj, 2025-12-01'den 2026-03-10'a (100 mesaj).
-function tohum(roomId) {
+function tohum(roomId, adet = 100) {
   const all = {};
   const bas = Date.UTC(2025, 11, 1, 12);
-  for (let i = 0; i < 100; i++) {
+  for (let i = 0; i < adet; i++) {
     const iso = new Date(bas + i * 864e5).toISOString();
     all[`m${i}`] = { id: `m${i}`, data: { metin: String(i), kimden: 'ali' }, author: 'ali', deleted: false, created_at: iso, updated_at: iso };
   }
@@ -53,6 +53,20 @@ test('geriYukle: hepsi yüklenince tamam; yeter koşulu erken durdurur', async (
   assert.equal(r2.docs.length, 100);
   assert.equal(r2.tamam, true);
   col.close();
+});
+
+test('geriYukle: tümü yüklendikten sonra önbellekten açılan koleksiyon da başa inebilir', async () => {
+  tohum('testyild44', 260); // önbellek sınırından (200) fazla
+  const r = room('testyild44');
+  const c1 = await openCollection(r, 'mesaj', { recent: 10 });
+  assert.equal((await geriYukle(c1, { kadar: 0, sayfa: 50 })).docs.length, 260);
+  assert.equal(c1.hasOlder(), false);
+  c1.close();
+  // Önbellek yalnız son 200 belgeyi tutar; imleç ona göre olmalı ki aradakiler yeniden yüklenebilsin.
+  const c2 = await openCollection(r, 'mesaj', { recent: 10 });
+  const s = await geriYukle(c2, { kadar: 0, sayfa: 50 });
+  assert.equal(s.docs.length, 260);
+  c2.close();
 });
 
 test('ilerlemeOrani: şimdiden hedefe zamanca ne kadar inildi', () => {

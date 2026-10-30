@@ -1,10 +1,12 @@
 // Amiral Battı sayfası. Ev sahibi sırayı ve atış geçmişini tutar; her filo yalnız kendi
 // cihazında (sessionStorage) durur. Savunan cihaz atışın sonucunu kendisi hesaplar.
-import { joinRoom } from '../../js/core/room.js';
+import { joinRoom, partnerGoruyor } from '../../js/core/room.js';
 import { readGameParams, lobbyUrl } from '../../js/core/identity.js';
 import { mountShell, waitForPartner, celebrate, confirmDialog, toast } from '../../js/core/ui.js';
 import { sfx } from '../../js/core/sound.js';
 import { logGame } from '../../js/core/db.js';
+import { bildir } from '../../js/core/bildirim.js';
+import { siraPartnere } from '../dama/kayit.js';
 import { createSync, sessionStore } from '../hafiza/sync.js';
 import { mulberry32, newSeed } from '../hafiza/rng.js';
 import { esc } from '../hafiza/ekran.js';
@@ -79,7 +81,7 @@ const sync = createSync({
   storage: store,
   storeKey: `bizim.amiral.${roomId || '-'}`,
   accept: (s) => s.v === 1 && s.players?.join() === players.join(),
-  onState: render,
+  onState: (s, prev) => { render(s, prev); siraBildir(s, prev); },
   onPeer: (here) => {
     clearTimeout(awayTimer);
     if (here) away.classList.add('hidden');
@@ -100,6 +102,17 @@ window.addEventListener('pointerup', onDragEnd);
 window.addEventListener('pointercancel', onDragEnd);
 sync.start();
 if (isHost) room.on('presence', (p) => { if (p) fillSeat(p); });
+
+// "Sıra sende" bildirimi (dama/masa.js kalıbı): sırayı devreden cihaz yollar; partner bu oyunda ve
+// uygulaması öndeyse yollanmaz.
+function siraBildir(s, prev) {
+  const holder = (x) => (x?.faz === 'oyun' ? x.players[x.sira] : null);
+  if (!prev || !roomId || !siraPartnere(holder(prev), holder(s), me) || partnerGoruyor(room.partner(), NS)) return;
+  const metin = prev.faz !== 'oyun'
+    ? 'Amiral Battı: savaş başladı · ilk atış senin'
+    : `Amiral Battı: ${room.me.name || 'Sevgilin'} ıskaladı · atış sırası sende`;
+  bildir(roomId, { tur: 'oyun', baslik: 'Sıra sende', metin, url: `games/${NS}/?oda=${roomId}&host=${isHost ? me : hostId}` });
+}
 
 // ---------- yardımcılar ----------
 const later = (fn, ms = 0) => setTimeout(fn, ms);

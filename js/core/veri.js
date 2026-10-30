@@ -374,6 +374,11 @@ const cacheKey = (roomId, kind) => `bizim.veri.${roomId}.${kind}`;
 // Giden kutusu kişiye özel: yerel modda iki sekme (iki kişi) aynı localStorage'ı paylaşır.
 const outboxKey = (roomId, clientId) => `bizim.veri.giden.${roomId}.${clientId || '-'}`;
 
+/** Türlerin önbelleğini siler (geri yüklemeden sonra sayfalar baştan yüklesin). Giden kutusuna dokunmaz. */
+export function onbellekTemizle(roomId, kinds) {
+  for (const kind of kinds || []) writeStore('local', cacheKey(roomId, kind), null);
+}
+
 function readJson(key, fallback) {
   try {
     const v = JSON.parse(readStore('local', key) || 'null');
@@ -516,10 +521,11 @@ export async function openCollection(room, kind, { recent = 0 } = {}) {
   }
   const newOp = (id, extra) => ({ n: uuid(), kind, id, at: new Date().toISOString(), ...extra });
 
-  async function refresh() {
+  /** tam: 'since' yok sayılır, hepsi çekilir (geri yüklenen eski tarihli belgeler için). */
+  async function refresh(tam = false) {
     if (closed || durdu.has(roomId)) return;
     try {
-      const docs = await listDocs(roomId, kind, { since: overlapSince(since) });
+      const docs = await listDocs(roomId, kind, { since: tam ? null : overlapSince(since) });
       since = maxUpdated(docs, since);
       ilkHata = null;
       if (mergeDocs(map, docs)) changed();
@@ -594,8 +600,8 @@ export async function openCollection(room, kind, { recent = 0 } = {}) {
       if (type === 'error' && ilkHata) { const e = ilkHata; queueMicrotask(() => fn(e)); }
       return () => listeners[type]?.delete(fn);
     },
-    /** Sunucudan eksikleri çeker. Hata fırlatmaz (error olayı gelir). */
-    refresh: () => refresh().catch(() => {}),
+    /** Sunucudan eksikleri çeker ({ tam: true } hepsini). Hata fırlatmaz (error olayı gelir). */
+    refresh: (o) => refresh(!!o?.tam).catch(() => {}),
     loadOlder,
     hasOlder: () => older,
     close() {

@@ -204,3 +204,26 @@ test('bildirim.js: bildir gövdesinde anahtar; eski sunucuda yok', async (t) => 
   assert.equal(await bildir(E, { tur: 'mesaj' }), true);
   assert.equal('anahtar' in govdeler[1], false);
 });
+
+test('geri yükleme sonrası: refresh({ tam: true }) eski tarihli belgeleri de getirir; önbellek temizlenir', async () => {
+  const { onbellekTemizle } = await import('../js/core/veri.js');
+  const { readStore } = await import('../js/core/identity.js');
+  writeStore('session', 'bizim.yerel', '1');
+  const R = 'tamtazele2';
+  const col = await openCollection(odaNesnesi(R), 'liste');
+  try {
+    await col.put({ metin: 'yeni' });
+    await iceAktar(R, [{ kind: 'liste', id: 'eski1', data: { metin: 'yedekten' }, created_at: '2020-01-01T00:00:00Z', updated_at: '2020-01-01T00:00:00Z' }]);
+    await col.refresh();
+    assert.equal(col.get('eski1'), null, 'artımlı tazeleme eski tarihi atlar');
+    await col.refresh({ tam: true });
+    assert.equal(col.get('eski1').data.metin, 'yedekten');
+    assert.ok(readStore('local', `bizim.veri.${R}.liste`));
+    assert.equal(typeof onbellekTemizle, 'function');
+    onbellekTemizle(R, ['liste', 'mesaj']);
+    assert.equal(readStore('local', `bizim.veri.${R}.liste`), null);
+  } finally {
+    col.close();
+    sunucuModu();
+  }
+});

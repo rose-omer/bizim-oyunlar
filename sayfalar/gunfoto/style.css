@@ -126,7 +126,8 @@
   justify-content: center;
   gap: 4px;
   padding: 16px 10px;
-  background: color-mix(in srgb, var(--plum) 38%, transparent);
+  /* Ortası koyu (yazı her fotoğrafta okunur), kenarlar bulanık fotoğrafı gösterir */
+  background: radial-gradient(ellipse 90% 62% at 50% 50%, color-mix(in srgb, var(--plum) 82%, transparent), color-mix(in srgb, var(--plum) 40%, transparent));
   color: var(--plum-ink);
   text-align: center;
 }
@@ -139,11 +140,11 @@
   border-radius: 50%;
   background: color-mix(in srgb, var(--plum-ink) 92%, transparent);
   color: var(--plum);
-  box-shadow: 0 8px 20px -10px rgb(0 0 0 / 0.5);
+  box-shadow: var(--shadow);
 }
 .gf-kilit-ikon svg { width: 24px; height: 24px; }
-.gf-kilit-metin { font-weight: 800; text-shadow: 0 1px 8px rgb(0 0 0 / 0.35); }
-.gf-kilit-ince { font-size: 0.8125rem; font-weight: 700; opacity: 0.92; text-shadow: 0 1px 8px rgb(0 0 0 / 0.35); }
+.gf-kilit-metin { font-size: 1.1875rem; font-weight: 800; line-height: 1.25; }
+.gf-kilit-ince { font-size: 0.8125rem; font-weight: 700; }
 
 /* Alt yazı: ad · not */
 .gf-altyazi {

@@ -85,7 +85,7 @@ function altyazi(ad, not, ek = null) {
 function acikFoto(kim, ad, f, gun) {
   const img = fotoImg(f.foto, { alt: fotoAlt(kim, ad, gun, f.not), eager: true });
   return h('button', {
-    type: 'button', class: 'gf-foto', 'aria-label': `${fotoAlt(kim, ad, gun, f.not)}. Büyüt`,
+    type: 'button', class: 'gf-foto', dataset: { odak: `foto:${kim}:${gun}` }, 'aria-label': `${fotoAlt(kim, ad, gun, f.not)}. Büyüt`,
     onclick: () => buyukAc(gun),
   }, img);
 }
@@ -102,14 +102,14 @@ function cizBenKare(d, g) {
     benKare.dataset.durum = 'acik';
     benKare.replaceChildren(h('div', { class: 'gf-cerceve' }, acikFoto('ben', 'Sen', d.ben, bugun)),
       altyazi('Sen', d.ben.not, h('button', {
-        type: 'button', class: 'btn ghost small gf-degistir', onclick: sec, 'aria-label': 'Fotoğrafını değiştir',
+        type: 'button', class: 'btn ghost small gf-degistir', dataset: { odak: 'sec' }, onclick: sec, 'aria-label': 'Fotoğrafını değiştir',
       }, 'Değiştir')));
     return;
   }
   benKare.dataset.durum = 'bos';
   benKare.replaceChildren(
     h('div', { class: 'gf-cerceve' },
-      h('button', { type: 'button', class: 'gf-sec', onclick: sec },
+      h('button', { type: 'button', class: 'gf-sec', dataset: { odak: 'sec' }, onclick: sec },
         h('span', { class: 'gf-sec-ikon', 'aria-hidden': 'true' }, ikon('foto')),
         h('span', { class: 'gf-sec-metin' }, 'Fotoğrafını seç'),
         h('span', { class: 'gf-sec-ince' }, 'Bugün ne görüyorsun?'))),
@@ -181,7 +181,7 @@ function gunKarti(g, pAd) {
   const kimler = g.ikisi ? 'ikinizin fotoğrafı' : g.ben ? 'yalnız senin fotoğrafın' : `yalnız ${genitive(pAd)} fotoğrafı`;
   return h('li', {},
     h('button', {
-      type: 'button', class: 'gf-gun', dataset: { ikisi: String(g.ikisi) },
+      type: 'button', class: 'gf-gun', dataset: { ikisi: String(g.ikisi), odak: `gun:${g.gun}` },
       'aria-label': `${tarihMetni(g.gun)}: ${kimler}. Büyüt`, onclick: () => buyukAc(g.gun),
     },
     h('span', { class: 'gf-gun-ikili' }, yarim(g.ben, pAd, g.gun, 'ben'), yarim(g.partner, pAd, g.gun, 'partner')),
@@ -209,6 +209,8 @@ function cizArsiv(harita, pAd) {
 }
 
 function ciz() {
+  const odakEl = document.activeElement;
+  const odak = odakEl?.dataset?.odak || null;
   const harita = gunlereGore(col.all());
   const d = gunDurumu(harita, bugun, me.clientId);
   const g = gorunum(d, bugun, bugun);
@@ -222,6 +224,12 @@ function ciz() {
   cizArsiv(harita, pAd);
   gecisler(d);
   buyukTazele?.();
+  if (odak && !odakEl.isConnected) odakla(odak);
+}
+
+/** data-odak anahtarlı düğmeye odaklan (yeniden çizimden sonra). */
+function odakla(anahtar) {
+  document.querySelector(`.gf [data-odak="${CSS.escape(anahtar)}"]`)?.focus({ preventScroll: true });
 }
 
 // ---------- Seç ve gönder ----------
@@ -248,6 +256,7 @@ function secimBirak() {
   secim = null;
   notGirdi.value = '';
   ciz();
+  odakla('sec');
 }
 
 async function gonder(e) {
@@ -281,13 +290,16 @@ async function gonder(e) {
     vazgecBtn.disabled = false;
     formEl.removeAttribute('aria-busy');
     gonderBtn.textContent = 'Gönder';
+    ciz(); // hata olursa "Gönderiliyor…" durumu kalmasın
   }
   URL.revokeObjectURL(secim.url);
   secim = null;
   notGirdi.value = '';
+  bugun = gun; // gece yarısını geçen gönderim: ekran da yeni güne geçer
   if (!once.partner) sfx('pop'); // partner göndermişse açılışta 'match' çalar
   if (once.ben) toast('Fotoğrafın değişti');
   ciz();
+  odakla('sec');
   if (!once.ben && !partnerGoruyor(room.partner?.(), 'gunfoto')) {
     const b = bildirimMetni({ benAd: benAdi(), partnerGonderdi: !!once.partner });
     bildir(roomId, { tur: 'ani', ...b, url: 'sayfalar/gunfoto/' })

@@ -10,7 +10,7 @@ import { sfx } from '../../js/core/sound.js';
 import { ikon } from './ikonlar.js';
 import {
   KATEGORILER, BASLIK_MAX, kategoriById, paraMetni, kayitOku, yeniHarcama, bakiye, bakiyeDurumu, bakiyeMetni,
-  hesaplasmaKaydi, aylar, ayFiltresi, kategoriOzeti, payTuru, payAciklama, ozelPay, tutarCoz, yonelme,
+  hesaplasmaKaydi, aylar, ayFiltresi, kategoriOzeti, payTuru, payAciklama, ozelPay, tutarCoz, yonelme, hesaplasmaId,
 } from './mantik.js';
 
 const { room, roomId, me } = await bootPage({ ns: 'harcama', title: 'Harcamalar', tab: 'daha' });
@@ -112,21 +112,24 @@ app.replaceChildren(h('div', { class: 'hc' },
     ozetEl, listeEl, bosEl)));
 
 // ---------- Form ----------
-function segDugme(etiket, secili, onclick) {
-  return h('button', { type: 'button', 'aria-pressed': String(secili), onclick }, etiket);
+function segDugme(grup, etiket, secili, sec) {
+  return h('button', {
+    type: 'button', 'aria-pressed': String(secili),
+    onclick: () => { sec(); formCiz(); grup.querySelector('[aria-pressed="true"]')?.focus(); },
+  }, etiket);
 }
 
 function formCiz() {
   const pId = partnerId();
   const pAd = partnerAdi();
   odeyenSeg.replaceChildren(
-    segDugme(`Ben (${benAdi()})`, durum.odeyen === myId, () => { durum.odeyen = myId; formCiz(); }),
-    segDugme(pAd, durum.odeyen === pId, () => { durum.odeyen = pId; formCiz(); }));
+    segDugme(odeyenSeg, `Ben (${benAdi()})`, durum.odeyen === myId, () => { durum.odeyen = myId; }),
+    segDugme(odeyenSeg, pAd, durum.odeyen === pId, () => { durum.odeyen = pId; }));
   paySeg.replaceChildren(
-    segDugme('Yarı yarıya', durum.payTur === 'esit', () => { durum.payTur = 'esit'; formCiz(); }),
-    segDugme('Hepsi benim', durum.payTur === 'benim', () => { durum.payTur = 'benim'; formCiz(); }),
-    segDugme(`Hepsi ${pAd}`, durum.payTur === 'onun', () => { durum.payTur = 'onun'; formCiz(); }),
-    segDugme('Özel', durum.payTur === 'ozel', () => { durum.payTur = 'ozel'; formCiz(); }));
+    segDugme(paySeg, 'Yarı yarıya', durum.payTur === 'esit', () => { durum.payTur = 'esit'; }),
+    segDugme(paySeg, 'Hepsi benim', durum.payTur === 'benim', () => { durum.payTur = 'benim'; }),
+    segDugme(paySeg, `Hepsi ${pAd}`, durum.payTur === 'onun', () => { durum.payTur = 'onun'; }),
+    segDugme(paySeg, 'Özel', durum.payTur === 'ozel', () => { durum.payTur = 'ozel'; }));
   ozelEl.hidden = durum.payTur !== 'ozel';
   yuzdeGirdi.value = String(durum.yuzde);
   yuzdeCikti.textContent = `Sen %${durum.yuzde} · ${pAd} %${100 - durum.yuzde}`;
@@ -181,7 +184,7 @@ function formAc(kayit = null) {
   baslikGirdi.value = k?.baslik || '';
   tutarGirdi.value = k ? paraMetni(k.tutar).replace(/\s*₺$/, '') : '';
   tarihGirdi.value = k?.tarih || toDay();
-  durum.odeyen = k?.odeyen || myId;
+  durum.odeyen = !k || k.odeyen === myId ? myId : pId; // benden farklı her kimlik partnerdir
   const pt = k ? payTuru(k.pay, myId, pId) : { tur: 'esit', yuzde: 50 };
   durum.payTur = pt.tur;
   durum.yuzde = pt.yuzde;
@@ -252,8 +255,13 @@ async function hesaplas() {
     `${adOf(d.borclu)}, ${yonelme(adOf(d.alacakli))} ${paraMetni(d.tutar)} ödedi olarak kaydedilsin mi? Bakiye sıfırlanır.`,
     { ok: 'Hesaplaştık', cancel: 'Vazgeç' });
   if (!ok) return;
+  const simdi = bakiyeDurumu(bakiye(col.all()), myId, partnerId());
+  if (simdi.tutar !== d.tutar || simdi.borclu !== d.borclu) {
+    toast(simdi.tutar ? 'Bakiye az önce değişti. Yeni tutara bakıp yeniden dene.' : 'Zaten hesaplaşmışsınız.');
+    return;
+  }
   try {
-    await col.put(kayit);
+    await col.put(kayit, hesaplasmaId(col.all(), simdi));
   } catch (err) {
     toast(err?.message || 'Kaydedilemedi.');
     return;
@@ -313,12 +321,14 @@ function cizOzet(oz) {
   }
   ozetEl.hidden = false;
   const pId = partnerId();
-  const kimler = [myId, pId, ...Object.keys(oz.odeyenler)].filter((id, i, l) => id && l.indexOf(id) === i && oz.odeyenler[id]);
+  const benim = oz.odeyenler[myId] || 0;
+  const onun = Object.entries(oz.odeyenler).reduce((t, [kim, n]) => (kim === myId ? t : t + n), 0);
+  const odeyenMetni = [[benAdi(), benim], [adOf(pId), onun]].filter(([, n]) => n).map(([ad, n]) => `${ad} ${paraMetni(n)} ödedi`).join(' · ');
   ozetEl.replaceChildren(
     h('div', { class: 'hc-toplam' },
       h('span', {}, durum.ay ? `${ayMetni(durum.ay)} toplamı` : 'Tüm zamanlar toplamı'),
       h('strong', {}, paraMetni(oz.toplam))),
-    h('p', { class: 'hc-odeyenler' }, kimler.map((id) => `${adOf(id)} ${paraMetni(oz.odeyenler[id])} ödedi`).join(' · ')),
+    h('p', { class: 'hc-odeyenler' }, odeyenMetni),
     h('ul', { class: 'hc-kategori-ozet', 'aria-label': 'Kategorilere göre' }, oz.kategoriler.map((k) => h('li', {},
       h('div', { class: 'hc-ko-ust' },
         h('span', { class: 'hc-ko-ad' }, k.ad),

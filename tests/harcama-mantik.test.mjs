@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   KATEGORILER, MAX_KURUS, tutarCoz, paraMetni, paylar, yonelme, kayitOku, yeniHarcama, bakiye, bakiyeDurumu,
-  bakiyeMetni, hesaplasmaKaydi, aylar, ayFiltresi, kategoriOzeti, payTuru, payAciklama, ozelPay,
+  bakiyeMetni, hesaplasmaKaydi, aylar, ayFiltresi, kategoriOzeti, payTuru, payAciklama, ozelPay, hesaplasmaId,
 } from '../sayfalar/harcama/mantik.js';
 
 const O = 'omer-test-id';
@@ -167,4 +167,23 @@ test('payTuru, ozelPay ve payAciklama', () => {
   assert.equal(payAciklama({ [O]: 1, [G]: 1 }, O, G, adOf), 'yarı yarıya');
   assert.equal(payAciklama({ [G]: 1 }, O, G, adOf), 'hepsi Gül için');
   assert.equal(payAciklama({ [O]: 70, [G]: 30 }, O, G, adOf), 'Ömer %70 · Gül %30');
+});
+
+test('payTuru ve payAciklama: partnerin eski cihazı da partner sayılır (benden farklı her kimlik)', () => {
+  const G2 = 'gul-eski-cihaz';
+  assert.deepEqual(payTuru({ [O]: 1, [G2]: 1 }, O, G), { tur: 'esit', yuzde: 50 });
+  assert.deepEqual(payTuru({ [G2]: 1 }, O, G), { tur: 'onun', yuzde: 0 });
+  assert.deepEqual(payTuru({ [O]: 70, [G2]: 30 }, O, G), { tur: 'ozel', yuzde: 70 });
+  assert.equal(payAciklama({ [G2]: 1 }, O, G, adOf), 'hepsi Gül için');
+});
+
+test('hesaplasmaId: aynı defterde iki cihaz aynı kimliği üretir; defter değişince kimlik değişir', () => {
+  const docs = [harcama(24590, O, { [O]: 1, [G]: 1 }), harcama(101, G, { [O]: 1, [G]: 1 })];
+  const d = bakiyeDurumu(bakiye(docs), O, G);
+  const id = hesaplasmaId(docs, d);
+  assert.match(id, /^[A-Za-z0-9_-]{1,64}$/);
+  assert.equal(hesaplasmaId([...docs].reverse(), d), id, 'sıra fark etmez');
+  const sonra = [...docs, harcama(500, O, { [O]: 1, [G]: 1 })];
+  assert.notEqual(hesaplasmaId(sonra, bakiyeDurumu(bakiye(sonra), O, G)), id);
+  assert.notEqual(hesaplasmaId([...docs, { ...harcama(1, O, { [O]: 1 }), deleted: true }], d), hesaplasmaId([...docs, harcama(1, O, { [O]: 1 })], d));
 });

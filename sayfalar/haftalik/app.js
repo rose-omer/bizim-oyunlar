@@ -108,7 +108,7 @@ function duzenlemeBasla(k) {
   formuDoldur(k);
   hataGoster(null);
   ciz();
-  formEl.querySelector('input:checked, input')?.focus();
+  (formEl.querySelector('input:checked') || formEl.querySelector('input'))?.focus();
 }
 
 function duzenlemeBitir() {
@@ -172,7 +172,7 @@ function cizSonuc(d, pAd) {
     return;
   }
   sonucEl.hidden = false;
-  const duzenle = h('button', { type: 'button', class: 'btn ghost small', onclick: () => duzenlemeBasla(d.ben) },
+  const duzenle = h('button', { type: 'button', class: 'btn ghost small', dataset: { odak: 'duzenle' }, onclick: () => duzenlemeBasla(d.ben) },
     ikon('kalem'), 'Düzenle');
 
   if (!d.partner) {
@@ -331,6 +331,8 @@ function gecisler(d) {
 }
 
 function ciz() {
+  const odakEl = document.activeElement; // canlı yeniden çizimde "Düzenle" odağı kaybolmasın
+  const odak = odakEl?.dataset?.odak || null;
   const harita = haftalaraGore(col.all());
   const d = haftaDurumu(harita, hafta, me.clientId);
   const pAd = partnerAdi();
@@ -343,6 +345,7 @@ function ciz() {
   cizSonuc(d, pAd);
   cizEgilim(harita, pAd);
   gecisler(d);
+  if (odak && !odakEl.isConnected) sonucEl.querySelector(`[data-odak="${odak}"]`)?.focus({ preventScroll: true });
 }
 
 // ---------- Canlı ----------
@@ -363,8 +366,12 @@ const zamanKontrol = () => {
     hafta = simdiki;
     duzenliyor = false;
     formuDoldur(null);
+    ciz();
+    return;
   }
-  ciz(); // pazar akşamı hatırlatması saatle değişir
+  // Aynı hafta: yalnız pazar akşamı hatırlatması saatle değişir (odak ve okuma yeri bozulmasın).
+  const d = haftaDurumu(haftalaraGore(col.all()), hafta, me.clientId);
+  hatirlatEl.hidden = !hatirlatmaGoster({ simdi: new Date(), benDoldurdu: !!d.ben });
 };
 setInterval(zamanKontrol, 60000);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') zamanKontrol(); });

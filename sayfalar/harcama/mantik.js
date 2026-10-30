@@ -5,6 +5,7 @@
 // bölünmeyen kuruş ödeyenin payına yazılır (101 kuruş eşit: ödemeyen 50, ödeyen 51). Toplam hep tutara eşittir.
 // "Hesaplaştık" kaydı: borçlu, alacaklıya borcun tamamını öder (odeyen = borçlu, pay = { alacaklı: 1 }).
 import { parseDay } from '../../js/core/gunler.js';
+import { hashStr } from '../gunun-sorusu/mantik.js';
 
 export const KATEGORILER = [
   { id: 'market', ad: 'Market' },
@@ -159,6 +160,15 @@ export function hesaplasmaKaydi(durum, { tarih }) {
   };
 }
 
+/**
+ * Hesaplaşma kaydının kimliği: defterden (geçerli kayıt kimlikleri) ve borç durumundan türetilir.
+ * İki cihaz aynı anda "Hesaplaştık" derse aynı belgeye yazar; borç iki kez kapanıp tersine dönmez.
+ */
+export function hesaplasmaId(docs, durum) {
+  const ids = (docs || []).filter((d) => kayitOku(d)).map((d) => d.id).sort();
+  return `hesap-${hashStr(ids.join(',')).toString(36)}-${durum.tutar}`;
+}
+
 /** Kayıtların ayları 'YYYY-MM', yeniden eskiye. */
 export function aylar(docs) {
   const set = new Set();
@@ -199,10 +209,13 @@ export function kategoriOzeti(docs, ay) {
   return { toplam, kategoriler, odeyenler };
 }
 
-/** Paylaşım türü (form ve liste için). -> { tur: 'esit'|'benim'|'onun'|'ozel', yuzde: benim payım % } */
+/**
+ * Paylaşım türü (form ve liste için). -> { tur: 'esit'|'benim'|'onun'|'ozel', yuzde: benim payım % }
+ * Benden farklı her kimlik partner sayılır (partnerin eski cihazı da). partnerId yalnız imza uyumu için.
+ */
 export function payTuru(pay, benId, partnerId) {
   const b = pay?.[benId] || 0;
-  const o = pay?.[partnerId] || 0;
+  const o = Object.entries(pay || {}).reduce((t, [kim, w]) => (kim === benId ? t : t + (w || 0)), 0);
   if (b > 0 && o > 0 && b === o) return { tur: 'esit', yuzde: 50 };
   if (b > 0 && !o) return { tur: 'benim', yuzde: 100 };
   if (o > 0 && !b) return { tur: 'onun', yuzde: 0 };

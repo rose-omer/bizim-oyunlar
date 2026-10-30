@@ -1,0 +1,177 @@
+/* Skor Tablosu — yalnız base.css değişkenleri. Ben = --plum (avatar.me), sevgilin = --accent (avatar.partner). */
+
+.sk {
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 18px var(--gutter) 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+.sk-yukleniyor { padding: 40px 0; text-align: center; }
+
+/* ---------- Skor kartı: iki kişi karşı karşıya ---------- */
+.sk-hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 26px 18px 26px;
+  border-radius: 28px;
+  background: var(--hero);
+  color: var(--hero-ink);
+  box-shadow: var(--shadow-lg);
+  text-align: center;
+}
+.sk-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: radial-gradient(90% 75% at 50% -10%, color-mix(in srgb, var(--hero-accent) 22%, transparent), transparent 70%);
+  pointer-events: none;
+}
+.sk-duel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: end;
+  gap: 10px;
+  width: 100%;
+}
+.sk-kisi {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.sk-kisi .avatar { --av: 52px; box-shadow: 0 0 0 2px var(--hero); }
+.sk-kisi .avatar.me { background: color-mix(in srgb, var(--hero-ink) 16%, var(--hero)); color: var(--hero-ink); }
+.sk-kisi .avatar.partner { background: var(--hero-accent); color: var(--hero); }
+.sk-ad {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--hero-muted);
+  font-size: 0.9375rem;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sk-n {
+  font-family: var(--font-display);
+  font-variation-settings: 'SOFT' 100, 'opsz' 144;
+  font-size: clamp(3.5rem, 2.6rem + 5vw, 4.75rem);
+  font-weight: 600;
+  line-height: 0.95;
+  letter-spacing: -0.04em;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+.sk-kisi.sag .sk-n { color: var(--hero-accent); }
+.sk-ayrac {
+  padding-bottom: 0.5rem;
+  color: var(--hero-muted);
+  font-family: var(--font-display);
+  font-size: 2rem;
+  line-height: 1;
+}
+.sk-lider {
+  margin-top: 14px;
+  font-family: var(--font-display);
+  font-variation-settings: 'SOFT' 100;
+  font-size: 1.25rem;
+  font-style: italic;
+  font-weight: 500;
+  line-height: 1.25;
+  text-wrap: balance;
+}
+.sk-alt { color: var(--hero-muted); font-size: 0.9375rem; font-weight: 650; }
+.sk-oyna { margin-top: 12px; }
+
+/* ---------- Bölümler ---------- */
+.sk-bolum { display: flex; flex-direction: column; gap: 12px; }
+.sk-bolum h2 { font-size: 1.375rem; }
+.sk-bas { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 14px; }
+.sk-anahtar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  color: var(--muted);
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+.sk-nokta { width: 10px; height: 10px; border-radius: 50%; margin-left: 4px; }
+.sk-nokta.ben { background: var(--plum); }
+.sk-nokta.o { background: var(--accent); }
+.sk-nokta.bb { background: var(--line); }
+
+/* ---------- Oyun satırları ---------- */
+.sk-liste { padding: 4px 0; overflow: hidden; }
+.sk-oyun {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px 12px 12px;
+}
+.sk-oyun + .sk-oyun { border-top: 1px solid var(--line); }
+.sk-oyun .game-tile { width: 44px; height: 44px; border-radius: 14px; font-size: 22px; }
+.sk-oyun-govde { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.sk-oyun-ad {
+  font-family: var(--font-display);
+  font-variation-settings: 'SOFT' 100;
+  font-size: 1.0625rem;
+  font-weight: 600;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+.sk-bar {
+  display: flex;
+  gap: 2px;
+  height: 8px;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+}
+.sk-bar > span { flex-basis: 0; min-width: 6px; }
+.sk-bar-ben { background: var(--plum); }
+.sk-bar-o { background: var(--accent); }
+.sk-bar-bb { background: var(--line); }
+.sk-oyun-alt { color: var(--muted); font-size: 0.8125rem; font-weight: 650; }
+.sk-oyun-skor {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  font-family: var(--font-display);
+  font-variation-settings: 'SOFT' 100;
+  font-size: 1.375rem;
+  font-weight: 600;
+  font-variant-numeric: lining-nums tabular-nums;
+  white-space: nowrap;
+}
+.sk-oyun-skor > span:last-child { color: var(--accent-strong); }
+.sk-tire { color: var(--muted); font-size: 1rem; }
+.sk-oyun.bos .sk-oyun-skor { color: var(--muted); }
+.sk-oyun.bos .sk-oyun-skor > span:last-child { color: var(--muted); }
+
+/* ---------- Son oynananlar ---------- */
+.sk-son { padding: 4px 0; overflow: hidden; }
+.sk-son-satir {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: 'ad ne' 'kim ne';
+  align-items: center;
+  gap: 2px 12px;
+  min-height: 60px;
+  padding: 10px 16px;
+}
+.sk-son-satir + .sk-son-satir { border-top: 1px solid var(--line); }
+.sk-son-ad { grid-area: ad; font-weight: 750; overflow-wrap: anywhere; }
+.sk-son-kim { grid-area: kim; color: var(--muted); font-size: 0.875rem; font-weight: 650; }
+.sk-son-kim[data-kim='ben'] { color: var(--plum); }
+.sk-son-kim[data-kim='o'] { color: var(--accent-strong); }
+.sk-son-ne { grid-area: ne; color: var(--muted); font-size: 0.875rem; white-space: nowrap; }

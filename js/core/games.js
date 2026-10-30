@@ -124,6 +124,9 @@ export const SAYFALAR = [
   { id: 'izle', title: 'Birlikte İzle', icon: '🎬', path: 'sayfalar/izle/', desc: 'Aynı YouTube videosunu aynı anda izleyin.' },
   { id: 'ayarlar', title: 'Ayarlar', icon: '⚙️', path: 'sayfalar/ayarlar/', desc: 'Profil, başlangıç tarihi, bildirim, kilit, tema.' },
   { id: 'daha', title: 'Daha', icon: '☰', path: 'sayfalar/daha/', desc: 'Tüm özellikler.' },
+  { id: 'skor', title: 'Skor Tablosu', icon: '🏆', path: 'sayfalar/skor/', desc: 'Kim kaç kez kazandı? Oyun oyun skorunuz.' },
+  { id: 'yilimiz', title: 'Yılımız', icon: '✨', path: 'sayfalar/yilimiz/', desc: 'Bir yılınızın hikâyesi: mesajlar, anılar, oyunlar.' },
+  { id: 'rozetler', title: 'Rozetlerimiz', icon: '🏅', path: 'sayfalar/rozetler/', desc: 'Birlikte açtığınız rozetler ve sıradakiler.' },
 ];
 
 // Alt sekme çubuğu sırası.

@@ -638,6 +638,8 @@ function kayitYaz() {
 async function kayitBasla(mod) {
   if (kayit || !sesVar) return;
   oynatici.durdur();
+  emojiPanel.hidden = true;
+  emojiBtn.setAttribute('aria-expanded', 'false');
   const bu = { mod, k: null, hazir: false, birakildi: false, doldu: false };
   kayit = bu;
   kayitArayuz(true);

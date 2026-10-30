@@ -40,11 +40,17 @@ export function aramaPaneli(o) {
     h('div', { class: 'sh-sutun sh-ara-govde' }, bilgi, sonuclar, alt));
 
   // ---------- Çizim ----------
+  // Düğmeler bir kez kurulur, sonra yerinde güncellenir (klavye odağı kaybolmasın).
   function suzgecCiz() {
     const secenek = [['hepsi', 'İkimiz'], ['ben', 'Ben'], ['o', o.partnerAd()]];
-    suzgec.replaceChildren(...secenek.map(([k, yazi]) => h('button', {
-      type: 'button', class: 'sh-suzgec', 'aria-pressed': String(kim === k), dataset: { kim: k },
-    }, yazi)));
+    if (!suzgec.children.length) {
+      suzgec.append(...secenek.map(([k]) => h('button', { type: 'button', class: 'sh-suzgec', dataset: { kim: k } })));
+    }
+    secenek.forEach(([k, yazi], i) => {
+      const b = suzgec.children[i];
+      if (b.textContent !== yazi) b.textContent = yazi;
+      b.setAttribute('aria-pressed', String(kim === k));
+    });
   }
 
   function zamanYazisi(doc) {
@@ -130,7 +136,9 @@ export function aramaPaneli(o) {
     }
     const l = liste();
     sonucSayisi = l.length;
+    const odakId = sonuclar.contains(document.activeElement) ? document.activeElement.dataset?.id : null;
     sonuclar.replaceChildren(...l.map((r) => sonucEl(r.doc, r.parcalar)));
+    if (odakId) sonuclar.querySelector(`.sh-sonuc[data-id="${CSS.escape(odakId)}"]`)?.focus({ preventScroll: true });
     if (!l.length) {
       const bosYazi = mod === 'ara'
         ? `“${sorgu.trim()}” ${col.hasOlder() ? 'yüklü mesajlarda' : 'sohbetinizde'} yok.`
@@ -173,6 +181,8 @@ export function aramaPaneli(o) {
     if (tarama !== bu) return;
     tarama = null;
     guncelle();
+    // Düğme ilerleme satırına dönüşünce odak kaybolur: klavyeyle devam edilebilsin.
+    if (!el.contains(document.activeElement)) (alt.querySelector('button') || sonuclar.querySelector('.sh-sonuc'))?.focus({ preventScroll: true });
     if (r && !r.yeni && !r.durduruldu) {
       bilgiYaz(r.bitti ? `${r.taranan} eski mesaja daha bakıldı; sonuç çıkmadı.` : `${r.taranan} eski mesaja daha bakıldı. İstersen devam et.`);
     } else if (r?.yeni) {

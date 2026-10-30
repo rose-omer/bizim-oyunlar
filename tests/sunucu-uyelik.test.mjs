@@ -592,6 +592,49 @@ const ESKI_IMZALAR = `
     language sql stable as $$ select null::text, null::text, null::text, null::jsonb where false $$;
 `;
 
+test('push: geçişte kimliksiz, başka cihaz adına kayıt koruma başlayınca sayılmaz; anahtarla kayıt sayılır', ATLA, async () => {
+  const { q } = await kur();
+  const u = uyelik(q);
+  // Eski oda: L geçişle onaylı, M davetle.
+  await q(`select * from public.doc_put($1, 'kisi', 'L', '{}'::jsonb, 'L')`, [ODA]);
+  await q(`update public.room_doc set created_at = now() - interval '1 day'`);
+  const L = cihaz('L');
+  const M = cihaz('M');
+  assert.equal((await u.katil(ODA, L)).durum, 'onayli');
+  assert.equal((await u.katil(ODA, M, { davet: await u.davet(ODA, L) })).durum, 'onayli');
+  // Oda kodunu bilen biri geçişte (kimliksiz çağrı geçer) L adına abone olur.
+  await q('select public.push_kaydet($1, $2, $3::jsonb)', [ODA, 'L', JSON.stringify(ab(66))]);
+  const dogrulandi = async () => (await q('select endpoint, dogrulandi from public.push_sub order by endpoint'))
+    .map((x) => [x.endpoint, x.dogrulandi]);
+  assert.deepEqual(await dogrulandi(), [[ab(66).endpoint, false]]);
+  const hedef = async () => (await q('select endpoint from public.push_hedef($1, $2, $3)', [ODA, M.id, M.k])).map((x) => x.endpoint);
+  assert.deepEqual(await hedef(), [ab(66).endpoint], 'geçişte kimliksiz kayıt sayılır');
+
+  await q(`update public.oda set zorunlu = now() - interval '1 second'`);
+  assert.deepEqual(await hedef(), [], 'koruma altında kimliksiz kayıt sayılmaz');
+  assert.deepEqual(await q('select * from public.push_abonelikler()'), []);
+
+  // L anahtarıyla kaydolur: sayılır; kendi eski (kimliksiz) kaydı silinir.
+  await q('select public.push_kaydet($1, $2, $3::jsonb, null, $4)', [ODA, L.id, JSON.stringify(ab(67)), L.k]);
+  assert.deepEqual(await dogrulandi(), [[ab(67).endpoint, true]]);
+  assert.deepEqual(await hedef(), [ab(67).endpoint]);
+  assert.deepEqual((await q('select endpoint from public.push_abonelikler()')).map((x) => x.endpoint), [ab(67).endpoint]);
+
+  // Aynı adres önce kimliksiz (eski istemci), sonra anahtarla (yeni istemci) kaydedilince doğrulanır.
+  await q(`update public.oda set zorunlu = now() + interval '1 day'`);
+  await q('select public.push_kaydet($1, $2, $3::jsonb)', [ODA, M.id, JSON.stringify(ab(68))]);
+  await q(`update public.oda set zorunlu = now() - interval '1 second'`);
+  await q('select public.push_kaydet($1, $2, $3::jsonb, null, $4)', [ODA, M.id, JSON.stringify(ab(68)), M.k]);
+  assert.deepEqual(await dogrulandi(), [[ab(67).endpoint, true], [ab(68).endpoint, true]]);
+});
+
+test('oda_yetki: cihaz satırını paylaşımlı kilitler (çıkarma, süren isteğin bitmesini bekler)', ATLA, async () => {
+  const { q } = await kur();
+  // Tek bağlantılı PGlite'ta eşzamanlılık denenemez; kilit ifadesi yapıdan denetlenir.
+  const kaynak = (await q(`select prosrc from pg_catalog.pg_proc where proname = 'oda_yetki'`))[0].prosrc;
+  assert.match(kaynak, /for key share of c/);
+});
+
 test('şema: eski şemanın üstüne kurulur; eski imzalar kalmaz; yetki fonksiyonları volatile ve tanımlayıcı yetkili; eski adlı argümanlar; anon yeni RPC\'leri çağırır', ATLA, async () => {
   const { db, q } = await kur({ once: ESKI_IMZALAR });
   const dil = await q(`select p.proname as ad, l.lanname as dil from pg_catalog.pg_proc as p

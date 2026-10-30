@@ -276,7 +276,7 @@ test('yetkiler: anon yalnız istemci RPC\'leri; tablolar ve yardımcılar kapal�
     `select public.oda_ozet('x')`,
     `select public.oda_cevap('onayli', '${ODA}', 'k', now(), false)`,
     `select public.oda_bicim('x', '${ODA}', 'a', null)`,
-    `select public.push_sayilir('${ODA}', 'omer')`,
+    `select public.push_sayilir('${ODA}', 'omer', true)`,
   ]) {
     const e = await hata(s);
     assert.equal(e.code, '42501', `${s}: ${e.message}`);

@@ -425,6 +425,10 @@ create table if not exists public.push_sub (
 
 create index if not exists push_sub_room_idx on public.push_sub (room);
 
+-- Kayıt cihaz anahtarıyla mı yapıldı (7. bölüm). Koruma altındaki odada yalnız doğrulanmış kayıt sayılır:
+-- geçişte oda kodunu bilen biri kimliksiz olarak başka bir cihaz adına abone olamasın.
+alter table public.push_sub add column if not exists dogrulandi boolean not null default false;
+
 alter table public.push_sub enable row level security;
 revoke all on table public.push_sub from anon, authenticated;
 
@@ -521,14 +525,16 @@ begin
     delete from public.push_kayit_rate as r where r.bucket < v_saat - interval '1 day';
   end if;
 
-  insert into public.push_sub as s (endpoint, room, client, p256dh, auth, ua, created_at)
-  values (v_endpoint, p_room, p_client, v_p256dh, v_auth, pg_catalog.left(p_ua, 200), pg_catalog.clock_timestamp())
+  insert into public.push_sub as s (endpoint, room, client, p256dh, auth, ua, created_at, dogrulandi)
+  values (v_endpoint, p_room, p_client, v_p256dh, v_auth, pg_catalog.left(p_ua, 200), pg_catalog.clock_timestamp(),
+    p_anahtar is not null)
   on conflict (endpoint) do update
     set room = excluded.room,
         client = excluded.client,
         p256dh = excluded.p256dh,
         auth = excluded.auth,
         ua = excluded.ua,
+        dogrulandi = excluded.dogrulandi,
         last_ok_at = pg_catalog.clock_timestamp(),
         fail_count = 0;
 
@@ -609,7 +615,7 @@ begin
   select s.endpoint, s.p256dh, s.auth
   from public.push_sub as s
   where s.room = p_room and (p_from is null or s.client <> p_from)
-    and public.push_sayilir(s.room, s.client);
+    and public.push_sayilir(s.room, s.client, s.dogrulandi);
 end;
 $$;
 
@@ -654,7 +660,7 @@ begin
   select s.room, s.client, s.endpoint, s.p256dh, s.auth
   from public.push_sub as s
   where (p_after is null or s.endpoint > p_after)
-    and public.push_sayilir(s.room, s.client)
+    and public.push_sayilir(s.room, s.client, s.dogrulandi)
   order by s.endpoint
   limit least(greatest(coalesce(p_limit, 500), 1), 1000);
 end;
@@ -677,7 +683,7 @@ begin
   from public.room_doc as d
   where d.kind = any (p_kinds)
     and not d.deleted
-    and d.room in (select s.room from public.push_sub as s where public.push_sayilir(s.room, s.client))
+    and d.room in (select s.room from public.push_sub as s where public.push_sayilir(s.room, s.client, s.dogrulandi))
     and (d.kind <> 'gs' or (p_gs_gun is not null and d.id like (p_gs_gun::text || '-%')))
     and (p_after is null or (d.room, d.kind, d.id) > (p_after[1], p_after[2], p_after[3]))
   order by d.room, d.kind, d.id
@@ -915,21 +921,25 @@ begin
 end;
 $$;
 
--- Abonelik sayılır mı: oda korumasızsa (satır yok ya da geçişte) her abonelik; koruma altında yalnız onaylı cihazınki.
-create or replace function public.push_sayilir(p_room text, p_client text)
+-- Abonelik sayılır mı: oda korumasızsa (satır yok ya da geçişte) her abonelik; koruma altında yalnız onaylı
+-- cihazın anahtarıyla yaptığı kayıt (push_sub.dogrulandi).
+create or replace function public.push_sayilir(p_room text, p_client text, p_dogrulandi boolean)
 returns boolean
 language sql
 stable
 set search_path = ''
 as $$
   select not exists (select 1 from public.oda as o where o.room = p_room and o.zorunlu <= pg_catalog.now())
-    or exists (select 1 from public.oda_cihaz as c
-               where c.room = p_room and c.cihaz = p_client and c.durum = 'onayli');
+    or (coalesce(p_dogrulandi, false)
+        and exists (select 1 from public.oda_cihaz as c
+                    where c.room = p_room and c.cihaz = p_client and c.durum = 'onayli'));
 $$;
 
 -- Var olan RPC'lerin yetkisi (2., 4., 5. bölüm). Kimliksiz (ikisi null): oda satırı yoksa ya da koruma
 -- başlamadıysa geçer. Kimlikli: biçim doğru, cihaz onaylı ve anahtar özeti eşit olmalı (koruma öncesinde de).
 -- Geçerse son_gorulme en çok 10 dakikada bir yazılır. Değilse '<p_fn>: yetki yok' (42501).
+-- Cihaz satırı 'for key share' ile kilitlenir: cihaz_cikar (delete) süren isteğin bitmesini bekler; böylece
+-- çıkarılan cihazın o an yazdığı davet ya da belge çıkarmadan sonra kalmaz. son_gorulme güncellemesiyle çakışmaz.
 create or replace function public.oda_yetki(p_fn text, p_room text, p_cihaz text, p_anahtar text)
 returns void
 language plpgsql
@@ -950,7 +960,8 @@ begin
   elsif p_cihaz ~ '^[A-Za-z0-9_-]{1,64}$' and p_anahtar ~ '^[A-Za-z0-9_-]{43}$' then
     select c.anahtar_ozet, c.durum, c.son_gorulme into v_ozet, v_durum, v_son
     from public.oda_cihaz as c
-    where c.room = p_room and c.cihaz = p_cihaz;
+    where c.room = p_room and c.cihaz = p_cihaz
+    for key share of c;
     if v_durum = 'onayli' and v_ozet = public.oda_ozet(p_anahtar) then
       if v_son is null or v_son < pg_catalog.now() - interval '10 minutes' then
         update public.oda_cihaz as c set son_gorulme = pg_catalog.now()
@@ -982,7 +993,7 @@ revoke execute on function public.oda_ozet(text) from public, anon, authenticate
 revoke execute on function public.oda_rastgele(text, integer) from public, anon, authenticated;
 revoke execute on function public.oda_cevap(text, text, text, timestamptz, boolean) from public, anon, authenticated;
 revoke execute on function public.oda_bicim(text, text, text, text) from public, anon, authenticated;
-revoke execute on function public.push_sayilir(text, text) from public, anon, authenticated;
+revoke execute on function public.push_sayilir(text, text, boolean) from public, anon, authenticated;
 revoke execute on function public.oda_yetki(text, text, text, text) from public, anon, authenticated;
 revoke execute on function public.oda_yetki_kimlikli(text, text, text, text) from public, anon, authenticated;
 

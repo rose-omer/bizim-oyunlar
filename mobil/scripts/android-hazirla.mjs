@@ -1,12 +1,15 @@
 // `npx cap add android` ile üretilen projeye Biz İkimiz ayarlarını uygular. Java gerekmez.
 // CI (.github/workflows/android.yml) her derlemede çalıştırır; tekrar çalıştırmak zararsızdır.
-//   1. SCHEDULE_EXACT_ALARM iznini kaldırır (hatırlatıcılar kesin olmayan alarmla kurulur).
-//      WebView'ın mikrofon ve konum izinlerini bildirir (WEB_IZINLERI).
-//   2. versionCode / versionName: BIZ_SURUM_KODU (CI'da github.run_number), BIZ_SURUM_ADI.
-//   3. Release imzası: derleme anında BIZ_KEYSTORE_PATH varsa PKCS12 depoyla imzalar.
-//   4. android-ek/res/ altındaki ek kaynakları (bildirim ikonu, widget) projeye kopyalar.
-//   5. Ana ekran widget'ı: android-ek/java/ yerel kodunu kopyalar, AndroidManifest'e iki widget alıcısını
+//   1. WebView'ın mikrofon ve konum izinlerini bildirir (WEB_IZINLERI: sesli mesaj, navigator.geolocation).
+//   2. SCHEDULE_EXACT_ALARM iznini kaldırır (hatırlatıcılar kesin olmayan alarmla kurulur).
+//   3. versionCode / versionName: BIZ_SURUM_KODU (CI'da github.run_number), BIZ_SURUM_ADI.
+//   4. Release imzası: derleme anında BIZ_KEYSTORE_PATH varsa PKCS12 depoyla imzalar.
+//   5. android-ek/res/ altındaki ek kaynakları (bildirim ikonu, bildirim rengi, widget) projeye kopyalar.
+//   6. Ana ekran widget'ı: android-ek/java/ yerel kodunu kopyalar, AndroidManifest'e iki widget alıcısını
 //      ekler, MainActivity'de BizWidget eklentisini kaydeder (js/core/mobil.js widgetGuncelle).
+//   7. FCM: bildirim varsayılanları (ikon, renk, kanal) manifeste; android/app/google-services.json varsa
+//      paket adını denetler. Dosya varsa Capacitor şablonu google-services Gradle eklentisini kendisi uygular
+//      (app/build.gradle sonu; classpath kök build.gradle'da). Dosyayı CI yazar (GOOGLE_SERVICES_JSON_B64).
 import { readFileSync, writeFileSync, cpSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -15,11 +18,23 @@ const TOOLS_NS = 'http://schemas.android.com/tools';
 const EXACT_ALARM = 'android.permission.SCHEDULE_EXACT_ALARM';
 const IMZA_ISARET = '// --- Biz İkimiz: CI imzası';
 
+// FCM bildirimi kendi ikon/renk/kanalını taşır (supabase/functions/_shared/fcm.js). Bunlar yedek değerlerdir:
+// ör. Firebase konsolundan gönderilen deneme bildirimi uygulama ikonunu (beyaz kare) değil kalbi gösterir.
+// Kanal kimliği js/core/mobil.js FCM_KANAL ile aynı; renk android-ek/res/values/biz_bildirim.xml.
+const FCM_META = [
+  ['com.google.firebase.messaging.default_notification_icon', 'android:resource="@drawable/ic_stat_kalp"'],
+  ['com.google.firebase.messaging.default_notification_color', 'android:resource="@color/biz_bildirim"'],
+  ['com.google.firebase.messaging.default_notification_channel_id', 'android:value="biz-ikimiz"'],
+];
+
 /**
  * WebView'ın çalışma anında istediği izinler. Capacitor 8 BridgeWebChromeClient kendisi ister:
  * getUserMedia ses (sohbette sesli mesaj) → RECORD_AUDIO + MODIFY_AUDIO_SETTINGS;
- * navigator.geolocation (anı haritası, Ayarlar › Mesafe) → ACCESS_COARSE_LOCATION + ACCESS_FINE_LOCATION.
- * Manifest'te bildirilmezse istek hemen reddedilir; ek kod gerekmez.
+ * navigator.geolocation (anı haritası, Ayarlar › Mesafe ve konum rehberi) → ACCESS_COARSE_LOCATION +
+ * ACCESS_FINE_LOCATION (onGeolocationPermissionsShowPrompt ikisini birlikte ister; Android 12+ kullanıcı
+ * "yaklaşık"ı seçerse yalnız COARSE verilir, Capacitor bunu da kabul eder).
+ * Manifest'te bildirilmezse istek diyalogsuz reddedilir (sayfa PERMISSION_DENIED alır); ek kod gerekmez.
+ * Diğer izinler eklentilerin manifestinden gelir (VIBRATE: haptics; POST_NOTIFICATIONS: local-notifications).
  */
 export const WEB_IZINLERI = [
   'android.permission.RECORD_AUDIO',
@@ -28,7 +43,10 @@ export const WEB_IZINLERI = [
   'android.permission.ACCESS_FINE_LOCATION',
 ];
 
-/** Manifest'e WebView izinlerini (yoksa), tools ad alanını ve SCHEDULE_EXACT_ALARM kaldırma kuralını ekler. */
+/**
+ * Manifest'e WebView izinlerini (yoksa), tools ad alanını, SCHEDULE_EXACT_ALARM kaldırma kuralını ve
+ * <application> içine FCM bildirim varsayılanlarını (yoksa) ekler.
+ */
 export function manifestYamala(xml) {
   let out = xml;
   const nl = out.includes('\r\n') ? '\r\n' : '\n';
@@ -36,6 +54,10 @@ export function manifestYamala(xml) {
   if (!out.includes('xmlns:tools=')) {
     out = out.replace(/<manifest\b/, `<manifest xmlns:tools="${TOOLS_NS}"`);
   }
+  const meta = FCM_META
+    .filter(([ad]) => !out.includes(`android:name="${ad}"`))
+    .map(([ad, deger]) => `        <meta-data android:name="${ad}" ${deger} />${nl}`);
+  if (meta.length) out = out.replace(/([ \t]*)<\/application>/, (_, girinti) => `${meta.join('')}${girinti}</application>`);
   for (const izin of WEB_IZINLERI) {
     if (!new RegExp(`<uses-permission\\s+android:name="${izin.replace(/\./g, '\\.')}"`).test(out)) {
       sona(`<uses-permission android:name="${izin}" />`);
@@ -167,9 +189,35 @@ export function hazirla(kok, env = process.env) {
   return surumKodu;
 }
 
+/**
+ * google-services.json metni bu paket için mi? -> Firebase proje kimliği. Değilse anlaşılır hata fırlatır
+ * (google-services eklentisi aksi hâlde derlemenin ortasında "No matching client" der).
+ */
+export function googleServicesKontrol(metin, paket) {
+  let j;
+  try {
+    j = JSON.parse(metin);
+  } catch {
+    throw new Error('google-services.json geçerli JSON değil (GOOGLE_SERVICES_JSON_B64 doğru mu?)');
+  }
+  const proje = j?.project_info?.project_id;
+  const paketler = (Array.isArray(j?.client) ? j.client : []).map((c) => c?.client_info?.android_client_info?.package_name);
+  if (!proje || !paketler.includes(paket)) {
+    throw new Error(`google-services.json "${paket}" paketini içermiyor (Firebase'de bu paket adıyla Android uygulaması ekle)`);
+  }
+  return proje;
+}
+
 function main() {
-  const surumKodu = hazirla(join(dirname(fileURLToPath(import.meta.url)), '..'));
-  console.log(`android hazır: sürüm kodu ${surumKodu}, SCHEDULE_EXACT_ALARM kaldırıldı, bildirim ikonu ve ana ekran widget'ı eklendi.`);
+  const kok = join(dirname(fileURLToPath(import.meta.url)), '..');
+  const surumKodu = hazirla(kok);
+  const gsYolu = join(kok, 'android', 'app', 'google-services.json');
+  const { appId } = JSON.parse(readFileSync(join(kok, 'capacitor.config.json'), 'utf8'));
+  const fcm = existsSync(gsYolu)
+    ? `FCM açık (Firebase projesi ${googleServicesKontrol(readFileSync(gsYolu, 'utf8'), appId)})`
+    : 'FCM kapalı (google-services.json yok)';
+  console.log(`android hazır: sürüm kodu ${surumKodu}, WebView izinleri eklendi, SCHEDULE_EXACT_ALARM kaldırıldı, `
+    + `bildirim ikonu ve ana ekran widget'ı eklendi, ${fcm}.`);
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main();

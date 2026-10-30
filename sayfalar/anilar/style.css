@@ -295,6 +295,7 @@
   overflow: hidden;
   border: 0;
   background: var(--surface-2);
+  touch-action: manipulation; /* art arda dokunuş çift dokunma yakınlaştırması sayılmasın */
 }
 .ani-album-kare:focus-visible { outline-offset: -3px; }
 .ani-album-kare img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.35s var(--ease); }

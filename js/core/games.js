@@ -120,6 +120,14 @@ export const GAMES = [
     players: '2',
     minutes: '10–30 dk',
   },
+  {
+    id: 'kelime',
+    title: 'Kelime Zinciri',
+    emoji: '🔤',
+    desc: 'Sırayla kelime söyleyin, her kelime öncekinin son harfiyle başlasın. Birlikte en uzun zinciri kurun.',
+    players: '2',
+    minutes: '5–15 dk',
+  },
 ];
 
 export function gameById(id) {

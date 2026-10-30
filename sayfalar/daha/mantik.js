@@ -1,6 +1,7 @@
 // "Daha" sayfasının saf mantığı (Node'da test edilir; DOM yok).
 
-export const APK_URL = 'https://github.com/rose-omer/bizim-oyunlar/releases/latest/download/BizIkimiz.apk';
+// Son APK sitede (.github/workflows/pages.yml koyar); depo gizli, Releases girişsiz indirilemez.
+export const APK_URL = 'https://rose-omer.github.io/bizim-oyunlar/indir/BizIkimiz.apk';
 
 /** iPhone'da ana ekrana ekleme adımları (Daha ve Ayarlar > Bildirimler kullanır). İlk adımın yanına Paylaş simgesi çizilir. */
 export const IOS_ADIMLARI = [

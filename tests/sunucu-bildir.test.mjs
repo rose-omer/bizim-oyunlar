@@ -292,7 +292,44 @@ test('hatirlat: abonelik yoksa belge okunmaz', async () => {
   const h = hatirlatIsleyici({ env: await ortam(), fetchFn: fn, simdi: () => new Date('2026-10-30T06:00:00Z') });
   const j = await (await h(hIstek({ slot: 'sabah' }))).json();
   assert.equal(j.oda, 0);
-  assert.deepEqual(cagri.rpc.map((c) => c[0]), ['push_abonelikler']);
+  assert.deepEqual(cagri.rpc.map((c) => c[0]), ['hatirlat_anahtar', 'push_abonelikler']);
+});
+
+test('hatirlat: anahtar vault\'tan (RPC hatirlat_anahtar, 5 dk önbellek); okunamazsa HATIRLAT_ANAHTAR', async (t) => {
+  t.mock.method(console, 'error', () => {});
+  let dbAnahtar = 'vault-anahtar';
+  let dbHata = false;
+  const { fn, cagri } = sahteFetch({
+    rpcYanit: {
+      hatirlat_anahtar: () => (dbHata ? { hata: { message: 'yok' }, status: 503 } : dbAnahtar),
+      push_abonelikler: () => [],
+    },
+  });
+  let an = new Date('2026-10-30T06:00:00Z');
+  const h = hatirlatIsleyici({ env: await ortam(), fetchFn: fn, simdi: () => an });
+  const kac = () => cagri.rpc.filter((c) => c[0] === 'hatirlat_anahtar').length;
+
+  assert.equal((await h(hIstek({ slot: 'sabah' }, 'vault-anahtar'))).status, 200);
+  assert.equal((await h(hIstek({ slot: 'sabah' }, 'gizli-hatirlat'))).status, 401, 'veritabanı anahtarı varken secret geçmez');
+  assert.equal(kac(), 1, 'önbellekten');
+
+  dbAnahtar = 'yenilendi';
+  an = new Date(an.getTime() + 4 * 60_000);
+  assert.equal((await h(hIstek({ slot: 'sabah' }, 'yenilendi'))).status, 401, '5 dk dolmadan eski anahtar geçerli');
+  an = new Date(an.getTime() + 2 * 60_000);
+  assert.equal((await h(hIstek({ slot: 'sabah' }, 'yenilendi'))).status, 200);
+  assert.equal(kac(), 2);
+
+  // Veritabanı okunamaz ya da anahtar yoksa secret'a düşer; önbelleğe alınmaz.
+  dbHata = true;
+  an = new Date(an.getTime() + 6 * 60_000);
+  assert.equal((await h(hIstek({ slot: 'sabah' }, 'gizli-hatirlat'))).status, 200);
+  dbHata = false;
+  dbAnahtar = null;
+  assert.equal((await h(hIstek({ slot: 'sabah' }, 'gizli-hatirlat'))).status, 200);
+  assert.equal(kac(), 4);
+  const secretsiz = hatirlatIsleyici({ env: await ortam({ HATIRLAT_ANAHTAR: undefined }), fetchFn: fn });
+  assert.equal((await secretsiz(hIstek({ slot: 'sabah' }, ''))).status, 500);
 });
 
 test('sayfala: imleçle tüm sayfalar; kısa sayfada biter; imleç ilerlemezse hata', async () => {

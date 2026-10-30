@@ -33,9 +33,12 @@ const yerelGun = (gun) => {
   const p = parseDay(gun);
   return p ? new Date(p.y, p.m - 1, p.d) : null;
 };
+// Biçimleyiciler bir kez kurulur (her kayıt satırında yeniden kurmak telefonda pahalı).
+const uzunTarihBicim = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'long', weekday: 'long' });
+const kisaAyBicim = new Intl.DateTimeFormat('tr-TR', { month: 'short' });
 const tarihUzun = (gun) => {
   const d = yerelGun(gun);
-  return d ? new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'long', weekday: 'long' }).format(d) : '';
+  return d ? uzunTarihBicim.format(d) : '';
 };
 const aniUrl = (metin, iso) => pageUrl('sayfalar/anilar/', aniParametreleri(metin, toDay(new Date(iso))));
 const yaz = (data, id) => col.put(data, id).catch((e) => toast(e.message));
@@ -294,7 +297,7 @@ function rozet(d, tur) {
     const g = yerelGun(d.data.plan);
     return h('div', { class: 'rv-rozet rv-rozet-tarih', 'aria-hidden': 'true' },
       h('span', { class: 'rv-rozet-gun' }, String(g.getDate())),
-      h('span', { class: 'rv-rozet-ay' }, new Intl.DateTimeFormat('tr-TR', { month: 'short' }).format(g)));
+      h('span', { class: 'rv-rozet-ay' }, kisaAyBicim.format(g)));
   }
   return h('div', { class: `rv-rozet${tur === 'yapilan' ? ' rv-rozet-yapildi' : ''}`, 'aria-hidden': 'true' },
     ikon(tur === 'yapilan' ? 'check' : 'heart'));

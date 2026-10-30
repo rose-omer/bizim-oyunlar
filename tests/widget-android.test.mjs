@@ -176,11 +176,12 @@ function tanimlar() {
 // Şablondan ve önceki eklerden gelenler (android-ek dışında tanımlı).
 const SABLON = { string: new Set(['app_name', 'title_activity_main', 'package_name', 'custom_url_scheme']) };
 
-test('kaynak adları geçerli ve projeye özgü (biz_widget_ / ic_stat_)', () => {
+test('kaynak adları geçerli ve projeye özgü (biz_ / ic_stat_)', () => {
+  // biz_widget_*: widget; biz_bildirim: FCM bildirim rengi; ic_stat_*: bildirim ikonu.
   for (const p of resDosyalari) {
     const ad = basename(p);
     assert.match(ad, /^[a-z][a-z0-9_]*\.xml$/, goreli(p));
-    assert.match(ad, /^(biz_widget_|ic_stat_)/, `${goreli(p)}: şablon dosyalarını ezmemeli`);
+    assert.match(ad, /^(biz_|ic_stat_)/, `${goreli(p)}: şablon dosyalarını ezmemeli`);
   }
 });
 

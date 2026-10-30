@@ -1,8 +1,11 @@
-// supabase/schema.sql 7. bölüm: cihaz üyeliği, onay, davet, kurtarma, yetki (oda_yetki), yedekten geri yükleme.
+// supabase/schema.sql 7. bölüm: cihaz üyeliği, onay, davet, kurtarma, yetki (oda_yetki), yedekten geri yükleme;
+// 5. (Web Push) ve 8. bölüme (FCM) etkisi; canlı şemanın üstüne kurulum.
 // PGlite ile (gerçek Postgres, bellekte). Kurulum: sunucu-pglite.mjs.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomBytes, createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { kur, ATLA, ODA, ODA2, ab } from './sunucu-pglite.mjs';
 
 const HEX32 = /^[0-9a-f]{32}$/;
@@ -766,6 +769,126 @@ test('oda_yetki: cihaz satırını paylaşımlı kilitler (çıkarma, süren ist
   // Tek bağlantılı PGlite'ta eşzamanlılık denenemez; kilit ifadesi yapıdan denetlenir.
   const kaynak = (await q(`select prosrc from pg_catalog.pg_proc where proname = 'oda_yetki'`))[0].prosrc;
   assert.match(kaynak, /for key share of c/);
+});
+
+// ---------- 8. bölüm (FCM) ve cihaz üyeliği ----------
+
+// FCM belirtecine benzer (sunucu-sql.test.mjs ile aynı biçim).
+const tk = (n) => `cTk${n}_Xy-9:APA91b${'Q'.repeat(140)}${n}`;
+
+test('fcm: koruma altındaki odada yalnız onaylı cihazın anahtarla kaydı; fcm_hedef gönderen kimliğini doğrular; fcm_abonelikler ve hatirlat_belgeler süzülür', ATLA, async () => {
+  const { q, hata } = await kur();
+  const u = uyelik(q);
+  const omer = cihaz('omer');
+  const gul = cihaz('gul');
+  const bek = cihaz('bek');
+  // ODA2: oda satırı yok (eski istemci), kimliksiz belirteç.
+  await q('select public.fcm_kaydet($1, $2, $3)', [ODA2, 'eski', tk(9)]);
+  await q('select * from public.doc_put($1, $2, $3, $4::jsonb, null)', [ODA2, 'gun', 'g', '{"baslik":"x"}']);
+
+  // ODA: oda satırı yokken eski bir cihaz kaydolmuş; sonra yeni istemciler katılır (yeni oda: koruma hemen).
+  await q('select public.fcm_kaydet($1, $2, $3)', [ODA, 'eski-tel', tk(1)]);
+  await u.katil(ODA, omer);
+  await u.katil(ODA, gul, { davet: await u.davet(ODA, omer) });
+  await u.katil(ODA, bek);
+  const kaydet = (c, n) => q('select public.fcm_kaydet($1, $2, $3, $4) as ok', [ODA, c.id, tk(n), c.k]);
+  assert.equal((await kaydet(omer, 2))[0].ok, true);
+  await kaydet(gul, 3);
+  assert.deepEqual((await q('select client, dogrulandi from public.fcm_sub where room = $1 order by client', [ODA]))
+    .map((x) => [x.client, x.dogrulandi]), [['eski-tel', false], ['gul', true], ['omer', true]]);
+  assert.equal((await hata('select public.fcm_kaydet($1, $2, $3, $4)', [ODA, bek.id, tk(4), bek.k])).code, '42501', 'bekleyen cihaz');
+  assert.equal((await hata('select public.fcm_kaydet($1, $2, $3, $4)', [ODA, 'gul', tk(4), omer.k])).code, '42501', 'başkasının anahtarı');
+  assert.equal((await hata('select public.fcm_kaydet($1, $2, $3)', [ODA, 'eski-tel', tk(5)])).code, '42501', 'kimliksiz, koruma altında');
+
+  const hedef = async (from, k) => (await q('select token from public.fcm_hedef($1, $2, $3)', [ODA, from, k])).map((x) => x.token);
+  assert.deepEqual(await hedef('omer', omer.k), [tk(3)], 'onaylı olmayan eski-tel hedef değil');
+  for (const [from, k] of [['omer', null], [null, null], ['omer', gul.k], [null, omer.k], ['bek', bek.k], ['a b', omer.k]]) {
+    assert.equal((await hata('select * from public.fcm_hedef($1, $2, $3)', [ODA, from, k])).code, '42501', `${from} ${k}`);
+  }
+  assert.deepEqual((await q('select token from public.fcm_hedef($1, null)', [ODA2])).map((x) => x.token), [tk(9)]);
+
+  const abonelikler = async () => (await q('select room, client from public.fcm_abonelikler() order by room, client')).map((x) => `${x.room}/${x.client}`);
+  assert.deepEqual(await abonelikler(), [`${ODA}/gul`, `${ODA}/omer`, `${ODA2}/eski`]);
+
+  const odalar = async () => (await q(`select distinct room from public.hatirlat_belgeler(array['gun'])`)).map((x) => x.room).sort();
+  await q('select * from public.doc_put($1, $2, $3, $4::jsonb, null, false, $5, $6)', [ODA, 'gun', 'g1', '{"baslik":"y"}', omer.id, omer.k]);
+  assert.deepEqual(await odalar(), [ODA, ODA2].sort());
+  await q(`delete from public.fcm_sub where client in ('omer', 'gul')`);
+  assert.deepEqual(await odalar(), [ODA2], 'yalnız onaysız belirteci olan korumalı oda hatırlatma almaz');
+
+  // Koruma öncesi (geçiş) odada tüm belirteçler sayılır.
+  await q(`update public.oda set zorunlu = now() + interval '1 day'`);
+  assert.deepEqual(await abonelikler(), [`${ODA}/eski-tel`, `${ODA2}/eski`]);
+  assert.deepEqual(await odalar(), [ODA, ODA2].sort());
+});
+
+test('fcm: çıkarılan cihazın ve kurtarma koduyla çakışması çözülen eski anahtarın belirteçleri silinir', ATLA, async () => {
+  const { q, hata } = await kur();
+  const u = uyelik(q);
+  const omer = cihaz('omer');
+  const gul = cihaz('gul');
+  const ali = cihaz('ali');
+  await u.katil(ODA, omer);
+  await u.katil(ODA, gul, { davet: await u.davet(ODA, omer) });
+  await u.katil(ODA, ali, { davet: await u.davet(ODA, omer) });
+  const kaydet = (c, n) => q('select public.fcm_kaydet($1, $2, $3, $4)', [ODA, c.id, tk(n), c.k]);
+  await kaydet(omer, 1);
+  await kaydet(gul, 2);
+  await kaydet(ali, 3);
+  await q('select public.fcm_kaydet($1, $2, $3)', [ODA2, 'gul', tk(4)]); // başka oda, aynı cihaz adı
+  const belirtecler = async () => (await q('select room, client from public.fcm_sub order by room, client')).map((x) => `${x.room}/${x.client}`);
+
+  assert.equal(await u.cikar(ODA, omer, 'gul'), true);
+  assert.deepEqual(await belirtecler(), [`${ODA}/ali`, `${ODA}/omer`, `${ODA2}/gul`]);
+
+  // ali'nin anahtarı kaybolur; aynı cihaz kurtarma koduyla yeni anahtara geçer: eski anahtarın belirteci silinir.
+  const kod = await u.kurtarma(ODA, omer);
+  const yeni = { id: 'ali', k: cihaz('x').k };
+  assert.equal((await u.katil(ODA, yeni, { kurtarma: kod })).durum, 'onayli');
+  assert.deepEqual(await belirtecler(), [`${ODA}/omer`, `${ODA2}/gul`]);
+  // Yeni anahtarla yeniden kayıt sayılır; eski anahtarla kayıt reddedilir.
+  assert.equal((await hata('select public.fcm_kaydet($1, $2, $3, $4)', [ODA, ali.id, tk(6), ali.k])).code, '42501');
+  await kaydet(yeni, 5);
+  assert.deepEqual((await q('select token from public.fcm_hedef($1, $2, $3)', [ODA, omer.id, omer.k])).map((x) => x.token), [tk(5)]);
+});
+
+// Canlı veritabanındaki şema (ea70312: üyelik ve FCM öncesi). Birleşik şema bunun üstüne tek seferde uygulanır.
+let CANLI = null;
+try {
+  CANLI = execFileSync('git', ['show', 'ea70312:supabase/schema.sql'], {
+    cwd: fileURLToPath(new URL('..', import.meta.url)), encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+} catch { /* git ya da geçmiş yok (sığ klon): test atlanır */ }
+
+test('şema: canlıdaki ea70312 şemasının (verisiyle) üstüne iki kez kurulur; aynı adlı overload kalmaz; eski oda çalışmayı sürdürür', CANLI ? ATLA : { skip: 'git geçmişi yok' }, async () => {
+  const eskiVeri = `
+    select public.push_kaydet('${ODA}', 'eski-tel', '${JSON.stringify(ab(1))}'::jsonb);
+    select * from public.doc_put('${ODA}', 'kisi', 'eski-tel', '{}'::jsonb, 'eski-tel');
+    select public.log_game('${ODA}', 'dama', '{}'::jsonb);
+  `;
+  const { q } = await kur({ once: CANLI + eskiVeri });
+  const cift = await q(`select p.proname, count(*)::int as n from pg_catalog.pg_proc as p
+    join pg_catalog.pg_namespace as n on n.oid = p.pronamespace
+    where n.nspname = 'public' group by p.proname having count(*) > 1`);
+  assert.deepEqual(cift, [], 'aynı adlı iki imza PostgREST\'te belirsizlik (PGRST203) yaratır');
+  const imzalar = (await q(`select p.oid::regprocedure::text as i from pg_catalog.pg_proc as p
+    join pg_catalog.pg_namespace as n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname in ('push_kaydet', 'push_hedef', 'fcm_kaydet', 'fcm_hedef', 'hatirlat_anahtar')
+    order by 1`)).map((x) => x.i);
+  assert.deepEqual(imzalar, ['fcm_hedef(text,text,text)', 'fcm_kaydet(text,text,text,text)', 'hatirlat_anahtar()',
+    'push_hedef(text,text,text)', 'push_kaydet(text,text,jsonb,text,text)']);
+
+  // Eski kayıtlar kalır; oda satırı yokken kimliksiz istemci eskisi gibi çalışır.
+  assert.deepEqual((await q('select client, dogrulandi from public.push_sub')).map((x) => [x.client, x.dogrulandi]), [['eski-tel', false]]);
+  assert.equal((await q('select * from public.doc_list($1, $2)', [ODA, 'kisi'])).length, 1);
+  assert.equal((await q(`select endpoint from public.push_hedef($1, 'baska')`, [ODA])).length, 1);
+  // Eski cihaz yeni istemciyle girince geçiş yoluyla onaylanır; oda 3 gün korumasız kalır.
+  const u = uyelik(q);
+  const eski = cihaz('eski-tel');
+  assert.equal((await u.katil(ODA, eski)).durum, 'onayli');
+  const oda = await u.oda(ODA);
+  assert.ok(Math.abs((oda.zorunlu - oda.olusturma) - 3 * 86_400_000) < 1000, 'eski oda: 3 gün geçiş');
+  await q('select public.fcm_kaydet($1, $2, $3, $4)', [ODA, eski.id, tk(1), eski.k]);
+  assert.deepEqual((await q(`select token from public.fcm_hedef($1, 'baska')`, [ODA])).map((x) => x.token), [tk(1)]);
 });
 
 test('şema: eski şemanın üstüne kurulur; eski imzalar kalmaz; yetki fonksiyonları volatile ve tanımlayıcı yetkili; eski adlı argümanlar; anon yeni RPC\'leri çağırır', ATLA, async () => {

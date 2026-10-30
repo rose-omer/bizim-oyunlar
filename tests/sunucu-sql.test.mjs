@@ -1,7 +1,8 @@
-// supabase/schema.sql 1–6. bölümler, PGlite ile (gerçek Postgres, bellekte). Kurulum: sunucu-pglite.mjs.
+// supabase/schema.sql 1–6. ve 8. bölümler, PGlite ile (gerçek Postgres, bellekte). Kurulum: sunucu-pglite.mjs.
+// 7. bölüm (cihaz üyeliği) ve onun 5. ve 8. bölüme etkisi: sunucu-uyelik.test.mjs.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { kur, ATLA, ODA, ODA2, ab } from './sunucu-pglite.mjs';
+import { kur, ATLA, ODA, ODA2, ab, SEMA } from './sunucu-pglite.mjs';
 
 test('push_kaydet: kayıt, güncelleme, aynı cihazın eski aboneliği, oda başına 10', ATLA, async () => {
   const { q } = await kur();
@@ -247,6 +248,8 @@ test('yetkiler: anon yalnız istemci RPC\'leri; tablolar ve yardımcılar kapal�
   await db.exec('set role anon');
   await q('select public.push_kaydet($1, $2, $3::jsonb)', [ODA, 'omer', JSON.stringify(ab(1))]);
   await q('select public.push_sil($1)', [ab(9).endpoint]);
+  await q('select public.fcm_kaydet($1, $2, $3)', [ODA, 'gul', tk(1)]);
+  await q('select public.fcm_sil($1)', [tk(9)]);
   // anon belge yazar (sınır fonksiyonu tanımlayıcı yetkisiyle çalışır).
   await q('select * from public.doc_put($1, $2, $3, $4::jsonb, null)', [ODA, 'liste', 'a', '{"x":1}']);
   await q('select * from public.doc_patch($1, $2, $3, $4::jsonb, null)', [ODA, 'liste', 'a', '{"y":2}']);
@@ -277,6 +280,11 @@ test('yetkiler: anon yalnız istemci RPC\'leri; tablolar ve yardımcılar kapal�
     `select public.oda_cevap('onayli', '${ODA}', 'k', now(), false)`,
     `select public.oda_bicim('x', '${ODA}', 'a', null)`,
     `select public.push_sayilir('${ODA}', 'omer', true)`,
+    // 8. bölüm: FCM
+    'select * from public.fcm_sub',
+    `select * from public.fcm_hedef('${ODA}', null)`,
+    'select public.fcm_sonuc(null, null, null)',
+    'select * from public.fcm_abonelikler()',
   ]) {
     const e = await hata(s);
     assert.equal(e.code, '42501', `${s}: ${e.message}`);
@@ -284,6 +292,10 @@ test('yetkiler: anon yalnız istemci RPC\'leri; tablolar ve yardımcılar kapal�
   await db.exec('reset role; set role service_role');
   assert.equal((await q('select * from public.push_abonelikler()')).length, 1);
   assert.equal((await q(`select * from public.push_hedef('${ODA}', 'baska')`)).length, 1);
+  assert.equal((await q('select * from public.fcm_abonelikler()')).length, 1);
+  assert.deepEqual((await q(`select * from public.fcm_hedef('${ODA}', 'omer')`)).map((r) => r.token), [tk(1)]);
+  await q('select public.fcm_sonuc($1, null, null)', [[tk(1)]]);
+  assert.equal((await q(`select * from public.hatirlat_belgeler(array['gun'])`)).length, 0);
   await db.exec('reset role');
 });
 
@@ -298,16 +310,148 @@ test('3. bölüm: photos kovası (5 MB, resim ve sesli mesaj) ve anon yükleme p
   assert.deepEqual(p.map((x) => [x.policyname, x.cmd]), [['photos_insert_anon', 'INSERT']]);
 });
 
+// ---------- 8. bölüm: FCM ----------
+
+// Gerçek FCM belirtecine benzer: <örnek kimlik>:APA91b<...> (harf, rakam, _ - :).
+const tk = (n) => `cTk${n}_Xy-9:APA91b${'Q'.repeat(140)}${n}`;
+
+test('fcm_kaydet: kayıt, oda taşıma, aynı cihazın eski belirteci, oda başına 10', ATLA, async () => {
+  const { q } = await kur();
+  const kaydet = (oda, client, t) => q('select public.fcm_kaydet($1, $2, $3) as ok', [oda, client, t]);
+  assert.equal((await kaydet(ODA, 'gul', tk(1)))[0].ok, true);
+  let r = await q('select * from public.fcm_sub');
+  assert.deepEqual(r.map((x) => [x.token, x.room, x.client, x.fail_count]), [[tk(1), ODA, 'gul', 0]]);
+
+  await kaydet(ODA2, 'gul', tk(1)); // aynı belirteç başka odaya taşınır
+  assert.deepEqual((await q('select room from public.fcm_sub')).map((x) => x.room), [ODA2]);
+  await kaydet(ODA2, 'gul', tk(2)); // aynı cihaz yeni belirteç aldı: eskisi silinir
+  assert.deepEqual((await q('select token from public.fcm_sub')).map((x) => x.token), [tk(2)]);
+
+  for (let i = 0; i < 12; i++) {
+    await kaydet(ODA, `c${i}`, tk(100 + i));
+    await new Promise((res) => setTimeout(res, 3));
+  }
+  r = await q('select client from public.fcm_sub where room = $1', [ODA]);
+  assert.equal(r.length, 10);
+  assert.ok(!r.some((x) => x.client === 'c0' || x.client === 'c1'), 'en eski iki belirteç silinmeli');
+  assert.equal((await q('select count(*)::int as n from public.fcm_sub where room = $1', [ODA2]))[0].n, 1);
+});
+
+test('fcm_kaydet / fcm_sil doğrulama; kayıt sınırı push_kaydet ile ortak', ATLA, async () => {
+  const { db, q, hata } = await kur();
+  const kotu = [
+    ['BAD', 'cli', tk(1)],
+    [ODA, 'cli 1', tk(1)],
+    [ODA, 'cli', null],
+    [ODA, 'cli', 'kisa:APA91b'],
+    [ODA, 'cli', `${tk(1)} `],
+    [ODA, 'cli', `${tk(1)}/x`],
+    [ODA, 'cli', 'a'.repeat(4097)],
+  ];
+  for (const [oda, client, t] of kotu) {
+    const e = await hata('select public.fcm_kaydet($1, $2, $3)', [oda, client, t]);
+    assert.equal(e.code, '22023', `${e.message} (${String(t).slice(0, 30)})`);
+  }
+  await q('select public.fcm_kaydet($1, $2, $3)', [ODA, 'uzun', 'a'.repeat(4096)]); // 255'ten uzun da geçer
+  assert.equal((await q('select public.fcm_sil($1) as ok', ['a'.repeat(4096)]))[0].ok, true);
+  assert.equal((await q('select public.fcm_sil($1) as ok', ['a'.repeat(4096)]))[0].ok, false);
+  for (const t of [null, 'kisa', `${tk(1)}'`]) {
+    assert.equal((await hata('select public.fcm_sil($1)', [t])).code, '22023', String(t));
+  }
+
+  // Oda başına saatte 20 kayıt: Web Push ve FCM birlikte sayılır (1 FCM kaydı yukarıda yapıldı).
+  for (let i = 0; i < 10; i++) await q('select public.push_kaydet($1, $2, $3::jsonb)', [ODA, `w${i}`, JSON.stringify(ab(i))]);
+  for (let i = 0; i < 9; i++) await q('select public.fcm_kaydet($1, $2, $3)', [ODA, `f${i}`, tk(i)]);
+  const e = await hata('select public.fcm_kaydet($1, $2, $3)', [ODA, 'f99', tk(99)]);
+  assert.equal(e.code, '54000');
+  assert.match(e.message, /cok fazla kayit/);
+  await db.exec(`update public.push_kayit_rate set n = 300 where room = '*'`);
+  assert.equal((await hata('select public.fcm_kaydet($1, $2, $3)', [ODA2, 'x', tk(7)])).code, '54000');
+});
+
+test('fcm_hedef: gönderen hariç, Web Push\'tan ayrı hız sınırı; fcm_sonuc', ATLA, async () => {
+  const { db, q, hata } = await kur();
+  await q('select public.fcm_kaydet($1, $2, $3)', [ODA, 'omer', tk(1)]);
+  await q('select public.fcm_kaydet($1, $2, $3)', [ODA, 'gul', tk(2)]);
+  await q('select public.fcm_kaydet($1, $2, $3)', [ODA2, 'baska', tk(3)]);
+  await q('select public.push_kaydet($1, $2, $3::jsonb)', [ODA, 'web', JSON.stringify(ab(1))]);
+  const hedef = (oda, from) => q('select * from public.fcm_hedef($1, $2)', [oda, from]);
+  assert.deepEqual(await hedef(ODA, 'omer'), [{ token: tk(2) }]);
+  assert.equal((await hedef(ODA, null)).length, 2);
+  assert.equal((await hata('select * from public.fcm_hedef($1, $2)', ['BAD', null])).code, '22023');
+  assert.equal((await hata('select * from public.fcm_hedef($1, $2)', [ODA, 'a b'])).code, '22023');
+
+  // Belirteci olmayan oda: boş, sayılmaz.
+  assert.deepEqual(await hedef('yyyyyyyy22', null), []);
+  assert.equal((await q(`select count(*)::int as n from public.push_rate where room like '%yyyyyyyy22'`))[0].n, 0);
+
+  // 2 çağrı yapıldı; 20'ye kadar, 21. reddedilir. Web Push sayacı (oda anahtarı) etkilenmez.
+  for (let i = 0; i < 18; i++) await hedef(ODA, 'omer');
+  assert.equal((await hata('select * from public.fcm_hedef($1, $2)', [ODA, 'omer'])).code, '54000');
+  assert.equal((await q('select * from public.push_hedef($1, $2)', [ODA, 'baska'])).length, 1);
+  assert.deepEqual((await q(`select room, n from public.push_rate where room in ($1, $2) order by room`, [ODA, `fcm:${ODA}`]))
+    .map((x) => [x.room, x.n]), [[ODA, 1], [`fcm:${ODA}`, 20]]);
+  assert.equal((await hedef(ODA2, null)).length, 1, 'başka oda etkilenmez');
+  await db.exec(`update public.push_rate set n = 600 where room = 'fcm:*'`);
+  assert.equal((await hata('select * from public.fcm_hedef($1, $2)', [ODA2, null])).code, '54000');
+
+  // Sonuç: ok tazelenir, gone silinir, fail sayılır; 20. düşüşte silinir.
+  await q('select public.fcm_sonuc($1, $2, $3)', [[tk(1)], [tk(2)], [tk(3)]]);
+  const r = await q('select token, last_ok_at, fail_count from public.fcm_sub order by token');
+  assert.deepEqual(r.map((x) => [x.token, x.fail_count]), [[tk(1), 0], [tk(3), 1]]);
+  assert.ok(r[0].last_ok_at instanceof Date);
+  await db.exec(`update public.fcm_sub set fail_count = 19 where token = '${tk(3)}'`);
+  await q('select public.fcm_sonuc($1, $2, $3)', [null, null, [tk(3)]]);
+  assert.deepEqual((await q('select token from public.fcm_sub')).map((x) => x.token), [tk(1)]);
+});
+
+test('fcm_abonelikler sayfalı; hatirlat_belgeler yalnız FCM\'li odayı da kapsar', ATLA, async () => {
+  const { q } = await kur();
+  for (let i = 0; i < 5; i++) await q('select public.fcm_kaydet($1, $2, $3)', [i < 3 ? ODA : ODA2, `c${i}`, tk(i)]);
+  const s1 = await q('select token from public.fcm_abonelikler(null, 2)');
+  const s2 = await q('select token from public.fcm_abonelikler($1, 2)', [s1[1].token]);
+  const s3 = await q('select token from public.fcm_abonelikler($1, 2)', [s2[1].token]);
+  assert.deepEqual([...s1, ...s2, ...s3].map((x) => x.token), [0, 1, 2, 3, 4].map(tk).sort());
+  assert.deepEqual(Object.keys((await q('select * from public.fcm_abonelikler()'))[0]).sort(), ['client', 'room', 'token']);
+
+  const put = (oda, id) => q('select * from public.doc_put($1, $2, $3, $4::jsonb, null)', [oda, 'gun', id, '{"baslik":"x"}']);
+  await put(ODA2, 'fcm-oda');
+  await put('yyyyyyyy22', 'abonesiz');
+  assert.deepEqual((await q(`select room, id from public.hatirlat_belgeler(array['gun'])`)).map((x) => x.id), ['fcm-oda']);
+});
+
+test('6. bölüm: hatırlatma anahtarı yoksa üretilir, varsa dokunulmaz; hatirlat_anahtar yalnız service_role', ATLA, async () => {
+  const { db, q, hata } = await kur();
+  const anahtarlar = async () => (await q(`select secret from vault.secrets where name = 'hatirlat_anahtar'`)).map((r) => r.secret);
+  const [ilk] = await anahtarlar();
+  assert.match(ilk, /^[0-9a-f]{64}$/, '32 rastgele bayt, hex');
+  await db.exec(SEMA); // tekrar çalıştırma anahtarı değiştirmez ve çoğaltmaz
+  assert.deepEqual(await anahtarlar(), [ilk]);
+
+  await db.exec('set role service_role');
+  assert.equal((await q('select public.hatirlat_anahtar() as k'))[0].k, ilk);
+  await db.exec('reset role; set role anon');
+  assert.equal((await hata('select public.hatirlat_anahtar()')).code, '42501');
+  await db.exec('reset role');
+
+  // Yenileme (README / şema yorumundaki komutun eşi): RPC yeni değeri döner.
+  await db.exec(`update vault.secrets set secret = 'yeni-anahtar' where name = 'hatirlat_anahtar'`);
+  assert.equal((await q('select public.hatirlat_anahtar() as k'))[0].k, 'yeni-anahtar');
+  await db.exec(`delete from vault.secrets`);
+  assert.equal((await q('select public.hatirlat_anahtar() as k'))[0].k, null);
+});
+
 test('6. bölüm: adlı cron işleri çoğalmaz; komut Edge Function\'ı vault anahtarıyla çağırır', ATLA, async () => {
   const { db, q, hata } = await kur();
   const isler = await q('select jobname, schedule, command from cron.job order by jobname');
   assert.deepEqual(isler.map((j) => [j.jobname, j.schedule]), [['biz-hatirlat-aksam', '0 17 * * *'], ['biz-hatirlat-sabah', '0 6 * * *']]);
 
   // Anahtar yoksa istek atılmaz.
+  await db.exec(`delete from vault.secrets`);
   await db.exec(isler[1].command);
   assert.equal((await q('select count(*)::int as n from net.istek'))[0].n, 0);
 
-  await db.exec(`insert into vault.decrypted_secrets values ('hatirlat_anahtar', 'deneme-anahtar')`);
+  await db.exec(`select vault.create_secret('deneme-anahtar', 'hatirlat_anahtar')`);
   for (const j of isler) await db.exec(j.command);
   const r = await q('select url, body, headers, zaman from net.istek order by id');
   assert.equal(r.length, 2);
@@ -317,7 +461,7 @@ test('6. bölüm: adlı cron işleri çoğalmaz; komut Edge Function\'ı vault a
   assert.equal(r[0].headers['Content-Type'], 'application/json');
   assert.equal(r[0].zaman, 60000);
 
-  await db.exec(`insert into vault.decrypted_secrets values ('project_url', 'https://ornek.supabase.co')`);
+  await db.exec(`select vault.create_secret('https://ornek.supabase.co', 'project_url')`);
   await db.exec(isler[1].command);
   assert.equal((await q('select url from net.istek order by id desc limit 1'))[0].url, 'https://ornek.supabase.co/functions/v1/hatirlat');
   assert.equal((await hata(`select public.hatirlat_cagir('gece')`)).code, '22023');

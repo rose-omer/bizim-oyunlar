@@ -1,10 +1,14 @@
 # Biz İkimiz Android APK'sı (Capacitor). Uygulama canlı siteyi açar (mobil/capacitor.config.json server.url);
 # site güncellenince APK'yı yeniden kurmak gerekmez. Bu iş yalnız kabuk (mobil/) değişince ya da elle çalışır.
 # android/ klasörü depoda tutulmaz: her derlemede sabit Capacitor sürümünden üretilir, sonra
-# mobil/scripts/android-hazirla.mjs ayarları uygular (izin, sürüm, imza, bildirim ikonu, ana ekran widget'ı).
+# mobil/scripts/android-hazirla.mjs ayarları uygular (mikrofon ve konum izni, sürüm, imza, bildirim ikonu,
+# ana ekran widget'ı, FCM denetimi).
 # İmza: ANDROID_KEYSTORE_B64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD secret'ları
-# varsa release imzası; yoksa debug APK (uyarıyla). Çıktı: Release "android-latest" → BizIkimiz.apk
-#   https://github.com/rose-omer/bizim-oyunlar/releases/download/android-latest/BizIkimiz.apk
+# varsa release imzası; yoksa debug APK (uyarıyla). Çıktı: Release "android-latest" → BizIkimiz.apk ve surum.json
+# FCM (partnerden anlık bildirim): GOOGLE_SERVICES_JSON_B64 secret'ı (google-services.json, base64) varsa
+# android/app/google-services.json yazılır; yoksa push eklentisi çıkarılır ve APK FCM'siz derlenir (uyarıyla).
+# Depo gizli: Releases girişsiz indirilemez. Bu iş bitince pages.yml APK'yı ve surum.json'u siteye koyar:
+#   https://rose-omer.github.io/bizim-oyunlar/indir/BizIkimiz.apk
 name: Android APK
 
 on:
@@ -26,6 +30,10 @@ jobs:
   apk:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      # Sürüm adı <SURUM_ANA>.<çalıştırma no> (ör. 1.2.42); sürüm kodu = çalıştırma no.
+      # Kabuk davranışı (izin, eklenti) değişince artır; mobil/package.json sürümüyle aynı tut (test denetler).
+      SURUM_ANA: '1.2'
     defaults:
       run:
         working-directory: mobil
@@ -49,12 +57,30 @@ jobs:
       - name: Android projesini üret
         run: npx cap add android
 
+      # Firebase yapılandırması yokken PushNotifications.register() uygulamayı çökertir (FirebaseApp başlatılmamış).
+      # Bu yüzden secret yoksa eklenti node_modules'tan çıkarılır; sonraki "cap sync" onu projeye almaz
+      # ve sayfa eklentiyi göremez (bildirim ayarı eski APK'daki gibi "yok" der).
+      - name: Firebase (FCM)
+        env:
+          GS_B64: ${{ secrets.GOOGLE_SERVICES_JSON_B64 }}
+        run: |
+          set -euo pipefail
+          if [ -n "$GS_B64" ]; then
+            printf '%s' "$GS_B64" | tr -d '\r\n ' | base64 -d > android/app/google-services.json
+            echo "FCM=acik" >> "$GITHUB_ENV"
+          else
+            echo "::warning::GOOGLE_SERVICES_JSON_B64 yok; APK FCM'siz derleniyor (partnerden anlık bildirim gelmez)."
+            rm -rf node_modules/@capacitor/push-notifications
+            echo "FCM=kapali" >> "$GITHUB_ENV"
+          fi
+
       - name: İkon ve açılış ekranı (assets/*.svg)
         run: npx capacitor-assets generate --android --assetPath assets
 
-      - name: Proje ayarları (izin, sürüm, imza, bildirim ikonu, widget)
+      - name: Proje ayarları (izin, sürüm, imza, bildirim ikonu, widget, FCM denetimi)
         env:
           BIZ_SURUM_KODU: ${{ github.run_number }}
+          BIZ_SURUM_ADI: ${{ env.SURUM_ANA }}.${{ github.run_number }}
         run: node scripts/android-hazirla.mjs
 
       - name: Eşitle
@@ -105,7 +131,7 @@ jobs:
           set -euo pipefail
           tag=android-latest
           cat > "$RUNNER_TEMP/not.md" <<EOF
-          **Biz İkimiz** Android uygulaması · sürüm 1.0.${GITHUB_RUN_NUMBER} · ${GITHUB_SHA::7} · imza: ${IMZA}
+          **Biz İkimiz** Android uygulaması · sürüm ${SURUM_ANA}.${GITHUB_RUN_NUMBER} · ${GITHUB_SHA::7} · imza: ${IMZA}
 
           Kurulum: telefonda **BizIkimiz.apk** dosyasını aç → istenirse "bu kaynaktan yüklemeye izin ver" → Yükle.
           Uygulama her açılışta canlı siteyi yükler; site güncellemeleri için APK'yı yeniden kurmak gerekmez.
@@ -113,13 +139,23 @@ jobs:
           if [ "$IMZA" = debug ]; then
             echo "> Uyarı: debug imzalı derleme. Önceki sürümün üstüne kurulmaz; önce eskisini kaldır." >> "$RUNNER_TEMP/not.md"
           fi
+          if [ "$FCM" != acik ]; then
+            echo "> Not: bu derlemede partnerden anlık bildirim (FCM) yok." >> "$RUNNER_TEMP/not.md"
+          fi
+          # Sürüm bilgisi (pages.yml → indir/surum.json; js/core/mobil.js okur). kod = versionCode.
+          jq -n --arg surum "${SURUM_ANA}.${GITHUB_RUN_NUMBER}" --argjson kod "$GITHUB_RUN_NUMBER" \
+            --arg tarih "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --argjson fcm "$([ "$FCM" = acik ] && echo true || echo false)" \
+            '{surum: $surum, kod: $kod, tarih: $tarih, fcm: $fcm}' > surum.json
+          cat surum.json
           git push --force origin "$GITHUB_SHA:refs/tags/$tag"
           if gh release view "$tag" > /dev/null 2>&1; then
             gh release edit "$tag" --title "Biz İkimiz (Android)" --notes-file "$RUNNER_TEMP/not.md" --prerelease=false --latest
           else
             gh release create "$tag" --verify-tag --title "Biz İkimiz (Android)" --notes-file "$RUNNER_TEMP/not.md" --latest
           fi
+          # Önce APK, sonra surum.json: uygulama, APK'sı yüklenmemiş sürümü duyurmasın.
           gh release upload "$tag" BizIkimiz.apk --clobber
+          gh release upload "$tag" surum.json --clobber
 
       - name: Yapıt (main dışı elle çalıştırma)
         if: github.ref != 'refs/heads/main'

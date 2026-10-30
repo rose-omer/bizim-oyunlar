@@ -176,6 +176,9 @@
   border-radius: var(--radius);
   background: var(--surface);
   box-shadow: var(--shadow-sm);
+  /* Ekran dışındaki kartların yerleşimi ertelenir (telefonda açılış ve süzgeç değişimi). */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 132px;
 }
 .rv-fikir[data-kayitli] { border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
 .rv-fikir-metin { padding-right: 6px; font-weight: 750; line-height: 1.4; overflow-wrap: anywhere; }

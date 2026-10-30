@@ -41,7 +41,8 @@ function unlock() {
 }
 
 if (typeof window !== 'undefined') {
-  for (const type of ['pointerdown', 'keydown', 'touchend']) {
+  // pointerdown değil: ilk kaydırma hareketinde ses kurulumu takılma yapmasın; dokunuş bitince kurulur.
+  for (const type of ['pointerup', 'keydown', 'touchend']) {
     window.addEventListener(type, unlock, { capture: true, passive: true });
   }
 }

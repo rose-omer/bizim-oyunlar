@@ -81,6 +81,7 @@
   user-select: none;
   -webkit-user-select: none;
   -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation; /* pul seç + hedef: art arda iki dokunuş iOS'ta yakınlaştırmasın */
 }
 .tv-board.is-mine { outline-color: color-mix(in srgb, var(--accent) 55%, transparent); }
 .tv-board.is-loading { opacity: .35; min-height: 200px; }

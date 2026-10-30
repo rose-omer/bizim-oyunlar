@@ -306,6 +306,7 @@ dialog.ui-dialog.gn-sheet .dialog-card {
   text-align: center;
 }
 .gn-cell {
+  touch-action: manipulation; /* günler arasında hızlı dokunuş yakınlaştırma sayılmasın */
   display: flex;
   flex-direction: column;
   align-items: center;

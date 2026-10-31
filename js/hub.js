@@ -374,6 +374,7 @@ async function ensureRoom(roomId) {
   ];
   openData(room);
   mountGs(state.view);
+  mountYavru(state.view);
   paintAll();
   istekKontrol(true);
 }
@@ -805,7 +806,10 @@ function paintDate() {
 // ---------- Biz ekranı ----------
 // Sıra: sayaç kartı → şu an (partner durumu + ruh hâlim) → dokunuş → yaklaşanlar → buluşma → günün sorusu → oyunlar.
 function bizScreen(roomId) {
-  const view = { roomId, keys: {}, seenAt: Number(lsGet(seenKey(roomId))) || 0, cd: null, gsMounted: false, gsCleanup: null, lastPlayed: null };
+  const view = {
+    roomId, keys: {}, seenAt: Number(lsGet(seenKey(roomId))) || 0, cd: null, gsMounted: false, gsCleanup: null, lastPlayed: null,
+    yavruMounted: false, yavruCleanup: null,
+  };
   view.heading = h('h1', { class: 'sr-only', id: 'biz-h', tabindex: '-1' }, 'Biz');
   view.istekBox = h('div', { hidden: true });
   view.thread = h('div', { class: 'biz-thread' });
@@ -816,6 +820,7 @@ function bizScreen(roomId) {
   view.meetTitle = h('h2', { id: 'meet-h' }, 'Buluşma');
   view.meetBox = h('div');
   view.gsBox = h('div', { class: 'biz-gs' });
+  view.yavruSec = h('section', { class: 'biz-sec', 'aria-label': 'Yavrumuz', hidden: true });
 
   view.cards = GAMES.map((g) => gameCard(g, openGame));
   view.grid = h('div', { class: 'game-grid' }, view.cards.map((c) => c.card));
@@ -830,6 +835,7 @@ function bizScreen(roomId) {
     view.noteBox,
     view.todayBox,
     nowSection(view),
+    view.yavruSec,
     touchSection(view),
     section('up-h', 'Yaklaşanlar', {
       action: h('a', { class: 'biz-link', href: pageUrl(PAGES.gunler), 'aria-label': 'Tüm özel günler' }, 'Tümü', icon('chevron')),
@@ -1029,6 +1035,25 @@ async function mountGs(view) {
   } catch (e) {
     console.warn('[biz] Günün Sorusu kartı açılamadı', e);
     box.replaceChildren(gsFallback());
+  }
+}
+
+// ---------- Yavrumuz kartı (sayfalar/yavru/kart.js; açılamazsa bölüm gizli kalır) ----------
+async function mountYavru(view) {
+  if (!view || view.yavruMounted || !state.room || state.view !== view) return;
+  view.yavruMounted = true;
+  const room = state.room;
+  try {
+    const mod = await import('../sayfalar/yavru/kart.js');
+    if (state.view !== view || state.room !== room) return;
+    const off = await mod.mountYavruKart(view.yavruSec, { room });
+    if (state.view !== view) off?.();
+    else {
+      view.yavruCleanup = off;
+      view.yavruSec.hidden = false;
+    }
+  } catch (e) {
+    console.warn('[biz] Yavrumuz kartı açılamadı', e);
   }
 }
 
@@ -1462,6 +1487,7 @@ function cleanupView() {
   const v = state.view;
   if (!v) return;
   try { v.gsCleanup?.(); } catch { /* yok say */ }
+  try { v.yavruCleanup?.(); } catch { /* yok say */ }
   clearTimeout(v.coolTimer);
 }
 
@@ -1498,6 +1524,7 @@ function render({ focus = false } = {}) {
   if (tabs) mountTabBar('biz');
   else removeTabBar();
   mountGs(state.view);
+  mountYavru(state.view);
   paintAll();
   if (state.view) istekKontrol(true);
 

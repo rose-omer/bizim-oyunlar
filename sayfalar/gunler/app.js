@@ -683,7 +683,7 @@ function hatirlaticilariGuncelle(v) {
   const key = JSON.stringify(liste);
   if (key === hatKey) return;
   hatKey = key;
-  Promise.resolve().then(() => yerelHatirlaticilar(liste)).catch((e) => console.warn('[hatırlatıcı]', e));
+  Promise.resolve().then(() => yerelHatirlaticilar(liste, { grup: 'gunler' })).catch((e) => console.warn('[hatırlatıcı]', e));
 }
 
 // ---------- Akış ----------

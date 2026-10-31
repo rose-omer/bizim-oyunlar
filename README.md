@@ -11,6 +11,7 @@ Adres: https://rose-omer.github.io/bizim-oyunlar/
 - **Listelerimiz** (Şarkılarımız dahil), **Randevu Fikirleri** (200 fikir), **Günün Sorusu** (432 soru, seri), **Sevgi Dili Testi**,
   **Birlikte İzle** (YouTube eş zamanlı), **Ruh Hâlimiz** (30/90 gün), **Günün Fotoğrafı**, **Haftalık Kontrol**, **Ortak Harcamalar**,
   **Yılımız** (yıl özeti), **Rozetlerimiz**, **Skor Tablosu**.
+- **Yavrumuz:** birlikte baktığınız sanal yavru; yumurtayı ikiniz ısıtırsınız, çatlayınca besler, oynar, yıkar, uyutursunuz; bakımla büyür.
 - **Oyunlar (18):** Yapboz, Beni Ne Kadar Tanıyorsun, Aynı Kafa, Doğruluk mu Cesaret mi, Hafıza, Çiz Bakalım,
   Kim Daha Çok, Hiç Yaptın mı, Derin Sohbet, Dama, Tavla, Dört Taş/XOX, Amiral Battı, Satranç, Pişti, Kelime Zinciri, Kelime Düellosu, Birlikte Sudoku.
 - **Güvenlik:** her cihaz odaya onayla girer (Ayarlar › Cihazlar); tek kullanımlık davet linki; kurtarma kodu.

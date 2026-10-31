@@ -83,9 +83,14 @@ export function titret(desen = 200) {
 
 // ---------- Yerel hatırlatıcılar ----------
 
-/** Olay kimliğinden kararlı bildirim kimliği: FNV-1a 32 bit → 1..2^31-1. */
-export function hatirlaticiId(id) {
-  const s = String(id);
+// Hatırlatıcı grupları: her sayfa yalnız kendi grubunun bekleyenlerini iptal eder ('gunler', 'yavru').
+// Grubu olmayan eski bekleyenler (önceki sürüm) Özel Günler'indir.
+const VARSAYILAN_GRUP = 'gunler';
+const grubu = (n) => (typeof n?.extra?.grup === 'string' && n.extra.grup) || VARSAYILAN_GRUP;
+
+/** Olay kimliğinden (grup verilirse 'grup:id') kararlı bildirim kimliği: FNV-1a 32 bit → 1..2^31-1. */
+export function hatirlaticiId(id, grup = null) {
+  const s = grup ? `${grup}:${id}` : String(id);
   let h = 0x811c9dc5;
   for (let i = 0; i < s.length; i++) {
     h ^= s.charCodeAt(i);
@@ -100,10 +105,11 @@ function yazi(x) {
 
 /**
  * Olaylar → LocalNotifications.schedule listesi. Yalnız kimliği olan ve gelecekteki olaylar;
- * aynı kimlikten ilki; zamana göre sıralı; en çok 64. Kimlik çakışırsa sonraki boş sayı alınır.
+ * aynı kimlikten ilki; zamana göre sıralı; en çok 64. Kimlik grup + olay kimliğinden üretilir;
+ * çakışırsa (ya da başka grubun bekleyen kimliği `dolu` ise) sonraki boş sayı alınır.
  * olaylar: [{ id, baslik, metin, zaman: ISO }]
  */
-export function bildirimListesi(olaylar, simdi = Date.now()) {
+export function bildirimListesi(olaylar, simdi = Date.now(), { grup = VARSAYILAN_GRUP, dolu = [] } = {}) {
   const adaylar = [];
   const gorulen = new Set();
   for (const o of Array.isArray(olaylar) ? olaylar : []) {
@@ -116,9 +122,9 @@ export function bildirimListesi(olaylar, simdi = Date.now()) {
   }
   adaylar.sort((a, b) => a.at - b.at || (a.anahtar < b.anahtar ? -1 : a.anahtar > b.anahtar ? 1 : 0));
 
-  const kullanilan = new Set();
+  const kullanilan = new Set(dolu);
   return adaylar.slice(0, EN_COK_HATIRLATICI).map((a) => {
-    let id = hatirlaticiId(a.anahtar);
+    let id = hatirlaticiId(a.anahtar, grup);
     while (kullanilan.has(id)) id = id >= EN_BUYUK_ID ? 1 : id + 1;
     kullanilan.add(id);
     return {
@@ -128,7 +134,7 @@ export function bildirimListesi(olaylar, simdi = Date.now()) {
       schedule: { at: new Date(a.at).toISOString(), allowWhileIdle: true },
       // Kesin alarm izni istenmez (SCHEDULE_EXACT_ALARM kaldırıldı); birkaç dakika sapabilir.
       isExactNotification: false,
-      extra: { kaynak: a.anahtar },
+      extra: { kaynak: a.anahtar, grup },
     };
   });
 }
@@ -141,13 +147,15 @@ async function bildirimIzni(ln) {
   return durum === 'granted';
 }
 
-async function planla(olaylar) {
+async function planla(olaylar, grup) {
   const ln = eklenti('LocalNotifications');
   if (!ln) return 0;
   try {
-    const liste = bildirimListesi(olaylar);
     const bekleyen = (await ln.getPending({}))?.notifications || [];
-    if (bekleyen.length) await ln.cancel({ notifications: bekleyen.map((n) => ({ id: n.id })) });
+    const benim = bekleyen.filter((n) => grubu(n) === grup);
+    const dolu = bekleyen.filter((n) => grubu(n) !== grup).map((n) => n.id);
+    const liste = bildirimListesi(olaylar, Date.now(), { grup, dolu });
+    if (benim.length) await ln.cancel({ notifications: benim.map((n) => ({ id: n.id })) });
     if (!liste.length || !(await bildirimIzni(ln))) return 0;
     await ln.schedule({ notifications: liste });
     return liste.length;
@@ -161,12 +169,13 @@ let sira = Promise.resolve(0);
 
 /**
  * Cihazda yerel hatırlatıcı planla (yalnız uygulamada). olaylar: [{ id, baslik, metin, zaman: ISO }]
- * Önceki planlananları iptal eder, yeni listeyi kurar. Gerekirse bildirim izni ister.
- * -> planlanan sayı (web'de ve izin yoksa 0). Hata fırlatmaz. Çağrılar sırayla işlenir.
+ * Aynı grubun önceki planlananlarını iptal eder (başka grubunkilere dokunmaz), yeni listeyi kurar.
+ * grup: 'gunler' (varsayılan; grupsuz eski bekleyenler de bu sayılır) | 'yavru' | ...
+ * Gerekirse bildirim izni ister. -> planlanan sayı (web'de ve izin yoksa 0). Hata fırlatmaz. Çağrılar sırayla işlenir.
  */
-export async function yerelHatirlaticilar(olaylar) {
+export async function yerelHatirlaticilar(olaylar, { grup = VARSAYILAN_GRUP } = {}) {
   if (!eklenti('LocalNotifications')) return 0;
-  const is = sira.then(() => planla(olaylar));
+  const is = sira.then(() => planla(olaylar, grup));
   sira = is.catch(() => 0);
   return is;
 }

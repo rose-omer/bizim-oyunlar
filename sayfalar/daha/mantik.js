@@ -12,7 +12,7 @@ export const IOS_ADIMLARI = [
 
 /** Daha'daki gruplar. Grup üyeliği yalnız burada; grup içi sıra bu sıradır. */
 export const DAHA_GRUPLARI = [
-  { id: 'konusalim', baslik: 'Konuşalım', uyeler: ['mektup', 'gunsorusu', 'haftalik', 'gunfoto'] },
+  { id: 'konusalim', baslik: 'Konuşalım', uyeler: ['mektup', 'gunsorusu', 'haftalik', 'gunfoto', 'not'] },
   { id: 'planlayalim', baslik: 'Planlayalım', uyeler: ['listeler', 'randevu', 'harcama', 'onun'] },
   { id: 'biz', baslik: 'Biz', uyeler: ['ruh', 'sevgidili', 'yilimiz', 'rozetler', 'skor'] },
   { id: 'birlikte', baslik: 'Birlikte', uyeler: ['yavru', 'kupon', 'izle', 'oyunlar'] },

@@ -230,6 +230,7 @@ export const YEDEK_TURLERI = [
   'gunfoto', 'haftalik', 'harcama',
   'yavru', 'yavrubakim',
   'kupon', 'bilgi',
+  'not',
 ];
 
 /**
@@ -268,6 +269,7 @@ const TUR_ADLARI = {
   ruh: 'ruh hâli', dokunus: 'dokunuş', konum: 'konum', oyunkayit: 'oyun kaydı',
   ruhgecmis: 'ruh hâli geçmişi', skor: 'skor', gunfoto: 'günün fotoğrafı', haftalik: 'haftalık kontrol',
   harcama: 'harcama', yavru: 'yavru', yavrubakim: 'yavru bakımı', kupon: 'kupon', bilgi: 'kişi bilgisi',
+  not: 'not',
 };
 const turAdi = (tur) => TUR_ADLARI[tur] || tur;
 const YEDEK_DEGIL = 'Bu dosya bir Biz İkimiz yedeği değil.';

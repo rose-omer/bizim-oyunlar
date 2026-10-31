@@ -314,7 +314,7 @@ Tarih: gün `'YYYY-MM-DD'`, an ISO (`new Date().toISOString()`). `author` = yaza
 | `sevgidili` | clientId | `{ puanlar: { soz, zaman, hediye, hizmet, dokunma }, at: ISO }` | Günün Sorusu |
 | `ruh` | clientId | `{ emoji, not?, at: ISO }` (son ruh hâli) | Ana Sayfa |
 | `dokunus` | uuid | `{ tur: 'kalp'/'opucuk'/'sarilma'/'ozledim'/'dusunuyorum', kime: clientId, at: ISO }` | Ana Sayfa |
-| `konum` | clientId | `{ lat, lng (2 ondalık), sehir?, at: ISO }` (isteğe bağlı, varsayılan kapalı) | Ayarlar |
+| `konum` | clientId | `{ lat, lng, hassas, …, at }` ya da `{ kapali: true, at }` (isteğe bağlı, varsayılan kapalı; ayrıntı §26) | Konum (`sayfalar/konum/mantik.js`) |
 | `oyunkayit` | oyun id | oyuna özel kayıtlı durum (Dama/Tavla "kaldığın yerden") | Masa oyunları |
 
 Silme veriyi korur (deleted = true, data kalır); Ayarlar › Verilerimiz › Son silinenler'den geri alınır. Ekranlar silineni `deleted` bayrağıyla eler.
@@ -481,17 +481,22 @@ v3 bölümleri v1 ve v2'nin üstüne gelir. Çatışmada v3 geçerli.
 | `kumbara` | uuid | `{ baslik, emoji, hedef (kuruş), son?: gün, tamam?: ISO }` (`tamam` = hedefe ilk ulaşılan an; para alınsa da kalır) | Ortak Harcamalar → Kumbara (`sayfalar/harcama/kumbara-mantik.js`) |
 | `katki` | uuid | `{ kumbara (id), tutar (kuruş; eksi = kumbaradan alma), kim (clientId), not?, tarih: gün }` | Ortak Harcamalar → Kumbara |
 | `not` | uuid | `{ tur: 'yazi'/'cizim'/'foto', metin? (≤200), foto?: url (çizim WebP), kime, kimden (clientId), surpriz: bool, acildi?: ISO }` (sürpriz: alan kişi dokununca açılır; açılınca da arşivde kalır) | Not Bırak (`sayfalar/not/mantik.js`) |
+- `konum` (v3, §17'deki satırın yerine): paylaşıyorsa `{ lat, lng, hassas: 'yaklasik'|'tam', dogruluk?: metre (yalnız tam), yer?: 'Kadıköy, İstanbul', pil?: 0–100, sarj?: bool, canli?: ISO bitiş ('Ben kapatana dek' = '9999-12-31T00:00:00Z'), at: ISO }`;
+  yaklaşık 2 ondalık (~1 km), tam 5 ondalık. Durdurunca `{ kapali: true, at }` (putDoc; **removeDoc kullanılmaz**: silme veriyi saklar, koordinat sunucuda kalırdı).
+  Eski `{ lat, lng, sehir?, at }` yaklaşık sayılır. Okuyan her yer `kapali` belgeyi "paylaşmıyor" sayar (`paylasiyorMu`).
+  Yer adı paylaşan cihazda Nominatim ters aramasıyla (dakikada en çok 1, yerel önbellek; hata sessiz). Canlı: uygulama açıkken her sayfada `watchPosition` (ui.js `canliKonum` yerel işarete bakar: `bizim.konum.canli.<oda>.<clientId>` = bitiş; işaret yoksa konum kodu yüklenmez; sayfa başına tek izleyici ve tek koleksiyon: `paylasim.js` `canliServis`, `konumKoleksiyonu`); en çok dakikada 1 yazım, 50 m altı hareket ve 3 dk'dan taze kayıtta yazım yok; süre dolunca `canli` silinir, son konum kalır. Açılışta paylaşım açık ve kayıt 10 dk'dan eskiyse bir kez güncellenir.
+  Saf yardımcılar `sayfalar/konum/mantik.js`; tarayıcı tarafı (alma, yazma, canlı izleme, açılış tazelemesi) `sayfalar/konum/paylasim.js`.
 - Ek alanlar: `ani.konum = { lat, lng }` (4 ondalık); `mesaj.ses = { url, sure, tur }`; `mesaj.yildiz = { [clientId]: true }` (patch `yildiz.<clientId>`);
   `mesaj.sabit = { at: ISO, kim: clientId }` (ikimiz için ortak; patch `sabit`, kaldırınca `null`; en çok 10; eski sabitler istemcide `bizim.sohbet.sabit.<oda>` önbelleğinde);
   `liste.liste = 'sarki'` + `baglanti?` (yalnız https YouTube/Spotify/Apple Music) + `bizim?` (tek "Bizim şarkımız").
 - Yeni tür `sayfalar/ayarlar/mantik.js` `YEDEK_TURLERI` sonuna eklenir.
 
 ## 27. Yeni sayfalar, oyunlar ve ortak modüller
-- SAYFALAR: `ruh`, `skor`, `yilimiz`, `rozetler`, `gunfoto`, `haftalik`, `harcama`. GAMES: `satranc`, `pisti`, `duello` (Kelime Düellosu), `sudoku`.
+- SAYFALAR: `ruh`, `skor`, `yilimiz`, `rozetler`, `gunfoto`, `haftalik`, `harcama`, `konum` (Daha › Biz; Ayarlar'daki eski Mesafe bölümünün yerine). GAMES: `satranc`, `pisti`, `duello` (Kelime Düellosu), `sudoku`.
 - Rekabetçi oyun bitişinde ev sahibi `logGame` yanında `skorKaydet(room, oyunId, { kazanan })` çağırır; kutlamaya `toplamSatiri(...)` eklenir.
 - Masa oyunları `games/dama/masa.js` `bootMasa` üstüne kurulur. `game.save?(s)` kayda gideni belirler (varsayılan `view`). "Sıra sende" bildirimini sırayı devreden cihaz yollar; `partnerGoruyor(partner, ns)` doğruysa yollanmaz.
 - `storage.js`: `uploadAudio(blob, roomId)` (`<oda>/<uuid>.webm|m4a`, en çok 2 MB); `uploadPhoto` yolu `.webp` ya da `.jpg`. Kova: `image/jpeg|webp|png`, `audio/webm|mp4`.
 - `foto.js`: `fotoKucult(file)` (destek varsa WebP 0.82, yoksa JPEG).
 - `mobil.js`: `widgetGuncelle({ baslangic, bulusma, adlar })` → Android ana ekran widget'ı (yerel eklenti `BizWidget`, `mobil/android-ek/`). hub.js profil verisi gelince çağırır.
 - `mobil/scripts/android-hazirla.mjs` manifest'e `RECORD_AUDIO`, `MODIFY_AUDIO_SETTINGS`, `ACCESS_COARSE_LOCATION`, `ACCESS_FINE_LOCATION` ekler (Capacitor WebView istemi kendisi açar).
-- Dış kod: `vendor/supabase.js` ve `vendor/leaflet/` (Leaflet 1.9.4, BSD-2; yalnız `sayfalar/anilar/harita.js` dinamik yükler). Harita karoları OpenStreetMap; atıf zorunlu.
+- Dış kod: `vendor/supabase.js` ve `vendor/leaflet/` (Leaflet 1.9.4, BSD-2; yalnız `sayfalar/anilar/harita.js` `leafletYukle` dinamik yükler; Konum sayfası da onu ve `haritaKur`'u kullanır). Harita karoları OpenStreetMap; atıf zorunlu.

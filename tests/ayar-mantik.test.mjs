@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { TEMA_RENKLER, TEMA_MODLAR } from '../js/core/ui.js';
 import {
   K_TEMA, TEMA_RENKLERI, TEMA_MODLARI, KISI_RENKLERI, bulusmaIso, bulusmaAyir, bulusmaMetni,
-  yuvarla2, konumVerisi, mesafeKm, mesafeMetni, bildirimGorunum,
+  bildirimGorunum,
   YEDEK_TURLERI, yedekVerisi, yedekSayisi, yedekDosyaAdi,
 } from '../sayfalar/ayarlar/mantik.js';
 import { APK_URL, apkGoster, kurulumGorunum } from '../sayfalar/daha/mantik.js';
@@ -34,29 +34,6 @@ test('bulusmaMetni: kalan süre ve geçmiş', () => {
   assert.equal(bulusmaMetni('2026-10-30T10:00:20Z', simdi), '1 dakika kaldı');
   assert.match(bulusmaMetni('2026-10-29T10:00:00Z', simdi), /geçti/);
   assert.equal(bulusmaMetni(null, simdi), '');
-});
-
-test('konum: 2 ondalık, geçersiz koordinat reddedilir', () => {
-  assert.equal(yuvarla2(41.00823), 41.01);
-  assert.equal(yuvarla2(-28.97849), -28.98);
-  const v = konumVerisi({ latitude: 41.00823, longitude: 28.97836 }, new Date('2026-10-30T10:00:00Z'));
-  assert.deepEqual(v, { lat: 41.01, lng: 28.98, at: '2026-10-30T10:00:00.000Z' });
-  assert.equal(konumVerisi({ latitude: 91, longitude: 0 }), null);
-  assert.equal(konumVerisi({ latitude: NaN, longitude: 0 }), null);
-  assert.equal(konumVerisi(null), null);
-});
-
-test('mesafeKm ve mesafeMetni', () => {
-  const ist = { lat: 41.01, lng: 28.98 };
-  const ank = { lat: 39.93, lng: 32.86 };
-  const km = mesafeKm(ist, ank);
-  assert.ok(km > 345 && km < 355, String(km));
-  assert.equal(mesafeKm(ist, ist), 0);
-  assert.equal(mesafeKm(ist, { lat: 'x' }), null);
-  assert.equal(mesafeMetni(0.4), 'Yan yanasınız');
-  assert.equal(mesafeMetni(3.44), 'Aranızda yaklaşık 3,4 km var');
-  assert.equal(mesafeMetni(1234.4), 'Aranızda yaklaşık 1.234 km var');
-  assert.equal(mesafeMetni(null), '');
 });
 
 test('bildirimGorunum: her durum', () => {

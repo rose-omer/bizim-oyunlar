@@ -13,9 +13,9 @@ export const IOS_ADIMLARI = [
 /** Daha'daki gruplar. Grup üyeliği yalnız burada; grup içi sıra bu sıradır. */
 export const DAHA_GRUPLARI = [
   { id: 'konusalim', baslik: 'Konuşalım', uyeler: ['mektup', 'gunsorusu', 'haftalik', 'gunfoto'] },
-  { id: 'planlayalim', baslik: 'Planlayalım', uyeler: ['listeler', 'randevu', 'harcama'] },
+  { id: 'planlayalim', baslik: 'Planlayalım', uyeler: ['listeler', 'randevu', 'harcama', 'onun'] },
   { id: 'biz', baslik: 'Biz', uyeler: ['ruh', 'sevgidili', 'yilimiz', 'rozetler', 'skor'] },
-  { id: 'birlikte', baslik: 'Birlikte', uyeler: ['izle', 'oyunlar'] },
+  { id: 'birlikte', baslik: 'Birlikte', uyeler: ['yavru', 'kupon', 'izle', 'oyunlar'] },
 ];
 const DIGER = { id: 'diger', baslik: 'Diğer' };
 // Ayarlar listede değil: başlığın sağında ikon düğme.

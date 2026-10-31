@@ -10,9 +10,9 @@ const idler = (gruplar) => gruplar.map((g) => [g.id, g.sayfalar.map((x) => x.id)
 test('DAHA_GRUPLARI: dört grup, talimattaki sıra', () => {
   assert.deepEqual(DAHA_GRUPLARI.map((g) => [g.baslik, g.uyeler]), [
     ['Konuşalım', ['mektup', 'gunsorusu', 'haftalik', 'gunfoto']],
-    ['Planlayalım', ['listeler', 'randevu', 'harcama']],
+    ['Planlayalım', ['listeler', 'randevu', 'harcama', 'onun']],
     ['Biz', ['ruh', 'sevgidili', 'yilimiz', 'rozetler', 'skor']],
-    ['Birlikte', ['izle', 'oyunlar']],
+    ['Birlikte', ['yavru', 'kupon', 'izle', 'oyunlar']],
   ]);
 });
 
@@ -27,11 +27,11 @@ test('dahaGruplari: sekmeler ve ayarlar çıkar, haritadaki sıra korunur', () =
 });
 
 test('dahaGruplari: haritada olmayan sayfa "Diğer"e düşer (kayıt sırasıyla)', () => {
-  const kayit = [s('biz'), s('kupon'), s('izle'), s('yavru'), s('oyunlar'), s('onun'), s('ayarlar'), s('mektup')];
+  const kayit = [s('biz'), s('yeni1'), s('izle'), s('yeni2'), s('oyunlar'), s('yeni3'), s('ayarlar'), s('mektup')];
   assert.deepEqual(idler(dahaGruplari(kayit, ['biz'])), [
     ['konusalim', ['mektup']],
     ['birlikte', ['izle', 'oyunlar']],
-    ['diger', ['kupon', 'yavru', 'onun']],
+    ['diger', ['yeni1', 'yeni2', 'yeni3']],
   ]);
   const diger = dahaGruplari(kayit, ['biz']).at(-1);
   assert.equal(diger.baslik, 'Diğer');

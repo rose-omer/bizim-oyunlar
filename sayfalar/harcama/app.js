@@ -1,4 +1,5 @@
 // Ortak harcamalar: kim ödedi, nasıl bölündü, kim kime borçlu. Para hesabı kuruşla (mantik.js, testli).
+// Sayfa içi sekmeler: Harcamalar | Kumbara (kumbara.js; adres ?sekme=kumbara).
 import { bootPage } from '../../js/core/sayfa.js';
 import { openCollection } from '../../js/core/veri.js';
 import { openProfil } from '../../js/core/profil.js';
@@ -8,6 +9,7 @@ import { toDay } from '../../js/core/gunler.js';
 import { h, toast, confirmDialog, knownPartner } from '../../js/core/ui.js';
 import { sfx } from '../../js/core/sound.js';
 import { ikon } from './ikonlar.js';
+import { kumbaraKur } from './kumbara.js';
 import {
   KATEGORILER, BASLIK_MAX, kategoriById, paraMetni, kayitOku, yeniHarcama, bakiye, bakiyeDurumu, bakiyeMetni,
   hesaplasmaKaydi, aylar, ayFiltresi, kategoriOzeti, payTuru, payAciklama, ozelPay, tutarCoz, yonelme, hesaplasmaId,
@@ -102,14 +104,41 @@ const ozetEl = h('div', { class: 'hc-ozet' });
 const listeEl = h('ul', { class: 'hc-liste' });
 const bosEl = h('div', { class: 'hc-bos', hidden: true });
 
-app.replaceChildren(h('div', { class: 'hc' },
+const harcamaPanel = h('div', { class: 'hc-panel' },
   bakiyeEl,
   h('div', { class: 'hc-ekle-yuva' }, ekleBtn, partnerYokEl, formEl),
   h('section', { class: 'hc-ay', 'aria-labelledby': 'hc-ay-baslik' },
     h('div', { class: 'hc-ay-bas' },
       h('h2', { id: 'hc-ay-baslik' }, 'Hesap dökümü'),
       h('label', { class: 'sr-only', for: 'hc-ay' }, 'Ay seç'), aySecim),
-    ozetEl, listeEl, bosEl)));
+    ozetEl, listeEl, bosEl));
+
+// ---------- Sekmeler: Harcamalar | Kumbara ----------
+const kumbara = kumbaraKur({ room, roomId, myId, benAdi, partnerAdi });
+const kumbaraPanel = h('div', { class: 'hc-panel' }, kumbara.el);
+let sekme = new URLSearchParams(location.search).get('sekme') === 'kumbara' ? 'kumbara' : 'harcama';
+const sekmeDugme = (k, ad) => h('button', { type: 'button', dataset: { k }, onclick: () => sekmeSec(k) }, ad);
+const sekmeler = h('div', { class: 'seg hc-sekmeler', role: 'group', 'aria-label': 'Bölüm' },
+  sekmeDugme('harcama', 'Harcamalar'), sekmeDugme('kumbara', 'Kumbara'));
+
+function sekmeGoster() {
+  for (const b of sekmeler.children) b.setAttribute('aria-pressed', String(b.dataset.k === sekme));
+  harcamaPanel.hidden = sekme !== 'harcama';
+  kumbaraPanel.hidden = sekme !== 'kumbara';
+  if (sekme === 'kumbara') kumbara.goster();
+  else kumbara.gizle();
+}
+
+function sekmeSec(k) {
+  if (sekme === k) return;
+  sekme = k;
+  const u = new URL(location.href);
+  if (k === 'kumbara') u.searchParams.set('sekme', k); else u.searchParams.delete('sekme');
+  history.replaceState(history.state, '', u.pathname + u.search);
+  sekmeGoster();
+}
+
+app.replaceChildren(h('div', { class: 'hc' }, sekmeler, harcamaPanel, kumbaraPanel));
 
 // ---------- Form ----------
 function segDugme(grup, etiket, secili, sec) {
@@ -391,7 +420,8 @@ col.on('error', (err) => {
   toast(err?.message || 'Bağlantı sorunu. Kayıt bekletilip gönderilecek.');
 });
 col.on('change', ciz);
-profil?.on('change', () => { ciz(); if (durum.formAcik) formCiz(); });
-room.on('presence', () => ciz());
+profil?.on('change', () => { ciz(); kumbara.ciz(); if (durum.formAcik) formCiz(); });
+room.on('presence', () => { ciz(); kumbara.ciz(); });
 
 ciz();
+sekmeGoster();

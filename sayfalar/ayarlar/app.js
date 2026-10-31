@@ -2,12 +2,13 @@
 import { bootPage } from '../../js/core/sayfa.js';
 import { openProfil } from '../../js/core/profil.js';
 import { openCollection, listDocs, iceAktar, onbellekTemizle } from '../../js/core/veri.js';
-import { setName, inviteUrl, lobbyUrl, pageUrl, readStore, writeStore } from '../../js/core/identity.js';
+import { setName, inviteUrl, lobbyUrl, pageUrl, readStore, writeStore, parseYapistirilanLink } from '../../js/core/identity.js';
+import { yapistirilanLinkiUygula } from '../../js/core/kapi.js';
 import {
   h, icon, toast, confirmDialog, shareInvite, copyInvite, copyText, initial, formatDay, readTema, parseTema, davetHazirla,
 } from '../../js/core/ui.js';
 import {
-  cihazlar, cihazOnayla, cihazReddet, cihazCikar, kurtarmaOlustur, odaGiris, uyelikModu,
+  cihazlar, cihazOnayla, cihazReddet, cihazCikar, kurtarmaOlustur, odaGiris, uyelikModu, tasimaLinki,
 } from '../../js/core/uyelik.js';
 import { uploadPhoto, loadPhoto, isAllowedPhotoUrl } from '../../js/core/storage.js';
 import { fotoKirp } from '../../js/core/kirp.js';
@@ -962,6 +963,29 @@ function davetAlani() {
     h('p', { class: 'ayar-yardim', id: 'ayar-davet-y' }, yardim));
 }
 
+// Tarayıcıdaki kimlik ve cihaz anahtarı Android uygulamasına (APK ayrı depo kullanır) yapıştırılarak taşınır.
+function tasimaAlani() {
+  const kopyala = async () => {
+    const ok = await confirmDialog('Bu link bu cihazın anahtarını taşır. Yalnız kendi telefonundaki Biz İkimiz uygulamasına yapıştır; kimseyle paylaşma. 30 dakika geçerli.', { ok: 'Linki kopyala' });
+    if (!ok) return;
+    const url = tasimaLinki(roomId);
+    if (await copyText(url)) {
+      toast('Kopyalandı. Uygulamayı aç; ilk ekranda ya da Ayarlar → Oda bölümünde "Linki buraya yapıştır" alanına yapıştır.');
+    } else {
+      kutu.replaceChildren(h('input', {
+        class: 'input', type: 'text', readonly: true, value: url, 'aria-label': 'Taşıma linki',
+        onfocus: (e) => e.currentTarget.select(), onclick: (e) => e.currentTarget.select(),
+      }));
+    }
+  };
+  const kutu = h('div');
+  return h('div', { class: 'ayar-alan' },
+    h('div', { class: 'ayar-alan-ust' }, h('span', { class: 'ayar-etiket' }, 'Uygulamaya taşı')),
+    h('p', { class: 'ayar-yardim' }, 'Bu telefona Biz İkimiz uygulamasını kurduysan, buradaki seni (mesajların, anıların, adın) uygulamaya taşı.'),
+    h('div', { class: 'ayar-eylemler' }, h('button', { type: 'button', class: 'btn small', onclick: kopyala }, icon('copy'), 'Taşıma linkini kopyala')),
+    kutu);
+}
+
 async function davetOlusturVeGoster() {
   const kod = await davetHazirla(roomId, { yeni: true });
   if (!kod) toast('Davet kodu alınamadı. Kodsuz linkle gelen cihaz onay bekler.');
@@ -999,6 +1023,9 @@ function kurtarmaAlani() {
       })));
 }
 
+/** Taşıma yalnız tarayıcıda, sunucu modunda ve bu cihaz onaylıyken anlamlı. */
+const tasimaGoster = (mod) => !isNative() && mod === 'sunucu' && (cihazListe || []).some((c) => c.ben && c.durum === 'onayli');
+
 function cihazCiz() {
   const mod = uyelikModu(roomId);
   const ayrac = () => h('div', { class: 'ayar-ayrac' });
@@ -1029,11 +1056,48 @@ function cihazCiz() {
     davetAlani(),
     mod === 'yerel-gevsek' ? null : ayrac(),
     mod === 'yerel-gevsek' ? null : kurtarmaAlani(),
+    tasimaGoster(mod) ? ayrac() : null,
+    tasimaGoster(mod) ? tasimaAlani() : null,
   ].filter(Boolean));
 }
 
 // ---------- Oda ----------
+// APK linkleri kendisi açamaz: davet ya da taşıma linki buraya yapıştırılır (odasız ekrandaki alanla aynı).
+const linkGirdi = h('input', {
+  class: 'input', id: 'ayar-link', type: 'url', inputmode: 'url', autocomplete: 'off', spellcheck: 'false',
+  enterkeyhint: 'go', placeholder: 'Linki buraya yapıştır', 'aria-describedby': 'ayar-link-y',
+});
+const linkFormu = h('form', {
+  class: 'ayar-alan',
+  novalidate: true,
+  onsubmit: async (e) => {
+    e.preventDefault();
+    const p = parseYapistirilanLink(linkGirdi.value);
+    if (!p) {
+      toast('Bu bir Biz İkimiz linkine benzemiyor.');
+      linkGirdi.focus();
+      return;
+    }
+    if (p.oda === roomId && !p.kim && !p.davet) {
+      toast('Zaten bu odadasın.');
+      return;
+    }
+    const metin = p.kim
+      ? `Bu cihaz ${p.ad || 'linkteki kişi'} olarak linkteki odaya geçsin mi? Şu anki odadaki veriler silinmez.`
+      : 'Bu cihaz linkteki odaya geçsin mi? Şu anki odadaki veriler silinmez.';
+    if (!(await confirmDialog(metin, { ok: 'Odaya geç' }))) return;
+    yapistirilanLinkiUygula(p);
+    location.replace(lobbyUrl());
+  },
+},
+  h('div', { class: 'ayar-alan-ust' }, h('label', { class: 'ayar-etiket', for: 'ayar-link' }, 'Başka bir odaya geç')),
+  linkGirdi,
+  h('p', { class: 'ayar-yardim', id: 'ayar-link-y' }, 'Sevgilinin davet linkini ya da tarayıcıdan aldığın taşıma linkini yapıştır.'),
+  h('div', { class: 'ayar-eylemler' }, h('button', { type: 'submit', class: 'btn small' }, 'Linki uygula')));
+
 const odaKart = kart(
+  linkFormu,
+  h('div', { class: 'ayar-ayrac' }),
   h('div', { class: 'ayar-tehlike' },
     h('p', { class: 'ayar-satir-aciklama' }, uyeModu()
       ? 'Bu cihaz odadan çıkar ve odanızı unutur. Verileriniz silinmez. Geri dönmek için yeni bir davet linki gerekir.'

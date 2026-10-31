@@ -2,8 +2,8 @@
 // sayfa verisi yüklenmez. Çalışırken yetki giderse (bizim:uyelik 'yok' / 42501) aynı ekran açılır.
 // Kullanım: bootPage, ana sayfa (hub.js) ve oyun sayfaları (ui.js mountShell) kapidanGec(roomId) çağırır.
 // Üst kısım saf (Node'da test edilir); DOM yalnız tarayıcıda kurulur.
-import { me, clearRoom, lobbyUrl, readStore, writeStore } from './identity.js';
-import { odaGiris, sonDurum, durumTazele, girisAcikMi, cihazAdi } from './uyelik.js';
+import { me, clearRoom, lobbyUrl, readStore, writeStore, setClientId, setName, setRoom } from './identity.js';
+import { odaGiris, sonDurum, durumTazele, girisAcikMi, cihazAdi, anahtarYaz } from './uyelik.js';
 import { kurtarmaTemizle } from './uyelik-mantik.js';
 import { h, ICONS } from './ui.js';
 
@@ -59,6 +59,15 @@ export function bekleyenDavet(roomId) {
 }
 export function davetSakla(roomId, kod) {
   if (roomId) writeStore('session', davetKey(roomId), kod || null);
+}
+
+/** Yapıştırılan davet/taşıma linki (identity.js parseYapistirilanLink) bu cihaza uygulanır; çağıran sayfayı yeniler. */
+export function yapistirilanLinkiUygula(p) {
+  if (p.kim) setClientId(p.kim);
+  if (p.ad) setName(p.ad);
+  if (p.anahtar) anahtarYaz(p.oda, p.anahtar);
+  if (p.davet) davetSakla(p.oda, p.davet);
+  setRoom(p.oda);
 }
 
 /** Yoklama aralığı. Çevrimdışında artan bekleme (5, 10, 20, 40 sn, en çok 60): sunucu hız sınırını zorlamasın. */

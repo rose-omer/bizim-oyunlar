@@ -5,7 +5,7 @@
 // öykünme: sunucu kuralları localStorage'da (sekmeler 'storage' olayıyla haberleşir).
 // Değişen durum window 'bizim:uyelik' olayıyla yayılır (detail = { roomId, durum, kanal, zorunlu, ilk }).
 // Node'da içe aktarılabilir: tarayıcı nesnelerine yalnız fonksiyon içinde erişilir.
-import { me, isLocalMode, readStore, writeStore } from './identity.js';
+import { me, isLocalMode, readStore, writeStore, buildTasimaUrl, SITE_ROOT } from './identity.js';
 import { getSupabase, _testSupabase } from './room.js';
 import {
   ANAHTAR_RE, base64url, cihazAdi, yetkiHatasiMi, eskiSunucuHatasiMi, sonucCoz, girisAcikMi, kanalSec,
@@ -53,6 +53,19 @@ export function anahtarim(roomId) {
     writeStore(kind, anahtarKey(roomId), a);
   }
   return a;
+}
+
+/** Taşıma: başka bir yerden gelen cihaz anahtarını bu odaya yazar; durum önbelleği sıfırlanır. */
+export function anahtarYaz(roomId, a) {
+  if (!roomId || !ANAHTAR_RE.test(a || '')) return;
+  writeStore(depo(), anahtarKey(roomId), a);
+  writeStore(depo(), onbellekKey(roomId), null);
+}
+
+/** Bu tarayıcıdaki kimliği ve cihaz anahtarını uygulamaya taşıyan link (30 dk geçerli; kimseyle paylaşılmaz). */
+export function tasimaLinki(roomId) {
+  const { clientId, name } = me();
+  return buildTasimaUrl(SITE_ROOT, { oda: roomId, kim: clientId, ad: name, anahtar: anahtarim(roomId), t: Math.floor(Date.now() / 1000) });
 }
 
 /** RPC'lere eklenecek kimlik. Eski sunucu ve yerel modda {}. */

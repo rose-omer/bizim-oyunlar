@@ -139,13 +139,31 @@ test('parseYapistirilanLink: davet ve taşıma linki (APK\'da elle yapıştırı
   const { parseYapistirilanLink } = await import('../js/core/identity.js');
   const kod = 'k'.repeat(32);
   const kim = '20089765-2a3b-4c5d-8e9f-0123456789ab';
-  assert.deepEqual(parseYapistirilanLink(`${ROOT}#oda=abcdefghij`), { oda: 'abcdefghij', davet: null, kim: null, ad: null });
-  assert.deepEqual(parseYapistirilanLink(`  ${ROOT}#oda=ABCDEFGHIJ&davet=${kod}  `), { oda: 'abcdefghij', davet: kod, kim: null, ad: null });
-  assert.deepEqual(parseYapistirilanLink(`${ROOT}#oda=abcdefghij&kim=${kim}&ad=G%C3%BCl`), { oda: 'abcdefghij', davet: null, kim, ad: 'Gül' });
-  assert.deepEqual(parseYapistirilanLink(`Bunu aç: ${ROOT}#oda=abcdefghij&kim=kisa&ad=`), { oda: 'abcdefghij', davet: null, kim: null, ad: null });
+  assert.deepEqual(parseYapistirilanLink(`${ROOT}#oda=abcdefghij`), { oda: 'abcdefghij', davet: null, kim: null, ad: null, anahtar: null });
+  assert.deepEqual(parseYapistirilanLink(`  ${ROOT}#oda=ABCDEFGHIJ&davet=${kod}  `), { oda: 'abcdefghij', davet: kod, kim: null, ad: null, anahtar: null });
+  assert.deepEqual(parseYapistirilanLink(`${ROOT}#oda=abcdefghij&kim=${kim}&ad=G%C3%BCl`), { oda: 'abcdefghij', davet: null, kim, ad: 'Gül', anahtar: null });
+  assert.deepEqual(parseYapistirilanLink(`Bunu aç: ${ROOT}#oda=abcdefghij&kim=kisa&ad=`), { oda: 'abcdefghij', davet: null, kim: null, ad: null, anahtar: null });
   assert.equal(parseYapistirilanLink(`${ROOT}#oda=ab`), null);
   assert.equal(parseYapistirilanLink(ROOT), null);
   assert.equal(parseYapistirilanLink(''), null);
+});
+
+test('taşıma linki: anahtar yalnız 30 dakika ve kimlikle birlikte geçerli', async () => {
+  const { parseYapistirilanLink, buildTasimaUrl } = await import('../js/core/identity.js');
+  const kim = '20089765-2a3b-4c5d-8e9f-0123456789ab';
+  const anahtar = 'A'.repeat(42) + 'b';
+  const simdi = Date.parse('2026-10-31T10:00:00Z');
+  const t = Math.floor(simdi / 1000);
+  const url = buildTasimaUrl(ROOT, { oda: 'abcdefghij', kim, ad: 'Gül', anahtar, t });
+  assert.ok(url.startsWith(ROOT + '#oda=abcdefghij&kim='));
+  assert.deepEqual(parseYapistirilanLink(url, simdi + 60_000), { oda: 'abcdefghij', davet: null, kim, ad: 'Gül', anahtar });
+  assert.equal(parseYapistirilanLink(url, simdi + 31 * 60_000).anahtar, null); // süre geçti: kimlik kalır, anahtar düşer
+  assert.equal(parseYapistirilanLink(url, simdi + 31 * 60_000).kim, kim);
+  assert.equal(parseYapistirilanLink(url, simdi - 10 * 60_000).anahtar, null); // ileri tarihli
+  assert.equal(parseYapistirilanLink(`${ROOT}#oda=abcdefghij&anahtar=${anahtar}&t=${t}`, simdi).anahtar, null); // kimliksiz
+  assert.equal(parseYapistirilanLink(`${ROOT}#oda=abcdefghij&kim=${kim}&anahtar=kisa&t=${t}`, simdi).anahtar, null);
+  const anahtarsiz = buildTasimaUrl(ROOT, { oda: 'abcdefghij', kim });
+  assert.ok(!anahtarsiz.includes('anahtar=') && !anahtarsiz.includes('&t='));
 });
 
 test('setClientId: geçerli kimliği alır, geçersizi yok sayar', async () => {

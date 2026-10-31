@@ -163,11 +163,15 @@ export function parseInviteHash(hash) {
   return { oda: m[1].toLowerCase(), davet: DAVET_RE.test(m[2] || '') ? m[2] : null };
 }
 
+const TASIMA_ANAHTAR_RE = /^[A-Za-z0-9_-]{43}$/; // uyelik-mantik.js ANAHTAR_RE
+const TASIMA_SURE_SN = 30 * 60; // anahtarlı taşıma linki 30 dakika geçerli
+
 /**
- * Saf: yapıştırılan metindeki davet ya da taşıma linki → { oda, davet, kim, ad } | null.
- * APK linki kendisi açamaz; odasız ekrandaki alana yapıştırılır. kim/ad: cihaz o kişi olarak devam eder.
+ * Saf: yapıştırılan metindeki davet ya da taşıma linki → { oda, davet, kim, ad, anahtar } | null.
+ * APK linki kendisi açamaz; odasız ekrandaki alana ya da Ayarlar → Oda'ya yapıştırılır. kim/ad: cihaz o kişi
+ * olarak devam eder. anahtar: aynı cihaz sayılır (kurtarma kodu gerekmez); yalnız t (sn) son 30 dakikadaysa.
  */
-export function parseYapistirilanLink(metin) {
+export function parseYapistirilanLink(metin, simdi = Date.now()) {
   const s = String(metin || '').trim();
   const i = s.indexOf('#oda=');
   if (i < 0) return null;
@@ -175,7 +179,22 @@ export function parseYapistirilanLink(metin) {
   const oda = (p.get('oda') || '').toLowerCase();
   if (!/^[a-z0-9]{4,40}$/.test(oda)) return null;
   const al = (ad, re) => (re.test(p.get(ad) || '') ? p.get(ad) : null);
-  return { oda, davet: al('davet', DAVET_RE), kim: al('kim', KIM_RE), ad: (p.get('ad') || '').trim().slice(0, 40) || null };
+  const kim = al('kim', KIM_RE);
+  const t = Number(p.get('t'));
+  const taze = Number.isFinite(t) && t * 1000 > simdi - TASIMA_SURE_SN * 1000 && t * 1000 < simdi + 5 * 60_000;
+  const anahtar = kim && taze ? al('anahtar', TASIMA_ANAHTAR_RE) : null;
+  return { oda, davet: al('davet', DAVET_RE), kim, ad: (p.get('ad') || '').trim().slice(0, 40) || null, anahtar };
+}
+
+/** Saf: kimliği (ve cihaz anahtarını) başka bir uygulamaya taşıyan link. t = saniye. */
+export function buildTasimaUrl(root, { oda, kim, ad = '', anahtar = null, t }) {
+  const p = new URLSearchParams({ oda, kim });
+  if (ad) p.set('ad', ad);
+  if (anahtar) { p.set('anahtar', anahtar); p.set('t', String(t)); }
+  const u = new URL(root);
+  u.search = '';
+  u.hash = p.toString();
+  return u.href;
 }
 
 export function buildLobbyUrl(root, local) {

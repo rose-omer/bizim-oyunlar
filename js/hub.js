@@ -5,10 +5,10 @@
 import { GAMES, gameById } from './core/games.js';
 import {
   me, setName, currentRoom, setRoom, newRoomId, inviteUrl, gameUrl, pageUrl, isLocalMode, parseInviteHash,
-  parseYapistirilanLink, setClientId,
+  parseYapistirilanLink,
 } from './core/identity.js';
 import { sonDurum, girisAcikMi, cihazlar, uyelikModu } from './core/uyelik.js';
-import { kapidanGec, davetSakla } from './core/kapi.js';
+import { kapidanGec, davetSakla, yapistirilanLinkiUygula } from './core/kapi.js';
 import { joinRoom, partnerGoruyor } from './core/room.js';
 import { roomStats } from './core/db.js';
 import { openCollection } from './core/veri.js';
@@ -789,10 +789,7 @@ function welcomeScreen(name) {
         sfx('wrong');
         return;
       }
-      if (p.kim) setClientId(p.kim);
-      if (p.ad) setName(p.ad);
-      if (p.davet) davetSakla(p.oda, p.davet);
-      setRoom(p.oda);
+      yapistirilanLinkiUygula(p);
       sfx('pop');
       location.reload();
     },
@@ -1248,7 +1245,8 @@ function coupleNote(roomId, p, pname, g, broken) {
     h('h2', {}, 'Sevgilin henüz gelmedi'),
     h('p', { class: 'muted' }, 'Bu linki gönder. Açınca burada belirir; link bir kez yeter.'),
     linkBox(roomId, { hemen: false }),
-    h('div', { class: 'row' }, shareButton(roomId)))];
+    h('div', { class: 'row' }, shareButton(roomId)),
+    h('a', { class: 'biz-link', href: pageUrl('sayfalar/ayarlar/') + '#ayar-oda' }, 'Sevgilin sana link mi gönderdi? Buraya yapıştır'))];
 }
 
 function paintCounter(view) {

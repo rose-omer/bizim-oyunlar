@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   BASLANGIC, CEVAP_MAX, gunNo, gunTarihi, hashStr, gununSorusu, soruSecici, docId, cevapOku,
-  gunlereGore, gunDurumu, ortakGunler, seri, haftaSeridi, arsiv, normalize, cevapHatasi,
+  gunlereGore, gunDurumu, ortakGunler, seri, seriMetni, haftaSeridi, arsiv, normalize, cevapHatasi,
 } from '../sayfalar/gunun-sorusu/mantik.js';
 
 const S = Array.from({ length: 12 }, (_, i) => ({ id: `q${i}`, k: 'hafif', s: `Soru ${i}?` }));
@@ -92,6 +92,24 @@ test('seri: bugün ya da dün biten ardışık ortak günler; en uzun', () => {
   assert.deepEqual(seri(new Set([1, 2, 3, 4, 6, 9, 10]), 10), { simdi: 2, enUzun: 4, bugunTamam: true });
   assert.deepEqual(seri([3, 4, 5], 5), { simdi: 3, enUzun: 3, bugunTamam: true }, 'dizi de kabul');
   assert.deepEqual(seri(new Set([11, 12, 13]), 10), { simdi: 0, enUzun: 0, bugunTamam: false }, 'gelecek sayılmaz');
+});
+
+test('seriMetni: nazik dil; kırılınca "Yeniden başlayalım", alev yok, rekor yalnız varsa', () => {
+  const tamam = seriMetni({ simdi: 3, enUzun: 5, bugunTamam: true });
+  assert.deepEqual(tamam, { simge: '🌿', sayi: 3, durum: 'gün üst üste', rekor: 5,
+    not: 'Bugün birlikte cevapladınız. Yarın yeni bir soru gelecek.' });
+  assert.equal(seriMetni({ simdi: 2, enUzun: 2, bugunTamam: false }).not, 'Bugün de cevaplarsanız 3 gün olacak.');
+  const kirildi = seriMetni({ simdi: 0, enUzun: 4, bugunTamam: false });
+  assert.deepEqual(kirildi, { simge: '🌱', sayi: null, durum: 'Yeniden başlayalım', rekor: 4,
+    not: 'İkiniz de bugün cevaplayınca yeni günler başlar.' });
+  const ilk = seriMetni({ simdi: 0, enUzun: 0, bugunTamam: false });
+  assert.deepEqual(ilk, { simge: '🌱', sayi: null, durum: 'Hadi başlayalım', rekor: null,
+    not: 'İkiniz de bugün cevaplayınca ilk gününüz sayılır.' });
+  assert.deepEqual(seriMetni(undefined), ilk);
+  for (const s of [tamam, kirildi, ilk]) {
+    const metin = `${s.durum} ${s.not}`;
+    assert.doesNotMatch(metin, /🔥|kırıl|kaybet|kaçır|bozul/i);
+  }
 });
 
 test('ortakGunler: yalnız iki ayrı kişinin dolu cevabı olan günler', () => {

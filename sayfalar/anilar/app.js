@@ -384,7 +384,7 @@ function ayrintiGorunumu(id) {
 
     const begendim = !!data.begeni?.[me.clientId];
     const begSayi = M.begeniSayisi(data.begeni);
-    const begen = h('button', {
+    const begen = M.begenGoster(data, me.clientId) && h('button', {
       type: 'button', class: 'ani-begen', 'aria-pressed': String(begendim),
       'aria-label': begendim ? 'Beğenmekten vazgeç' : 'Beğen',
       onclick: async (e) => {
@@ -708,7 +708,9 @@ function formGorunumu(id) {
     h('section', { class: 'ani-form-fotolar', 'aria-label': 'Fotoğraflar' },
       h('div', { class: 'ani-form-fotolar-bas' }, h('span', { class: 'ani-form-etiket' }, 'Fotoğraflar'), fotoSayac),
       izgara, ilerleme, fotoHata,
-      h('p', { class: 'ani-ipucu' }, 'İlk fotoğraf kapak olur. Fotoğrafları buraya sürükleyip bırakabilirsin.')),
+      h('p', { class: 'ani-ipucu' }, 'İlk fotoğraf kapak olur.',
+        // Dokunmatik cihazda sürükle-bırak yok (yapboz kurulumu ile aynı ölçüt).
+        matchMedia('(hover: hover) and (pointer: fine)').matches ? ' Fotoğrafları buraya sürükleyip bırakabilirsin.' : null)),
     baslik.el, tarih.el, yer.el, konumAlan, not.el, etiketAlan.el,
     genelHata,
     h('div', { class: 'ani-form-eylem' }, vazgecBtn, kaydetBtn));

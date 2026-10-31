@@ -89,6 +89,7 @@
   text-wrap: balance;
 }
 .sk-alt { color: var(--hero-muted); font-size: 0.9375rem; font-weight: 650; }
+.sk-birlikte { margin-bottom: 12px; color: var(--hero-ink); font-size: 1rem; font-weight: 750; text-wrap: balance; }
 .sk-oyna { margin-top: 12px; }
 
 /* ---------- Bölümler ---------- */

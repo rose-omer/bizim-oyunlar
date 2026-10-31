@@ -62,6 +62,7 @@ test('sayı rozetleri: seri, oyun, anı, mektup, sohbet; durum "n / hedef"', () 
   const r = rozetHesapla(TAM, { bugun: '2026-10-31' });
   assert.deepEqual(['seri-7', 'seri-30', 'seri-100'].map((id) => bul(r, id).acik), [true, false, false]);
   assert.equal(bul(r, 'seri-30').durum, '12 / 30');
+  assert.equal(bul(r, 'seri-7').baslik, '7 gün üst üste', 'Günün Sorusu ile aynı terim');
   assert.deepEqual(['oyun-10', 'oyun-50', 'oyun-100'].map((id) => bul(r, id).acik), [true, true, false]);
   assert.deepEqual(['ani-10', 'ani-50', 'ani-100'].map((id) => bul(r, id).acik), [false, false, false]);
   assert.equal(bul(r, 'ani-10').oran, 0.9);

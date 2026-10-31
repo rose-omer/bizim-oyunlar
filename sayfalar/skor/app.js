@@ -4,7 +4,7 @@ import { openProfil } from '../../js/core/profil.js';
 import { gameById } from '../../js/core/games.js';
 import { lobbyUrl } from '../../js/core/identity.js';
 import { h, avatarEl, formatDay, knownPartner, toast } from '../../js/core/ui.js';
-import { skorKoleksiyonu, skorHaritasi, skorTablosu, sonOynananlar, kisilerOf, liderMetni } from '../../js/core/skor.js';
+import { skorKoleksiyonu, skorHaritasi, skorTablosu, sonOynananlar, kisilerOf, liderMetni, birlikteMetni } from '../../js/core/skor.js';
 
 const { room, roomId, me } = await bootPage({ ns: 'skor', title: 'Skor Tablosu', tab: 'daha' });
 const app = document.getElementById('app');
@@ -40,15 +40,17 @@ function kahraman(t, k) {
     avatarEl(ad, cls, foto),
     h('span', { class: 'sk-ad' }, ad),
     h('span', { class: 'sk-n' }, n(sayi)));
-  const alt = [`${n(t.genel.toplam)} maç`];
-  if (t.genel.berabere) alt.push(`${n(t.genel.berabere)} berabere`);
   return h('section', { class: 'sk-hero', 'aria-label': 'Toplam skor' },
+    t.genel.toplam ? h('p', { class: 'sk-birlikte' }, birlikteMetni(t.genel.toplam)) : null,
     h('div', { class: 'sk-duel' },
       kisi(k.ben.ad, k.ben.foto, 'me', a, 'sol'),
       h('span', { class: 'sk-ayrac', 'aria-hidden': 'true' }, '–'),
       kisi(k.o.ad, k.o.foto, 'partner', b, 'sag')),
     t.genel.toplam
-      ? [h('p', { class: 'sk-lider' }, lider || 'Henüz kimse kazanmadı'), h('p', { class: 'sk-alt' }, alt.join(' · '))]
+      ? [
+          h('p', { class: 'sk-lider' }, lider || 'Henüz kimse kazanmadı'),
+          t.genel.berabere ? h('p', { class: 'sk-alt' }, `${n(t.genel.berabere)} berabere`) : null,
+        ]
       : [
           h('p', { class: 'sk-lider' }, 'Henüz skor yok.'),
           h('p', { class: 'sk-alt' }, 'İlk galibiyet kimin olacak?'),

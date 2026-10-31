@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  SKOR_KIND, SKOR_OYUNLARI, skorAnahtari, skorYamasi, sayaclar, skorOku, toplamMetni,
+  SKOR_KIND, SKOR_OYUNLARI, skorAnahtari, skorYamasi, sayaclar, skorOku, toplamMetni, birlikteMetni,
   skorHaritasi, skorTablosu, sonOynananlar, kisilerOf, liderMetni,
 } from '../js/core/skor.js';
 import { applyPatch } from '../js/core/veri.js';
@@ -63,11 +63,19 @@ test('skorOku: iki kişinin galibiyeti, berabere, toplam', () => {
   assert.deepEqual(skorOku(undefined, ['ali', 'ayse']).toplam, 0);
 });
 
-test('toplamMetni: "Toplam: Ömer 5 · Gül 3"; berabere varsa eklenir; hiç oyun yoksa boş', () => {
+test('birlikteMetni: ortak toplam; tr-TR sayı; birim; 0 → boş', () => {
+  assert.equal(birlikteMetni(24), 'Birlikte 24 oyun oynadık');
+  assert.equal(birlikteMetni(1356), 'Birlikte 1.356 oyun oynadık');
+  assert.equal(birlikteMetni(9, 'kez'), 'Birlikte 9 kez oynadık');
+  assert.equal(birlikteMetni(0), '');
+  assert.equal(birlikteMetni(undefined), '');
+});
+
+test('toplamMetni: üstte ortak toplam, altında kişi başı; berabere varsa eklenir; hiç oyun yoksa boş', () => {
   const k = [{ id: 'ali', ad: 'Ömer' }, { id: 'ayse', ad: 'Gül' }];
-  assert.equal(toplamMetni({ ali: 5, ayse: 3 }, k), 'Toplam: Ömer 5 · Gül 3');
-  assert.equal(toplamMetni({ ali: 5, ayse: 3, berabere: 2 }, k), 'Toplam: Ömer 5 · Gül 3 · 2 berabere');
-  assert.equal(toplamMetni({ ali: 1 }, [{ id: 'ali', ad: 'Ömer' }, { id: 'ayse', ad: '' }]), 'Toplam: Ömer 1 · Sevgilin 0');
+  assert.equal(toplamMetni({ ali: 5, ayse: 3 }, k), 'Birlikte 8 kez oynadık\nÖmer 5 · Gül 3');
+  assert.equal(toplamMetni({ ali: 5, ayse: 3, berabere: 2 }, k), 'Birlikte 10 kez oynadık\nÖmer 5 · Gül 3 · 2 berabere');
+  assert.equal(toplamMetni({ ali: 1 }, [{ id: 'ali', ad: 'Ömer' }, { id: 'ayse', ad: '' }]), 'Birlikte 1 kez oynadık\nÖmer 1 · Sevgilin 0');
   assert.equal(toplamMetni({}, k), '');
   assert.equal(toplamMetni(null, k), '');
 });

@@ -80,7 +80,7 @@ export function rozetHesapla(v, { bugun = new Date() } = {}) {
   }
 
   for (const n of [7, 30, 100]) {
-    out.push(sayiRozeti({ id: `seri-${n}`, grup: 'seri', simge: 'alev', baslik: `${n} günlük seri`,
+    out.push(sayiRozeti({ id: `seri-${n}`, grup: 'seri', simge: 'alev', baslik: `${n} gün üst üste`,
       aciklama: `Günün Sorusu'nu ${n} gün üst üste birlikte cevaplayın.`, deger: v.enUzunSeri || 0, hedef: n }));
   }
   for (const n of [10, 50, 100]) {

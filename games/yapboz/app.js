@@ -529,7 +529,7 @@ async function main() {
       class: 'input yb-note',
       maxlength: NOTE_MAX,
       rows: 3,
-      placeholder: roomId ? 'Ona küçük bir sürpriz yaz…' : 'Kendine küçük bir not…',
+      placeholder: roomId ? 'Ona küçük bir sürpriz yaz. Bitince ikiniz de göreceksiniz.' : 'Kendine küçük bir not. Bitince yalnız sen göreceksin.',
     });
     const noteCount = el('span', { class: 'muted', text: `0/${NOTE_MAX}` });
     const startBtn = el('button', { type: 'button', class: 'btn primary yb-start', text: 'Başla' });

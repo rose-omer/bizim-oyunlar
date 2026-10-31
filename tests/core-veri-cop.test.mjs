@@ -36,12 +36,12 @@ test('yerel arka uç: silme veriyi korur; olmayan belge {} ile silinir; putDoc g
   assert.deepEqual([geri.deleted, geri.data], [false, { metin: 'süt' }]);
 });
 
-test('yerel arka uç: silinmiş belgeye yama eskisi gibi {} üstüne kurulur', async () => {
+test('yerel arka uç: silinmiş belgeye yama korunan verinin üstüne kurulur (içerik kaybolmaz)', async () => {
   const R = 'copyerel23';
   await putDoc(R, 'mesaj', 'm', { metin: 'selam' }, 'ali');
   await removeDoc(R, 'mesaj', 'm', 'ali');
   const p = await patchDoc(R, 'mesaj', 'm', { 'tepki.ayse': '❤️' }, 'ayse');
-  assert.deepEqual([p.deleted, p.data], [false, { tepki: { ayse: '❤️' } }]);
+  assert.deepEqual([p.deleted, p.data], [false, { metin: 'selam', tepki: { ayse: '❤️' } }]);
 });
 
 test('openCollection: silinen belge veri taşısa da görünmez; önbellek silinenin verisini tutmaz', async () => {

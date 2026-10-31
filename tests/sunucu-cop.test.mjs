@@ -48,14 +48,15 @@ test('doc_put: silinmiş belgeye deleted=false ile yazmak onu gönderilen veriyl
   assert.deepEqual((await satir('a')).data, { metin: 'süt', yapildi: '2026-10-30' });
 });
 
-test('doc_patch silinmiş belgeye: eskisi gibi {} üstüne kurulur ve canlanır (silinen veri yamaya karışmaz)', ATLA, async () => {
+test('doc_patch silinmiş belgeye: korunan verinin üstüne kurulur ve geri gelir (içerik kaybolmaz)', ATLA, async () => {
   const { q } = await kur();
   const { put, patch, satir } = belgeler(q);
   await put('a', { metin: 'Kapadokya', not: 'balon' }, 'omer');
   await put('a', {}, 'gul', true);
   const p = await patch('a', { 'tepki.omer': '❤️' }, 'omer');
-  assert.deepEqual([p.deleted, p.data], [false, { tepki: { omer: '❤️' } }]);
-  assert.deepEqual((await satir('a')).data, { tepki: { omer: '❤️' } });
+  const beklenen = { metin: 'Kapadokya', not: 'balon', tepki: { omer: '❤️' } };
+  assert.deepEqual([p.deleted, p.data], [false, beklenen]);
+  assert.deepEqual((await satir('a')).data, beklenen);
 });
 
 test('doc_list silinen belgeyi verisiyle döner; doc_page silineni döndürmez', ATLA, async () => {

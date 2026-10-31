@@ -320,8 +320,9 @@ grant execute on function public.doc_page(text, text, timestamptz, integer, text
 
 -- Alan düzeyinde birleştirme: iki kişi aynı belgeye aynı anda farklı alan yazınca biri kaybolmasın.
 -- p_patch üst düzey anahtarları tek tek yazar; 'ana.alt' iç içe tek alanı yazar; değer null ise alanı siler.
--- Satır kilitlenir (for update): eşzamanlı birleştirmeler sırayla uygulanır. Belge yoksa ya da silinmişse
--- {} üstüne kurulur (silinmiş belgenin korunan verisi yamaya karışmaz).
+-- Satır kilitlenir (for update): eşzamanlı birleştirmeler sırayla uygulanır. Belge yoksa {} üstüne kurulur.
+-- Silinmiş belgeye yama korunan verinin üstüne kurulur ve belgeyi geri getirir: silme ile aynı anda gelen
+-- bir yama (ör. tepki) silinen içeriği kaybettirmez (veri asla silinmez kuralı).
 create or replace function public.doc_patch(
   p_room text, p_kind text, p_id text, p_patch jsonb, p_author text,
   p_cihaz text default null, p_anahtar text default null)
@@ -362,7 +363,7 @@ begin
   from public.room_doc as d
   where d.room = p_room and d.kind = p_kind and d.id = p_id
   for update;
-  if v_cur is null or coalesce(v_del, false) then
+  if v_cur is null then
     v_cur := '{}'::jsonb;
   end if;
 

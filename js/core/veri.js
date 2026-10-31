@@ -210,7 +210,7 @@ const localBackend = {
   async patch(roomId, kind, id, patch, author) {
     yerelYetki(roomId);
     const prev = localRead(roomId, kind)[id];
-    const base = prev && !prev.deleted ? prev.data : {};
+    const base = prev?.data || {}; // silinmişse korunan verinin üstüne (sunucudaki doc_patch gibi)
     return localBackend.put(roomId, kind, id, applyPatch(base, patch), author, false);
   },
   async list(roomId, kind, since, limit) {

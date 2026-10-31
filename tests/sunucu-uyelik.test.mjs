@@ -29,7 +29,7 @@ function uyelik(q) {
     onayla: hedefli('cihaz_onayla'),
     reddet: hedefli('cihaz_reddet'),
     cikar: hedefli('cihaz_cikar'),
-    davet: (oda, c) => tek('select public.davet_olustur($1, $2, $3) as r', [oda, c.id, c.k]),
+    davet: (oda, c, kimlik = null) => tek('select public.davet_olustur($1, $2, $3, $4) as r', [oda, c.id, c.k, kimlik]),
     kurtarma: (oda, c) => tek('select public.kurtarma_olustur($1, $2, $3) as r', [oda, c.id, c.k]),
     satir: async (oda, id) => (await q('select * from public.oda_cihaz where room = $1 and cihaz = $2', [oda, id]))[0] || null,
     oda: async (oda) => (await q('select * from public.oda where room = $1', [oda]))[0] || null,
@@ -251,6 +251,107 @@ test('çakışma yalnız kurtarma koduyla çözülür: satır yeni anahtara geç
   assert.equal((await q(`select count(*)::int as n from public.push_sub where client = 'gul'`))[0].n, 0);
   assert.equal((await u.katil(ODA, cihaz('ali'), { davet: gulDaveti })).durum, 'bekliyor');
   assert.equal((await u.katil(ODA, gul, { kurtarma: kod })).durum, 'cakisma', 'kod tek kullanımlık');
+});
+
+test('kişiye bağlı davet (yeni telefon linki): oluşturma kuralları; yalnız o kimlik kullanır; çakışmayı çözer, kurtarma kodu kalır; tek kullanım', ATLA, async () => {
+  const { q, hata } = await kur();
+  const u = uyelik(q);
+  const omer = cihaz('omer');
+  const gul = cihaz('gul');
+  await u.katil(ODA, omer);
+  assert.equal((await u.katil(ODA, gul, { davet: await u.davet(ODA, omer) })).durum, 'onayli');
+  await q(`select * from public.doc_put($1, 'kisi', 'gul', '{"ad":"Gül"}'::jsonb, 'gul', false, $2, $3)`, [ODA, gul.id, gul.k]);
+  await q(`select * from public.doc_put($1, 'kisi', 'eski-gul', '{"ad":"Gül"}'::jsonb, 'eski-gul', false, $2, $3)`, [ODA, omer.id, omer.k]);
+  await q('select public.push_kaydet($1, $2, $3::jsonb, null, $4)', [ODA, gul.id, JSON.stringify(ab(1)), gul.k]);
+  await q('select public.fcm_kaydet($1, $2, $3, $4)', [ODA, gul.id, 'f'.repeat(30), gul.k]);
+  const gulDaveti = await u.davet(ODA, gul);
+  const kurtarma = await u.kurtarma(ODA, omer);
+  const davetSatir = async (kod) => (await q(`select kimlik, olusturan, kullanildi from public.oda_davet
+    where ozet = sha256(convert_to($1, 'UTF8'))`, [kod]))[0] || null;
+
+  // Oluşturma: kimlik biçimi; odada kisi belgesi ya da cihaz satırı olmalı; yetki eskisi gibi.
+  assert.equal((await hata('select public.davet_olustur($1, $2, $3, $4)', [ODA, omer.id, omer.k, 'kötü id'])).code, '22023');
+  assert.equal((await hata('select public.davet_olustur($1, $2, $3, $4)', [ODA, omer.id, omer.k, 'yabanci'])).code, '22023');
+  assert.equal((await hata('select public.davet_olustur($1, $2, $3, $4)', [ODA2, omer.id, omer.k, 'gul'])).code, '42501');
+  assert.equal((await hata('select public.davet_olustur($1, $2, $3, $4)', [ODA, null, null, 'gul'])).code, '42501');
+  const bagli = await u.davet(ODA, omer, 'gul');
+  assert.match(bagli, DAVET_RE);
+  assert.deepEqual({ ...(await davetSatir(bagli)), kullanildi: null }, { kimlik: 'gul', olusturan: 'omer', kullanildi: null });
+  assert.equal((await davetSatir(gulDaveti)).kimlik, null, 'genel davet kimliksiz');
+
+  // Başka kimlik bağlı daveti kullanamaz: davet yokmuş gibi (bekler), davet harcanmaz.
+  assert.equal((await u.katil(ODA, cihaz('ali'), { davet: bagli })).durum, 'bekliyor');
+  assert.equal((await davetSatir(bagli)).kullanildi, null);
+
+  // Genel davet çakışmayı yine çözmez.
+  const yeni = { id: 'gul', k: cihaz('x').k }; // uygulama yeniden kuruldu: aynı kimlik, yeni anahtar
+  const genel = await u.davet(ODA, omer);
+  assert.equal((await u.katil(ODA, yeni, { davet: genel })).durum, 'cakisma');
+  assert.equal((await davetSatir(genel)).kullanildi, null);
+
+  // Bağlı davet çakışmayı çözer: satır yeni anahtara geçer ve onaylanır; davet harcanır, kurtarma kodu kalır.
+  const once = await u.oda(ODA);
+  const r = await u.katil(ODA, yeni, { davet: bagli, ad: 'Gül · yeni telefon' });
+  assert.equal(r.durum, 'onayli');
+  const s = await u.satir(ODA, 'gul');
+  assert.deepEqual([s.durum, s.ad, s.onaylayan], ['onayli', 'Gül · yeni telefon', 'omer']);
+  assert.equal((await q(`select encode(anahtar_ozet, 'hex') as h from public.oda_cihaz where cihaz = 'gul'`))[0].h, ozet(yeni.k));
+  assert.ok((await davetSatir(bagli)).kullanildi instanceof Date);
+  const sonra = await u.oda(ODA);
+  assert.ok(once.kurtarma_ozet);
+  assert.deepEqual(sonra.kurtarma_ozet, once.kurtarma_ozet, 'kurtarma kodu silinmez');
+  assert.equal(sonra.kurtarma_olusturan, 'omer');
+  assert.notEqual(sonra.kanal, once.kanal, 'kanal yenilenir');
+  assert.equal(r.kanal, sonra.kanal);
+
+  // Eski anahtar her şeyi kaybeder: veri, durum, bildirim kayıtları, oluşturduğu davetler.
+  assert.equal((await hata('select * from public.doc_list($1, $2, null, 500, $3, $4)', [ODA, 'kisi', gul.id, gul.k])).code, '42501');
+  assert.equal((await u.durum(ODA, gul)).durum, 'cakisma');
+  assert.equal((await q(`select count(*)::int as n from public.push_sub where client = 'gul'`))[0].n, 0);
+  assert.equal((await q(`select count(*)::int as n from public.fcm_sub where client = 'gul'`))[0].n, 0);
+  assert.equal(await davetSatir(gulDaveti), null);
+  // Yeni anahtar eski verisini görür.
+  const kisiler = await q('select * from public.doc_list($1, $2, null, 500, $3, $4)', [ODA, 'kisi', yeni.id, yeni.k]);
+  assert.deepEqual(kisiler.map((x) => x.id).sort(), ['eski-gul', 'gul']);
+
+  // Tek kullanım: aynı link bir daha çakışma çözmez.
+  assert.equal((await u.katil(ODA, { id: 'gul', k: cihaz('y').k }, { davet: bagli })).durum, 'cakisma');
+
+  // Satırı olmayan kimlik (yalnız kisi belgesi): bağlı davetle yeni onaylı satır.
+  const eski = cihaz('eski-gul');
+  const r2 = await u.katil(ODA, eski, { davet: await u.davet(ODA, yeni, 'eski-gul') });
+  assert.equal(r2.durum, 'onayli');
+  assert.equal((await u.satir(ODA, 'eski-gul')).onaylayan, 'gul');
+
+  // Kendine bağlı davet (aynı kişi yeni telefona geçer).
+  const kendi = await u.davet(ODA, omer, 'omer');
+  const omerYeni = { id: 'omer', k: cihaz('z').k };
+  assert.equal((await u.katil(ODA, omerYeni, { davet: kendi })).durum, 'onayli');
+  assert.equal((await hata('select * from public.doc_list($1, $2, null, 500, $3, $4)', [ODA, 'kisi', omer.id, omer.k])).code, '42501');
+
+  // Kurtarma kodu korunduğu için hâlâ çalışır.
+  assert.equal((await u.katil(ODA, { id: 'gul', k: cihaz('w').k }, { kurtarma })).durum, 'onayli');
+});
+
+test('kişiye bağlı davet: bağlı davet ve kurtarma kodu birlikte gelirse davet harcanır, kod kalır; 8 onaylı sınırında davet geri alınır', ATLA, async () => {
+  const { q, hata } = await kur();
+  const u = uyelik(q);
+  const omer = cihaz('omer');
+  await u.katil(ODA, omer);
+  const gul = cihaz('gul');
+  await u.katil(ODA, gul, { davet: await u.davet(ODA, omer) });
+  const kurtarma = await u.kurtarma(ODA, omer);
+  const bagli = await u.davet(ODA, omer, 'gul');
+  assert.equal((await u.katil(ODA, { id: 'gul', k: cihaz('x').k }, { davet: bagli, kurtarma })).durum, 'onayli');
+  assert.notEqual((await u.oda(ODA)).kurtarma_ozet, null);
+
+  // Bekleyen satır (farklı anahtar) bağlı davetle onaylanırken 8 onaylı sınırı: hata, davet harcanmaz.
+  const bek = cihaz('bek');
+  await u.katil(ODA, bek);
+  for (let i = 0; i < 6; i++) await u.katil(ODA, cihaz('c' + i), { davet: await u.davet(ODA, omer) });
+  const bagli2 = await u.davet(ODA, omer, 'bek');
+  assert.equal((await hata('select public.oda_katil($1, $2, $3, null, $4)', [ODA, 'bek', cihaz('y').k, bagli2])).code, '54000');
+  assert.equal((await q(`select kullanildi from public.oda_davet where ozet = sha256(convert_to($1, 'UTF8'))`, [bagli2]))[0].kullanildi, null);
 });
 
 test('eski oda geçişi: olusturma öncesi kisi onaylı (yalnız geçişte); yazarlık sayılmaz; sonradan eklenen bekler; 3 gün kimliksiz erişim, kanal = oda kodu', ATLA, async () => {
@@ -726,6 +827,8 @@ const ESKI_IMZALAR = `
   create function public.hatirlat_belgeler(p_kinds text[], p_gs_gun integer default null, p_after text[] default null,
     p_limit integer default 500) returns table (room text, kind text, id text, data jsonb)
     language sql stable as $$ select null::text, null::text, null::text, null::jsonb where false $$;
+  create function public.davet_olustur(p_room text, p_cihaz text, p_anahtar text) returns text
+    language sql as $$ select null::text $$;
 `;
 
 test('push: geçişte kimliksiz, başka cihaz adına kayıt koruma başlayınca sayılmaz; anahtarla kayıt sayılır', ATLA, async () => {

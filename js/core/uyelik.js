@@ -59,7 +59,12 @@ export function anahtarim(roomId) {
 export function anahtarYaz(roomId, a) {
   if (!roomId || !ANAHTAR_RE.test(a || '')) return;
   writeStore(depo(), anahtarKey(roomId), a);
-  writeStore(depo(), onbellekKey(roomId), null);
+  durumUnut(roomId);
+}
+
+/** Önbellekteki durumu unutur (ör. kimlik değişti: önbellek eski kimliğindi). Sonraki giriş sunucuya sorar. */
+export function durumUnut(roomId) {
+  if (roomId) writeStore(depo(), onbellekKey(roomId), null);
 }
 
 /** Bu tarayıcıdaki kimliği ve cihaz anahtarını uygulamaya taşıyan link (30 dk geçerli; kimseyle paylaşılmaz). */
@@ -344,12 +349,17 @@ export async function cihazCikar(roomId, hedef) {
   return true;
 }
 
-/** Tek kullanımlık, 7 gün geçerli davet kodu | null (eski sunucu, yerel gevşek mod ya da hata). */
-export async function davetOlustur(roomId) {
+/**
+ * Tek kullanımlık, 7 gün geçerli davet kodu | null (eski sunucu, yerel gevşek mod ya da hata).
+ * kimlik: kişiye bağlı davet ("Yeni telefonu için link"); yalnız o kimlik kullanır ve onun çakışmasını çözer.
+ */
+export async function davetOlustur(roomId, { kimlik = null } = {}) {
   const m = uyelikModu(roomId);
   if (m === 'eski-sunucu' || m === 'yerel-gevsek') return null;
   try {
-    const kod = await yonet(roomId, 'davet_olustur', {}, ykDavetOlustur);
+    const kisiVar = () => yerelBelgeler(roomId).some((d) => d.kind === 'kisi' && d.id === kimlik);
+    const kod = await yonet(roomId, 'davet_olustur', kimlik ? { p_kimlik: kimlik } : {},
+      (st, kim, ctx) => ykDavetOlustur(st, kim, ctx, { kimlik, kisiVar: !!kimlik && kisiVar() }));
     return davetKoduMu(kod) ? kod : null;
   } catch (e) {
     console.warn('[uyelik] davet_olustur:', e?.message || e);

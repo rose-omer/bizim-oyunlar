@@ -186,9 +186,14 @@ export function parseYapistirilanLink(metin, simdi = Date.now()) {
   return { oda, davet: al('davet', DAVET_RE), kim, ad: (p.get('ad') || '').trim().slice(0, 40) || null, anahtar };
 }
 
-/** Saf: kimliği (ve cihaz anahtarını) başka bir uygulamaya taşıyan link. t = saniye. */
-export function buildTasimaUrl(root, { oda, kim, ad = '', anahtar = null, t }) {
-  const p = new URLSearchParams({ oda, kim });
+/**
+ * Saf: kimliği (ve cihaz anahtarını) başka bir uygulamaya taşıyan link. t = saniye.
+ * davet: kişiye bağlı davet kodu ("Yeni telefonu için link"; anahtarsız): '#oda=&davet=&kim=&ad='.
+ */
+export function buildTasimaUrl(root, { oda, kim, ad = '', anahtar = null, t, davet = null }) {
+  const p = new URLSearchParams({ oda });
+  if (davet) p.set('davet', davet);
+  p.set('kim', kim);
   if (ad) p.set('ad', ad);
   if (anahtar) { p.set('anahtar', anahtar); p.set('t', String(t)); }
   const u = new URL(root);

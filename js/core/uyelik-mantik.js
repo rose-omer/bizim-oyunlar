@@ -150,12 +150,21 @@ export function ykKatil(st, args, { simdi, rastgele }) {
     };
   }
   const kurtarmaGecerli = !!(kurtarma && st.oda.kurtarma && kurtarmaTemizle(kurtarma) === st.oda.kurtarma);
+  // Geçerli davet: kullanılmamış, süresi geçmemiş. Kişiye bağlı davet yalnız o kimlik için; başkasına yok sayılır.
+  const d = davet ? st.davetler[davet] : null;
+  const davetGecerli = !!(d && !d.kullanildi && zaman(d.son) > simdi && (!d.kimlik || d.kimlik === cihaz));
   let row = st.cihazlar[cihaz];
   if (row && row.anahtar !== anahtar) {
-    // Çakışma: yalnız geçerli kurtarma kodu çözer (anahtar yenilenir, onaylanır, kod tükenir). Davet çözmez.
-    if (!kurtarmaGecerli) return { durum: 'cakisma', kanal: null, zorunlu: st.oda.zorunlu, ilk: false };
+    // Çakışma: yalnız bu kimliğe bağlı davet ya da geçerli kurtarma kodu çözer; genel davet çözmez.
+    // Bağlı davet önce: davet harcanır, kurtarma kodu kalır. Anahtar yenilenir, onaylanır; eski anahtarın
+    // davetleri silinir, kanal yenilenir.
+    const bagli = davetGecerli && d.kimlik === cihaz;
+    if (!bagli && !kurtarmaGecerli) return { durum: 'cakisma', kanal: null, zorunlu: st.oda.zorunlu, ilk: false };
     if (row.durum !== 'onayli' && onayliSayisi(st) >= MAX_ONAYLI) throw hata('54000', 'oda_katil: cok fazla cihaz');
-    st.oda.kurtarma = null;
+    if (bagli) d.kullanildi = iso(simdi);
+    else st.oda.kurtarma = null;
+    for (const [k, x] of Object.entries(st.davetler)) if (x.olusturan === cihaz) delete st.davetler[k];
+    st.oda.kanal = hex(rastgele(16));
     row.anahtar = anahtar;
     row.durum = 'onayli';
     if (ad) row.ad = ad;
@@ -173,7 +182,7 @@ export function ykKatil(st, args, { simdi, rastgele }) {
   let yol = null;
   if (n === 0 && !veriVar) { yol = 'kurucu'; ilk = true; }
   else if (eskiYazar && simdi < zaman(st.oda.zorunlu)) yol = 'gecis'; // geçiş yalnız koruma başlamadan
-  else if (davet && st.davetler[davet] && !st.davetler[davet].kullanildi && zaman(st.davetler[davet].son) > simdi) yol = 'davet';
+  else if (davetGecerli) yol = 'davet';
   else if (kurtarmaGecerli) yol = 'kurtarma';
 
   if (!yol) {
@@ -187,7 +196,7 @@ export function ykKatil(st, args, { simdi, rastgele }) {
   if (n >= MAX_ONAYLI || (!row && Object.keys(st.cihazlar).length >= MAX_SATIR)) {
     throw hata('54000', 'oda_katil: cok fazla cihaz');
   }
-  if (yol === 'davet') st.davetler[davet].kullanildi = iso(simdi);
+  if (yol === 'davet') d.kullanildi = iso(simdi);
   if (yol === 'kurtarma') st.oda.kurtarma = null;
   row = { anahtar, ad: ad ?? row?.ad ?? null, durum: 'onayli', olusturma: row?.olusturma || iso(simdi), son_gorulme: iso(simdi), onaylayan: null };
   st.cihazlar[cihaz] = row;
@@ -241,14 +250,23 @@ export function ykCikar(st, kim, hedef, { simdi, rastgele = null }) {
   return true;
 }
 
-/** davet_olustur: 32 karakter, 7 gün, tek kullanım; en çok 5 geçerli davet (fazlası en eskiden silinir). */
-export function ykDavetOlustur(st, kim, { simdi, rastgele }) {
+/**
+ * davet_olustur: 32 karakter, 7 gün, tek kullanım; en çok 5 geçerli davet (fazlası en eskiden silinir).
+ * kimlik: kişiye bağlı davet; odada cihaz satırı ya da 'kisi' belgesi (kisiVar, çağıran bilir) olmalı (yoksa 22023).
+ */
+export function ykDavetOlustur(st, kim, { simdi, rastgele }, { kimlik = null, kisiVar = false } = {}) {
   ykYetki(st, kim, simdi);
+  if (kimlik != null) {
+    if (!CIHAZ_RE.test(kimlik)) throw hata('22023', 'davet_olustur: gecersiz kimlik');
+    if (!kisiVar && !st.cihazlar[kimlik]) throw hata('22023', 'davet_olustur: kimlik odada yok');
+  }
   for (const [k, d] of Object.entries(st.davetler)) {
     if (d.kullanildi || zaman(d.son) <= simdi) delete st.davetler[k];
   }
   const kod = secim(rastgele(32), DAVET_ALFABE);
-  st.davetler[kod] = { olusturan: kim.cihaz, son: iso(simdi + DAVET_GUN * GUN_MS), kullanildi: null, olusturma: iso(simdi) };
+  st.davetler[kod] = {
+    olusturan: kim.cihaz, son: iso(simdi + DAVET_GUN * GUN_MS), kullanildi: null, olusturma: iso(simdi), kimlik: kimlik ?? null,
+  };
   const gecerli = Object.entries(st.davetler).sort((a, b) => zaman(a[1].olusturma) - zaman(b[1].olusturma));
   while (gecerli.length > MAX_DAVET) delete st.davetler[gecerli.shift()[0]];
   return kod;

@@ -2,8 +2,10 @@
 // sayfa verisi yüklenmez. Çalışırken yetki giderse (bizim:uyelik 'yok' / 42501) aynı ekran açılır.
 // Kullanım: bootPage, ana sayfa (hub.js) ve oyun sayfaları (ui.js mountShell) kapidanGec(roomId) çağırır.
 // Üst kısım saf (Node'da test edilir); DOM yalnız tarayıcıda kurulur.
-import { me, clearRoom, lobbyUrl, readStore, writeStore, setClientId, setName, setRoom } from './identity.js';
-import { odaGiris, sonDurum, durumTazele, girisAcikMi, cihazAdi, anahtarYaz } from './uyelik.js';
+import {
+  me, clearRoom, lobbyUrl, readStore, writeStore, setClientId, setName, setRoom, parseYapistirilanLink,
+} from './identity.js';
+import { odaGiris, sonDurum, durumTazele, girisAcikMi, cihazAdi, anahtarYaz, durumUnut } from './uyelik.js';
 import { kurtarmaTemizle } from './uyelik-mantik.js';
 import { h, ICONS } from './ui.js';
 
@@ -30,7 +32,9 @@ const ICERIK = {
   cakisma: {
     baslik: 'Bu cihaz tanınmadı',
     metin: "Bu cihaz başka bir anahtarla kayıtlı. Kurtarma kodun varsa gir; yoksa sevgilin Ayarlar › Cihazlar'dan bu cihazın eski kaydını çıkarsın.",
-    eylemler: ['kurtarma', 'cik'], // kurtarma kodu çakışmayı çözer (davet çözmez)
+    not: "Kısa yol: sevgilinden 'Yeni telefonu için link' iste ve buraya yapıştır.",
+    // Çakışmayı kişiye bağlı davet linki ya da kurtarma kodu çözer (genel davet çözmez).
+    eylemler: ['link', 'kurtarma', 'cik'],
     yokla: YOKLA_MS, // eski kayıt çıkarılınca 'yok' olur
   },
   yok: {
@@ -47,7 +51,7 @@ const ICERIK = {
   },
 };
 
-/** Durum → { baslik, metin, not?, eylemler: ('kurtarma'|'cik'|'yeniden'|'tekrar')[], yokla: ms } */
+/** Durum → { baslik, metin, not?, eylemler: ('link'|'kurtarma'|'cik'|'yeniden'|'tekrar')[], yokla: ms } */
 export function kapiIcerigi(durum) {
   return ICERIK[durum] || ICERIK.cevrimdisi;
 }
@@ -61,9 +65,15 @@ export function davetSakla(roomId, kod) {
   if (roomId) writeStore('session', davetKey(roomId), kod || null);
 }
 
-/** Yapıştırılan davet/taşıma linki (identity.js parseYapistirilanLink) bu cihaza uygulanır; çağıran sayfayı yeniler. */
+/**
+ * Yapıştırılan davet, taşıma ya da yeni telefon linki (identity.js parseYapistirilanLink) bu cihaza uygulanır;
+ * çağıran sayfayı yeniler. Kimlik değişirse odanın durum önbelleği unutulur (eski kimliğindi).
+ */
 export function yapistirilanLinkiUygula(p) {
-  if (p.kim) setClientId(p.kim);
+  if (p.kim && p.kim !== me().clientId) {
+    setClientId(p.kim);
+    durumUnut(p.oda);
+  }
   if (p.ad) setName(p.ad);
   if (p.anahtar) anahtarYaz(p.oda, p.anahtar);
   if (p.davet) davetSakla(p.oda, p.davet);
@@ -208,35 +218,26 @@ function dugme(etiket, sinif, is) {
   return b;
 }
 
-function kurtarmaFormu(roomId) {
-  const id = 'kapi-kurtarma';
+const BAGLANAMADIK = 'Bağlanamadık. Biraz sonra yeniden dener misin?';
+
+/** Tek alanlı kapı formu. is(deger) → hata metni | null (null: geçti ya da sayfa yenileniyor). */
+function kapiFormu({ id, etiket, girdi, gonderEtiket, is }) {
   const input = h('input', {
-    class: 'input kapi-kod', id, name: 'kurtarma', type: 'text', maxlength: 24, autocomplete: 'off',
-    autocapitalize: 'characters', spellcheck: 'false', enterkeyhint: 'go', placeholder: 'ABCD-EFGH-JKLM-NPQR',
-    'aria-describedby': `${id}-h`,
+    class: 'input', id, autocomplete: 'off', spellcheck: 'false', enterkeyhint: 'go', 'aria-describedby': `${id}-h`, ...girdi,
   });
   const hata = h('p', { class: 'kapi-hata', id: `${id}-h`, role: 'alert' });
-  const gonder = h('button', { type: 'submit', class: 'btn primary' }, 'Kodla gir');
+  const gonder = h('button', { type: 'submit', class: 'btn primary' }, gonderEtiket);
   const form = h('form', {
     class: 'kapi-form', novalidate: true,
     onsubmit: async (e) => {
       e.preventDefault();
-      const kod = kurtarmaTemizle(input.value);
-      if (kod.length !== 16) {
-        hata.textContent = 'Kod 16 harf ve rakamdan oluşur: ABCD-EFGH-JKLM-NPQR.';
-        input.setAttribute('aria-invalid', 'true');
-        input.focus();
-        return;
-      }
       gonder.disabled = true;
       gonder.setAttribute('aria-busy', 'true');
       hata.textContent = '';
       try {
-        const s = await yenidenDene(roomId, { kurtarma: kod });
-        if (girisAcikMi(s)) return;
-        hata.textContent = s.durum === 'cevrimdisi'
-          ? 'Bağlanamadık. Biraz sonra yeniden dener misin?'
-          : 'Bu kod tutmadı. Harfleri kontrol edip yeniden dener misin?';
+        const m = await is(input.value);
+        if (!m) return;
+        hata.textContent = m;
         input.setAttribute('aria-invalid', 'true');
         input.focus();
       } finally {
@@ -245,12 +246,45 @@ function kurtarmaFormu(roomId) {
       }
     },
   },
-  h('label', { class: 'kapi-etiket', for: id }, 'Kurtarma kodu'),
+  h('label', { class: 'kapi-etiket', for: id }, etiket),
   h('div', { class: 'kapi-form-satir' }, input, gonder),
   hata);
   input.addEventListener('input', () => { input.removeAttribute('aria-invalid'); hata.textContent = ''; });
   return form;
 }
+
+const kurtarmaFormu = (roomId) => kapiFormu({
+  id: 'kapi-kurtarma', etiket: 'Kurtarma kodu', gonderEtiket: 'Kodla gir',
+  girdi: {
+    class: 'input kapi-kod', name: 'kurtarma', type: 'text', maxlength: 24, autocapitalize: 'characters',
+    placeholder: 'ABCD-EFGH-JKLM-NPQR',
+  },
+  is: async (deger) => {
+    const kod = kurtarmaTemizle(deger);
+    if (kod.length !== 16) return 'Kod 16 harf ve rakamdan oluşur: ABCD-EFGH-JKLM-NPQR.';
+    const s = await yenidenDene(roomId, { kurtarma: kod });
+    if (girisAcikMi(s)) return null;
+    return s.durum === 'cevrimdisi' ? BAGLANAMADIK : 'Bu kod tutmadı. Harfleri kontrol edip yeniden dener misin?';
+  },
+});
+
+// Sevgilinin "Yeni telefonu için link"i (kişiye bağlı davet): kimlik ve davet uygulanır, oda_katil daveti alır.
+const linkFormu = (roomId) => kapiFormu({
+  id: 'kapi-link', etiket: 'Yeni telefonu için link', gonderEtiket: 'Linki uygula',
+  girdi: { name: 'link', type: 'url', inputmode: 'url', placeholder: 'Linki buraya yapıştır' },
+  is: async (deger) => {
+    const p = parseYapistirilanLink(deger);
+    if (!p) return 'Bu bir Biz İkimiz linkine benzemiyor.';
+    yapistirilanLinkiUygula(p);
+    if (p.oda !== roomId) {
+      location.replace(lobbyUrl());
+      return null;
+    }
+    const s = await yenidenDene(roomId);
+    if (girisAcikMi(s)) return null;
+    return s.durum === 'cevrimdisi' ? BAGLANAMADIK : 'Bu link tutmadı. Kullanılmış ya da süresi geçmiş olabilir; sevgilinden yenisini iste.';
+  },
+});
 
 /** Kapı ekranını açar ya da günceller. s = üyelik sonucu (durum). */
 export function kapiGoster(roomId, s) {
@@ -269,11 +303,14 @@ export function kapiGoster(roomId, s) {
   kok.dataset.durum = durum;
 
   const eylemler = h('div', { class: 'kapi-eylemler' });
-  let form = null;
   for (const e of ic.eylemler) {
-    if (e === 'kurtarma') {
-      const ac = h('button', { type: 'button', class: 'btn', 'aria-expanded': 'false', 'aria-controls': 'kapi-kurtarma-alan' }, 'Kurtarma kodum var');
-      form = h('div', { class: 'kapi-form-kap', id: 'kapi-kurtarma-alan', hidden: true }, kurtarmaFormu(roomId));
+    if (e === 'kurtarma' || e === 'link') {
+      const [etiket, sinif, formFn] = e === 'link'
+        ? ['Linki yapıştır', 'btn primary', linkFormu]
+        : ['Kurtarma kodum var', 'btn', kurtarmaFormu];
+      const alanId = `kapi-${e}-alan`;
+      const ac = h('button', { type: 'button', class: sinif, 'aria-expanded': 'false', 'aria-controls': alanId }, etiket);
+      const form = h('div', { class: 'kapi-form-kap', id: alanId, hidden: true }, formFn(roomId));
       ac.addEventListener('click', () => {
         const acik = form.hidden;
         form.hidden = !acik;

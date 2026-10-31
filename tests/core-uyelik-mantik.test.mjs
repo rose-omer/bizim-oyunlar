@@ -257,6 +257,61 @@ test('öykünme: geçerli kurtarma kodu çakışmayı çözer (anahtar yenilenir
   assert.equal(ykKatil(st, { room: R, cihaz: 'tel', anahtar: anahtar(), kurtarma: kod2 }, ctx()).durum, 'onayli');
 });
 
+test('öykünme: kişiye bağlı davet — oluşturma kuralları; yalnız o kimlik; çakışmayı çözer, kurtarma kodu kalır; tek kullanım', () => {
+  const st = yeniDurum();
+  const a = anahtar(); const g = anahtar();
+  ykKatil(st, { room: R, cihaz: 'omer', anahtar: a }, ctx());
+  ykKatil(st, { room: R, cihaz: 'gul', anahtar: g, davet: ykDavetOlustur(st, kim('omer', a), ctx()) }, ctx());
+  const kurtarma = ykKurtarmaOlustur(st, kim('omer', a), ctx());
+  const gulDaveti = ykDavetOlustur(st, kim('gul', g), ctx());
+
+  // Oluşturma: biçim; odada kisi belgesi (kisiVar) ya da cihaz satırı olmalı; yetki eskisi gibi.
+  assert.equal(kodu(() => ykDavetOlustur(st, kim('omer', a), ctx(), { kimlik: 'kötü id' })), '22023');
+  assert.equal(kodu(() => ykDavetOlustur(st, kim('omer', a), ctx(), { kimlik: 'yabanci' })), '22023');
+  assert.equal(kodu(() => ykDavetOlustur(st, kim('omer', anahtar()), ctx(), { kimlik: 'gul' })), '42501');
+  assert.ok(davetKoduMu(ykDavetOlustur(st, kim('omer', a), ctx(), { kimlik: 'eski-gul', kisiVar: true })));
+  const bagli = ykDavetOlustur(st, kim('omer', a), ctx(), { kimlik: 'gul' });
+  assert.equal(st.davetler[bagli].kimlik, 'gul');
+  assert.equal(st.davetler[gulDaveti].kimlik, null);
+
+  // Başka kimlik kullanamaz: davet yokmuş gibi, harcanmaz.
+  assert.equal(ykKatil(st, { room: R, cihaz: 'ali', anahtar: anahtar(), davet: bagli }, ctx()).durum, 'bekliyor');
+  assert.equal(st.davetler[bagli].kullanildi, null);
+
+  // Genel davet çakışmayı çözmez.
+  const yeni = anahtar();
+  const genel = ykDavetOlustur(st, kim('omer', a), ctx());
+  assert.equal(ykKatil(st, { room: R, cihaz: 'gul', anahtar: yeni, davet: genel }, ctx()).durum, 'cakisma');
+  assert.equal(st.davetler[genel].kullanildi, null);
+
+  // Bağlı davet çözer: anahtar yenilenir, onaylanır, kanal yenilenir; davet harcanır, kurtarma kodu kalır,
+  // eski anahtarın davetleri silinir.
+  const kanal = st.oda.kanal;
+  const kodOnce = st.oda.kurtarma;
+  const s = ykKatil(st, { room: R, cihaz: 'gul', anahtar: yeni, davet: bagli, ad: 'Gül · yeni' }, ctx(T0 + 1000));
+  assert.equal(s.durum, 'onayli');
+  assert.deepEqual([st.cihazlar.gul.anahtar, st.cihazlar.gul.ad], [yeni, 'Gül · yeni']);
+  assert.ok(st.davetler[bagli].kullanildi);
+  assert.equal(st.oda.kurtarma, kodOnce);
+  assert.notEqual(st.oda.kanal, kanal);
+  assert.equal(st.davetler[gulDaveti], undefined);
+  assert.equal(ykDurum(st, kim('gul', g), T0).durum, 'cakisma', 'eski anahtar artık geçmez');
+  assert.equal(kodu(() => ykYetki(st, kim('gul', g), T0)), '42501');
+  assert.doesNotThrow(() => ykYetki(st, kim('gul', yeni), T0));
+
+  // Tek kullanım.
+  assert.equal(ykKatil(st, { room: R, cihaz: 'gul', anahtar: anahtar(), davet: bagli }, ctx()).durum, 'cakisma');
+  // Satırı olmayan kimlik: bağlı davetle yeni onaylı satır.
+  const eski = ykDavetOlustur(st, kim('gul', yeni), ctx(), { kimlik: 'eski-gul', kisiVar: true });
+  assert.equal(ykKatil(st, { room: R, cihaz: 'eski-gul', anahtar: anahtar(), davet: eski }, ctx()).durum, 'onayli');
+  // Kendine bağlı davet.
+  const kendi = ykDavetOlustur(st, kim('omer', a), ctx(), { kimlik: 'omer' });
+  assert.equal(ykKatil(st, { room: R, cihaz: 'omer', anahtar: anahtar(), davet: kendi }, ctx()).durum, 'onayli');
+  // Kurtarma kodu hâlâ geçerli.
+  assert.equal(ykKatil(st, { room: R, cihaz: 'gul', anahtar: anahtar(), kurtarma }, ctx()).durum, 'onayli');
+  assert.equal(st.oda.kurtarma, null);
+});
+
 test('öykünme: geçiş yolu yalnız koruma başlamadan (zorunlu öncesi)', () => {
   const st = yeniDurum();
   const a = anahtar();

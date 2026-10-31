@@ -166,6 +166,16 @@ test('taşıma linki: anahtar yalnız 30 dakika ve kimlikle birlikte geçerli', 
   assert.ok(!anahtarsiz.includes('anahtar=') && !anahtarsiz.includes('&t='));
 });
 
+test('yeni telefon linki: #oda=&davet=&kim=&ad= (anahtar yok); yapıştırınca hepsi gelir, tıklanınca kimlik uygulanmaz', async () => {
+  const { parseYapistirilanLink, buildTasimaUrl, parseInviteHash } = await import('../js/core/identity.js');
+  const kod = 'k'.repeat(32);
+  const kim = '20089765-2a3b-4c5d-8e9f-0123456789ab';
+  const url = buildTasimaUrl(ROOT, { oda: 'abcdefghij', davet: kod, kim, ad: 'Gül' });
+  assert.equal(url, `${ROOT}#oda=abcdefghij&davet=${kod}&kim=${kim}&ad=G%C3%BCl`);
+  assert.deepEqual(parseYapistirilanLink(url), { oda: 'abcdefghij', davet: kod, kim, ad: 'Gül', anahtar: null });
+  assert.equal(parseInviteHash(new URL(url).hash), null, 'tıklanan link kimlik taşımaz');
+});
+
 test('setClientId: geçerli kimliği alır, geçersizi yok sayar', async () => {
   const { setClientId } = await import('../js/core/identity.js');
   const kim = '20089765-2a3b-4c5d-8e9f-0123456789ab';

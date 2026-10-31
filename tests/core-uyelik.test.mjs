@@ -167,6 +167,9 @@ test('cihaz RPC\'leri: liste (ben), onay/ret/çıkar, davet, kurtarma; çıkarı
   assert.deepEqual(c.cagrilar.at(-1), ['cihaz_onayla', { p_room: R, ...kimlik(R), p_hedef: 'gul' }]);
   assert.equal(await cihazReddet(R, 'gul'), false);
   assert.equal(await davetOlustur(R), 'k'.repeat(32));
+  assert.deepEqual(c.cagrilar.at(-1), ['davet_olustur', { p_room: R, ...kimlik(R) }], 'genel davet: p_kimlik yok (eski sunucuyla uyumlu)');
+  assert.equal(await davetOlustur(R, { kimlik: 'gul' }), 'k'.repeat(32));
+  assert.deepEqual(c.cagrilar.at(-1), ['davet_olustur', { p_room: R, ...kimlik(R), p_kimlik: 'gul' }]);
   assert.equal(await kurtarmaOlustur(R), 'ABCD-EFGH-JKLM-NPQR');
   olaylar.length = 0;
   assert.equal(await cihazCikar(R, 'gul'), true);
@@ -278,6 +281,55 @@ test('yetkiKaybedildi: kimliksiz istekte (eski sunucu önbelleği) ya da kayıts
   assert.equal(katil, 1);
   assert.equal(sonDurum(R).durum, 'onayli');
   assert.deepEqual(olaylar.map((o) => o.durum), ['onayli']);
+});
+
+test('yerel sıkı: kişiye bağlı davet yeniden kurulan cihazı tanır; genel davet tanımaz; kimlik odada olmalı', async () => {
+  writeStore('session', 'bizim.yerel', '1');
+  writeStore('session', 'bizim.yerel.uyelik', '1');
+  const R = 'bagliodaa2';
+  const m = new Map();
+  window.localStorage = {
+    get length() { return m.size; },
+    key: (i) => [...m.keys()][i] ?? null,
+    getItem: (k) => (m.has(k) ? m.get(k) : null),
+    setItem: (k, v) => m.set(k, String(v)),
+    removeItem: (k) => m.delete(k),
+  };
+  try {
+    sekme('omer', R);
+    assert.equal((await odaGiris(R)).durum, 'onayli');
+    m.set(`bizim.yerelveri.${R}.kisi`, JSON.stringify({ 'eski-gul': { id: 'eski-gul', data: { ad: 'Gül' }, created_at: new Date().toISOString() } }));
+    const genel = await davetOlustur(R);
+    sekme('gul', R);
+    assert.equal((await odaGiris(R, { davet: genel })).durum, 'onayli');
+    const eskiAnahtar = anahtarim(R);
+
+    sekme('omer', R);
+    assert.equal(await davetOlustur(R, { kimlik: 'yabanci' }), null, 'odada olmayan kimlik');
+    assert.match(await davetOlustur(R, { kimlik: 'eski-gul' }), /^[a-z2-9]{32}$/, 'yalnız kisi belgesi olan kimlik');
+    const bagli = await davetOlustur(R, { kimlik: 'gul' });
+    assert.match(bagli, /^[a-z2-9]{32}$/);
+    const genel2 = await davetOlustur(R);
+
+    // Gül uygulamayı yeniden kurdu: aynı kimlik, anahtar yok.
+    sekme('gul', R);
+    writeStore('session', 'bizim.anahtar.' + R, null);
+    writeStore('session', 'bizim.uyelik.' + R, null);
+    assert.notEqual(anahtarim(R), eskiAnahtar);
+    assert.equal((await odaGiris(R, { davet: genel2 })).durum, 'cakisma', 'genel davet çakışmayı çözmez');
+    assert.equal((await odaGiris(R, { davet: bagli })).durum, 'onayli');
+    assert.doesNotThrow(() => yerelVeriYetkisi(R));
+
+    // Başka kimlik bağlı daveti kullanamaz (zaten harcandı; yenisiyle de).
+    sekme('omer', R);
+    const bagli2 = await davetOlustur(R, { kimlik: 'gul' });
+    sekme('ali', R);
+    assert.equal((await odaGiris(R, { davet: bagli2 })).durum, 'bekliyor');
+  } finally {
+    delete window.localStorage;
+    writeStore('session', 'bizim.client', null);
+    sunucuModu();
+  }
 });
 
 test("yerel sıkı: geçiş yalnız kisi belgesi id'siyle (author sayılmaz)", async () => {

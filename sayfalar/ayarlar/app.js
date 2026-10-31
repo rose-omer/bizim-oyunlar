@@ -4,13 +4,15 @@ import { openProfil } from '../../js/core/profil.js';
 import { openCollection, listDocs, putDoc, iceAktar, onbellekTemizle } from '../../js/core/veri.js';
 import { sayfaById } from '../../js/core/games.js';
 import { COP_TURLERI, copListesi, copOnizleme, copKimZaman } from './mantik.js';
-import { setName, inviteUrl, lobbyUrl, pageUrl, readStore, writeStore, parseYapistirilanLink } from '../../js/core/identity.js';
+import {
+  setName, inviteUrl, lobbyUrl, pageUrl, readStore, writeStore, parseYapistirilanLink, buildTasimaUrl, SITE_ROOT,
+} from '../../js/core/identity.js';
 import { yapistirilanLinkiUygula } from '../../js/core/kapi.js';
 import {
   h, icon, toast, confirmDialog, shareInvite, copyInvite, copyText, initial, formatDay, readTema, parseTema, davetHazirla,
 } from '../../js/core/ui.js';
 import {
-  cihazlar, cihazOnayla, cihazReddet, cihazCikar, kurtarmaOlustur, odaGiris, uyelikModu, tasimaLinki,
+  cihazlar, cihazOnayla, cihazReddet, cihazCikar, kurtarmaOlustur, odaGiris, uyelikModu, tasimaLinki, davetOlustur,
 } from '../../js/core/uyelik.js';
 import { uploadPhoto, loadPhoto, isAllowedPhotoUrl } from '../../js/core/storage.js';
 import { fotoKirp } from '../../js/core/kirp.js';
@@ -18,7 +20,7 @@ import { isMuted, setMuted, sfx } from '../../js/core/sound.js';
 import { bildirimDestegi, bildirimDurumu, bildirimAc, bildirimKapat } from '../../js/core/bildirim.js';
 import { kilitAyarla, kilitVarMi, pinHatasi, pinDogruMu, cihazdanUnut } from '../../js/core/kilit.js';
 import { daysTogether, toDay } from '../../js/core/gunler.js';
-import { isNative } from '../../js/core/mobil.js';
+import { isNative, paylas } from '../../js/core/mobil.js';
 import { IOS_ADIMLARI, apkGoster } from '../daha/mantik.js';
 import { tarihYazi } from '../gunler/mantik.js';
 import {
@@ -960,6 +962,7 @@ let cihazListe = null; // son başarılı liste
 let cihazHata = false;
 let cihazSira = 0;
 let davetUrl = null; // bu sayfada oluşturulan davet linki
+let yeniTel = null; // bu sayfada oluşturulan yeni telefon linki: { ad, url }
 let kurtarmaKodu = null; // bir kez gösterilir (sayfadan çıkınca kaybolur)
 
 const DURUM_ADI = { onayli: 'Onaylı', bekliyor: 'Onay bekliyor', reddedildi: 'Reddedildi' };
@@ -1094,6 +1097,65 @@ async function davetOlusturVeGoster() {
   document.getElementById('ayar-davet')?.focus();
 }
 
+// Yeni telefon linki: kişiye bağlı davet (uyelik.js davetOlustur kimlik). Sevgilin uygulamayı yeniden kurunca ya da
+// telefon değiştirince kimliğini (verisini) geri alır; sunucu bu daveti yalnız o kimliğe verir. Anahtar taşımaz.
+// Kişiler: kisi belgeleri, benim dışımdakiler (en son güncellenen önce).
+async function yeniTelefonLinki(d) {
+  const ad = String(d.data?.ad || '').trim();
+  const kod = await davetOlustur(roomId, { kimlik: d.id });
+  if (!kod) {
+    toast('Link oluşturulamadı. Biraz sonra tekrar dener misin?');
+    return;
+  }
+  yeniTel = { ad: ad || 'Sevgilin', url: buildTasimaUrl(SITE_ROOT, { oda: roomId, davet: kod, kim: d.id, ad }) };
+  cihazCiz();
+  document.getElementById('ayar-yenitel')?.focus();
+}
+
+async function yeniTelefonKopyala() {
+  toast(await copyText(yeniTel.url)
+    ? "Kopyalandı. Sevgiline gönder; uygulamada 'Linki buraya yapıştır' alanına yapıştırsın."
+    : 'Kopyalanamadı. Linki seçip elle kopyala.');
+}
+
+async function yeniTelefonPaylas() {
+  const durum = await paylas("Biz İkimiz'e yeni telefonundan dön: uygulamada 'Linki buraya yapıştır' alanına yapıştır.", yeniTel.url);
+  if (durum !== 'shared' && durum !== 'cancelled') await yeniTelefonKopyala();
+}
+
+function yeniTelefonAlani() {
+  const kisiler = profil.kisiler.all().filter((d) => d.id !== myId)
+    .sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at));
+  if (!kisiler.length) return null;
+  const satir = (d) => {
+    const ad = String(d.data?.ad || '').trim() || 'Sevgilin';
+    const cihaz = (cihazListe || []).find((c) => c.cihaz === d.id);
+    return h('li', { class: 'cihaz' },
+      h('span', { class: 'cihaz-simge', 'aria-hidden': 'true' }, initial(ad)),
+      h('div', { class: 'cihaz-metin' },
+        h('p', { class: 'cihaz-ad' }, h('span', {}, ad)),
+        cihaz?.ad ? h('p', { class: 'cihaz-alt' }, cihaz.ad) : null),
+      h('div', { class: 'cihaz-eylemler' },
+        islem('Yeni telefonu için link', 'btn small', `${ad}: yeni telefonu için link`, () => yeniTelefonLinki(d))));
+  };
+  const link = yeniTel ? [
+    h('div', { class: 'linkbox' },
+      h('input', {
+        class: 'input', id: 'ayar-yenitel', type: 'text', readonly: true, value: yeniTel.url,
+        'aria-label': `${yeniTel.ad} için yeni telefon linki`,
+        onfocus: (e) => e.currentTarget.select(), onclick: (e) => e.currentTarget.select(),
+      }),
+      h('button', { type: 'button', class: 'btn small', onclick: yeniTelefonKopyala }, icon('copy'), 'Kopyala')),
+    h('div', { class: 'ayar-eylemler' },
+      h('button', { type: 'button', class: 'btn small', onclick: yeniTelefonPaylas }, icon('share'), 'Linki paylaş')),
+  ] : [];
+  return h('div', { class: 'ayar-alan' },
+    h('div', { class: 'ayar-alan-ust' }, h('span', { class: 'ayar-etiket' }, 'Yeni telefon linki')),
+    h('p', { class: 'ayar-yardim' }, "Sevgilin uygulamayı yeniden kurduysa ya da telefon değiştirdiyse bu linki gönder. Uygulamada 'Linki buraya yapıştır'a yapıştırınca her şeyi geri gelir. 7 gün geçerli, tek kullanımlık."),
+    h('ul', { class: 'cihaz-liste', 'aria-label': 'Yeni telefon linki verilecek kişiler' }, kisiler.map(satir)),
+    ...link);
+}
+
 function kurtarmaAlani() {
   const ust = h('div', { class: 'ayar-alan-ust' }, h('span', { class: 'ayar-etiket' }, 'Kurtarma kodu'));
   const metin = 'Bu kodu güvenli bir yere yaz. Tüm cihazların kaybolursa odaya bununla dönersin. Yeni kod eskisini geçersiz yapar.';
@@ -1145,6 +1207,7 @@ function cihazCiz() {
     liste = h('p', { class: 'ayar-satir-aciklama', role: 'status', 'aria-busy': 'true' }, 'Cihazlar yükleniyor…');
   }
   const bekleyen = (cihazListe || []).filter((c) => c.durum === 'bekliyor').length;
+  const yeniTelAlan = mod === 'yerel-gevsek' ? null : yeniTelefonAlani();
   cihazKutu.replaceChildren(...[
     mod === 'yerel-gevsek'
       ? bilgi('Yerel test modu: her cihaz onaylı sayılır.')
@@ -1154,6 +1217,8 @@ function cihazCiz() {
     liste,
     ayrac(),
     davetAlani(),
+    yeniTelAlan ? ayrac() : null,
+    yeniTelAlan,
     mod === 'yerel-gevsek' ? null : ayrac(),
     mod === 'yerel-gevsek' ? null : kurtarmaAlani(),
     tasimaGoster(mod) ? ayrac() : null,

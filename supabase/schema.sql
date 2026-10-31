@@ -873,6 +873,9 @@ create table if not exists public.oda_davet (
 
 create index if not exists oda_davet_room_idx on public.oda_davet (room);
 
+-- Kişiye bağlı davet ("Yeni telefonu için link"): doluysa daveti yalnız bu cihaz kimliği kullanır (oda_katil).
+alter table public.oda_davet add column if not exists kimlik text;
+
 alter table public.oda_davet enable row level security;
 revoke all on table public.oda_davet from anon, authenticated;
 
@@ -1041,13 +1044,15 @@ revoke execute on function public.oda_yetki_kimlikli(text, text, text, text) fro
 --   b. geçiş: yalnız koruma başlamadan (now() < zorunlu); oda satırından önce yazılmış 'kisi' belgesinin id'si
 --      bu cihaz. Yazarlık (author) sayılmaz: son yazandır, oda kodunu bilen değiştirebilir. Çıkarma korumayı
 --      hemen başlattığından çıkarılan cihaz bu yolla dönemez.
---   c. geçerli davet (aynı oda, süresi geçmemiş, kullanılmamış; harcanır)
+--   c. geçerli davet (aynı oda, süresi geçmemiş, kullanılmamış; harcanır). Kişiye bağlı davet (oda_davet.kimlik)
+--      yalnız o kimlikle (p_cihaz = kimlik) geçerlidir; başka cihaz için yok sayılır ve harcanmaz.
 --   d. geçerli kurtarma kodu (harcanır)
 -- Hiçbiri tutmazsa yeni satır 'bekliyor'; var olan 'reddedildi' satırı reddedildi kalır.
--- Aynı cihaz farklı anahtarla gelirse 'cakisma' (satıra dokunulmaz). Çakışmayı yalnız geçerli kurtarma kodu
--- çözer (davet çözmez: başkasının kimliğini ele geçirmeye yol açar): satır yeni anahtara geçer ve onaylanır,
--- kod harcanır. Eski anahtarın sahibi her şeyi kaybeder: push abonelikleri, FCM belirteçleri ve davetleri silinir,
--- kanal yenilenir.
+-- Aynı cihaz farklı anahtarla gelirse 'cakisma' (satıra dokunulmaz). Çakışmayı yalnız bu kimliğe bağlı davet ya da
+-- geçerli kurtarma kodu çözer. Genel (kimliksiz) davet çözmez: oda kodunu ve bir daveti bilen, başkasının kimliğini
+-- ele geçirirdi. Bağlı davet önce denenir: davet harcanır, kurtarma kodu yerinde kalır; yoksa kurtarma kodu harcanır.
+-- İkisinde de satır yeni anahtara geçer ve onaylanır. Eski anahtarın sahibi her şeyi kaybeder: push abonelikleri,
+-- FCM belirteçleri ve oluşturduğu davetler silinir, kanal yenilenir.
 -- Hız: onaylı cihazın girişi dışındaki denemeler, oda başına saatte 30. Genel: saatte 1000 yeni oda.
 -- Sınır: odada en çok 8 onaylı; onaylı + bekleyen en çok 20 satır (aşılırsa 54000; harcanan davet geri alınır).
 -- Temizlik: 30 gündür görülmeyen bekleyen ve reddedilen satırlar her katılma denemesinde; 7 günden eski
@@ -1073,6 +1078,7 @@ declare
   v_n integer;
   v_all integer;
   v_kurtarma boolean;
+  v_bagli boolean := false;
 begin
   perform public.oda_bicim('oda_katil', p_room, p_cihaz, p_anahtar);
   if pg_catalog.length(p_davet) > 64 or pg_catalog.length(p_kurtarma) > 64 then
@@ -1136,24 +1142,34 @@ begin
     = public.oda_ozet(pg_catalog.upper(pg_catalog.replace(pg_catalog.btrim(p_kurtarma), '-', ''))), false);
 
   if v_var and v_c.anahtar_ozet <> v_ozet then
-    if not v_kurtarma then
+    -- Yalnız bu kimliğe bağlı davet çözer (genel davet değil). Hata çıkarsa harcanan davet geri alınır.
+    if p_davet is not null then
+      update public.oda_davet as v set kullanildi = pg_catalog.now()
+      where v.ozet = public.oda_ozet(p_davet) and v.room = p_room
+        and v.son > pg_catalog.now() and v.kullanildi is null and v.kimlik = p_cihaz
+      returning v.olusturan into v_onaylayan;
+      v_bagli := found;
+    end if;
+    if not v_bagli and not v_kurtarma then
       return public.oda_cevap('cakisma', p_room, v_oda.kanal, v_oda.zorunlu, false);
     end if;
-    -- Kurtarma koduyla çakışma çözülür: satır yeni anahtara geçer; eski anahtarın sahibi her şeyi kaybeder.
+    -- Satır yeni anahtara geçer; eski anahtarın sahibi her şeyi kaybeder. Kurtarma kodu yalnız kendi yolunda harcanır.
     if v_c.durum <> 'onayli'
        and (select count(*) from public.oda_cihaz as c where c.room = p_room and c.durum = 'onayli') >= 8 then
       raise exception 'oda_katil: cok fazla cihaz' using errcode = '54000';
     end if;
     update public.oda as o
-    set kurtarma_ozet = null, kurtarma_olusturan = null, kanal = public.oda_rastgele('0123456789abcdef', 32)
+    set kurtarma_ozet = case when v_bagli then o.kurtarma_ozet end,
+        kurtarma_olusturan = case when v_bagli then o.kurtarma_olusturan end,
+        kanal = public.oda_rastgele('0123456789abcdef', 32)
     where o.room = p_room
     returning o.* into v_oda;
     delete from public.push_sub as s where s.room = p_room and s.client = p_cihaz;
     delete from public.fcm_sub as f where f.room = p_room and f.client = p_cihaz;
     delete from public.oda_davet as v where v.room = p_room and v.olusturan = p_cihaz;
     update public.oda_cihaz as c
-    set anahtar_ozet = v_ozet, durum = 'onayli', onaylayan = null, ad = coalesce(v_ad, c.ad),
-        son_gorulme = pg_catalog.now()
+    set anahtar_ozet = v_ozet, durum = 'onayli', onaylayan = case when v_bagli then v_onaylayan end,
+        ad = coalesce(v_ad, c.ad), son_gorulme = pg_catalog.now()
     where c.room = p_room and c.cihaz = p_cihaz;
     return public.oda_cevap('onayli', p_room, v_oda.kanal, v_oda.zorunlu, false);
   end if;
@@ -1175,7 +1191,7 @@ begin
   if v_yol is null and p_davet is not null then
     update public.oda_davet as v set kullanildi = pg_catalog.now()
     where v.ozet = public.oda_ozet(p_davet) and v.room = p_room
-      and v.son > pg_catalog.now() and v.kullanildi is null
+      and v.son > pg_catalog.now() and v.kullanildi is null and (v.kimlik is null or v.kimlik = p_cihaz)
     returning v.olusturan into v_onaylayan;
     if found then
       v_yol := 'davet';
@@ -1337,7 +1353,12 @@ $$;
 
 -- Davet kodu: 32 karakter [a-z2-9] (l, o, 0, 1 yok), 7 gün, tek kullanım. Odada en çok 5 geçerli davet:
 -- fazlası en eskiden silinir; kullanılmış ve süresi geçmişler de temizlenir.
-create or replace function public.davet_olustur(p_room text, p_cihaz text, p_anahtar text)
+-- p_kimlik verilirse kişiye bağlı davet ("Yeni telefonu için link"): odada bu kimliğin 'kisi' belgesi ya da cihaz
+-- satırı olmalı (yoksa 22023). Davet yalnız bu kimlikle kullanılır ve onun çakışmasını çözer (bkz. oda_katil).
+-- Kendi kimliğine bağlı davet de olur (aynı kişi yeni telefona geçer). Eski imza kaldırılır (bkz. 2. bölüm).
+drop function if exists public.davet_olustur(text, text, text);
+
+create or replace function public.davet_olustur(p_room text, p_cihaz text, p_anahtar text, p_kimlik text default null)
 returns text
 language plpgsql
 security definer
@@ -1347,11 +1368,20 @@ declare
   v_kod text;
 begin
   perform public.oda_yetki_kimlikli('davet_olustur', p_room, p_cihaz, p_anahtar);
+  if p_kimlik is not null then
+    if p_kimlik !~ '^[A-Za-z0-9_-]{1,64}$' then
+      raise exception 'davet_olustur: gecersiz kimlik' using errcode = '22023';
+    end if;
+    if not exists (select 1 from public.room_doc as d where d.room = p_room and d.kind = 'kisi' and d.id = p_kimlik)
+       and not exists (select 1 from public.oda_cihaz as c where c.room = p_room and c.cihaz = p_kimlik) then
+      raise exception 'davet_olustur: kimlik odada yok' using errcode = '22023';
+    end if;
+  end if;
   v_kod := public.oda_rastgele('abcdefghijkmnpqrstuvwxyz23456789', 32);
   delete from public.oda_davet as v
   where v.room = p_room and (v.kullanildi is not null or v.son <= pg_catalog.now());
-  insert into public.oda_davet (ozet, room, olusturan, son)
-  values (public.oda_ozet(v_kod), p_room, p_cihaz, pg_catalog.clock_timestamp() + interval '7 days');
+  insert into public.oda_davet (ozet, room, olusturan, son, kimlik)
+  values (public.oda_ozet(v_kod), p_room, p_cihaz, pg_catalog.clock_timestamp() + interval '7 days', p_kimlik);
   delete from public.oda_davet as v
   where v.ozet in (select x.ozet from public.oda_davet as x where x.room = p_room order by x.son desc offset 5);
   return v_kod;
@@ -1474,7 +1504,7 @@ revoke execute on function public.cihaz_listele(text, text, text) from public;
 revoke execute on function public.cihaz_onayla(text, text, text, text) from public;
 revoke execute on function public.cihaz_reddet(text, text, text, text) from public;
 revoke execute on function public.cihaz_cikar(text, text, text, text) from public;
-revoke execute on function public.davet_olustur(text, text, text) from public;
+revoke execute on function public.davet_olustur(text, text, text, text) from public;
 revoke execute on function public.kurtarma_olustur(text, text, text) from public;
 revoke execute on function public.doc_ice_aktar(text, text, text, jsonb) from public;
 
@@ -1484,7 +1514,7 @@ grant execute on function public.cihaz_listele(text, text, text) to anon, authen
 grant execute on function public.cihaz_onayla(text, text, text, text) to anon, authenticated;
 grant execute on function public.cihaz_reddet(text, text, text, text) to anon, authenticated;
 grant execute on function public.cihaz_cikar(text, text, text, text) to anon, authenticated;
-grant execute on function public.davet_olustur(text, text, text) to anon, authenticated;
+grant execute on function public.davet_olustur(text, text, text, text) to anon, authenticated;
 grant execute on function public.kurtarma_olustur(text, text, text) to anon, authenticated;
 grant execute on function public.doc_ice_aktar(text, text, text, jsonb) to anon, authenticated;
 

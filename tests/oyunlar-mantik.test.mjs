@@ -17,11 +17,11 @@ test('OYUN_GRUBU: her oyun tek grupta, harita yalnız var olan oyunları ve grup
   for (const g of GAMES) assert.ok(OYUN_GRUBU[g.id], `grupsuz oyun ${g.id}`);
 });
 
-test('grupla: 18 oyun 4 grupta, talimattaki sırayla', () => {
+test('grupla: 19 oyun 4 grupta, talimattaki sırayla', () => {
   const gr = grupla(GAMES);
   assert.deepEqual(gr.map((g) => g.ad), ['Tanışalım', 'Masa oyunları', 'Kelime ve zekâ', 'Birlikte yarat']);
   assert.deepEqual(ids(gr[0].oyunlar), ['tanis', 'aynikafa', 'kimdaha', 'hicyaptin', 'derin', 'dogruluk']);
-  assert.deepEqual(ids(gr[1].oyunlar), ['dama', 'tavla', 'satranc', 'dorttas', 'amiral', 'pisti']);
+  assert.deepEqual(ids(gr[1].oyunlar), ['dama', 'tavla', 'satranc', 'dorttas', 'xox', 'amiral', 'pisti']);
   assert.deepEqual(ids(gr[2].oyunlar), ['kelime', 'duello', 'sudoku', 'hafiza']);
   assert.deepEqual(ids(gr[3].oyunlar), ['yapboz', 'ciz']);
   assert.equal(gr.reduce((n, g) => n + g.oyunlar.length, 0), GAMES.length);

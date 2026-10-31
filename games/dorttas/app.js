@@ -1,4 +1,5 @@
-// Dört Taş (+ XOX) sayfası. Ev sahibi durumu tutar (oyun.js), misafir niyet yollar ve
+// Dört Taş (+ XOX) sayfası. games/xox/ aynı kodu body[data-oyun="xox"] ile açar: yalnız XOX, kendi oda kanalı ve skoru.
+// Ev sahibi durumu tutar (oyun.js), misafir niyet yollar ve
 // hamlesini yerelde tahmin ederek hemen gösterir (ev sahibi onaylamazsa 3 sn sonra geri alır).
 import { joinRoom, partnerGoruyor } from '../../js/core/room.js';
 import { readGameParams, lobbyUrl } from '../../js/core/identity.js';
@@ -12,19 +13,21 @@ import { createSync, sessionStore } from '../hafiza/sync.js';
 import { fitToViewport, esc } from '../hafiza/ekran.js';
 import { MODLAR, initialState, reduce, toAction, resultOf, yeniTaslar, inecegiSatir } from './oyun.js';
 
-const NS = 'dorttas';
+const XOX = document.body.dataset.oyun === 'xox';
+const NS = XOX ? 'xox' : 'dorttas';
+const BASLIK = XOX ? 'XOX' : 'Dört Taş';
 const TAHMIN_MS = 3000;
 const XOX_ADLAR = ['Sol üst', 'Üst orta', 'Sağ üst', 'Sol orta', 'Orta', 'Sağ orta', 'Sol alt', 'Alt orta', 'Sağ alt'];
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)');
 
 const { roomId, hostId, isHost } = readGameParams();
 const room = await joinRoom({ roomId, ns: NS });
-mountShell({ title: 'Dört Taş', room });
+mountShell({ title: BASLIK, room });
 
 const app = document.getElementById('app');
 app.innerHTML = `
-  <section class="dt" id="dt" aria-label="Dört Taş">
-    <div class="dt-head">
+  <section class="dt" id="dt" aria-label="${BASLIK}">
+    <div class="dt-head"${XOX ? ' hidden' : ''}>
       <div class="seg dt-mod" role="group" aria-label="Oyun türü">
         <button type="button" data-mod="dort" aria-pressed="true">Dört Taş</button>
         <button type="button" data-mod="xox" aria-pressed="false">XOX</button>
@@ -69,9 +72,9 @@ const sync = createSync({
   room, ns: NS, hostId, isHost, solo: false,
   reduce,
   toAction: (intent, by, s) => toAction(intent, by, s, { hostId: me }),
-  initial: initialState({ players, names }),
+  initial: initialState({ players, names, mod: XOX ? 'xox' : 'dort' }),
   storage: sessionStore(),
-  storeKey: `bizim.dorttas.${roomId || '-'}`,
+  storeKey: `bizim.${NS}.${roomId || '-'}`,
   accept: (s) => s.v === 1 && s.players?.join() === players.join(),
   onState: (s, prev) => { draw(s); siraBildir(s, prev); },
   onPeer: (here) => {

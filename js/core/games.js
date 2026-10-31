@@ -97,6 +97,14 @@ export const GAMES = [
     minutes: '3–10 dk',
   },
   {
+    id: 'xox',
+    title: 'XOX',
+    emoji: '❌',
+    desc: 'Klasik üçlü: sırayla X ve O koyun, üçünü yan yana getiren kazanır.',
+    players: '2',
+    minutes: '1–5 dk',
+  },
+  {
     id: 'amiral',
     title: 'Amiral Battı',
     emoji: '🚢',

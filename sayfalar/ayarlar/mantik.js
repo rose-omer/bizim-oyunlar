@@ -207,6 +207,7 @@ export const YEDEK_TURLERI = [
   'ruhgecmis',
   'skor',
   'gunfoto', 'haftalik', 'harcama',
+  'kupon', 'bilgi',
 ];
 
 /**

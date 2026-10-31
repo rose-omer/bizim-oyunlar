@@ -1,0 +1,440 @@
+/* Aşk Kuponları — kesik kenarlı bilet. Renkler yalnız css/base.css değişkenlerinden. */
+
+.kp {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 16px var(--gutter) 32px;
+}
+.kp-yukleniyor { padding: 24px 0; text-align: center; }
+
+/* ---------- Sekmeler ---------- */
+.kp-seg { display: flex; width: 100%; }
+.kp-seg > button {
+  flex: 1 1 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 0 6px;
+  font-size: 0.875rem;
+}
+.kp-seg > button > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kp-rozet {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 0.75rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.kp-ver svg { width: 20px; height: 20px; }
+.kp-bilgi { color: var(--muted); font-size: 0.9375rem; line-height: 1.45; text-align: center; }
+
+/* ---------- Bölümler ---------- */
+.kp-govde { display: flex; flex-direction: column; gap: 28px; }
+.kp-bolum { display: flex; flex-direction: column; gap: 12px; }
+.kp-bolum-baslik {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1.125rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+.kp-sayi {
+  min-width: 24px;
+  padding: 1px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 0.8125rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.kp-bolum[data-bolum='kullanildi'] .kp-sayi { background: var(--accent-soft); color: var(--accent-strong); }
+.kp-bolum-not { margin-top: -4px; color: var(--muted); font-size: 0.9375rem; line-height: 1.45; }
+.kp-liste { display: flex; flex-direction: column; gap: 14px; }
+
+/* ---------- Bilet ----------
+   Koçan (emoji) | delikli çizgi | içerik. Çentikler mask ile oyulur; gölge sarmalayıcıda (drop-shadow çentiği izler). */
+.kp-kupon,
+.kp-onizleme,
+.kp-bos-bilet {
+  /* --overlay iki temada da koyu ve yarı saydam: koyu temada gölge parlamaya dönmez */
+  filter: drop-shadow(0 1px 1px color-mix(in srgb, var(--overlay) 40%, transparent))
+    drop-shadow(0 8px 12px color-mix(in srgb, var(--overlay) 45%, transparent));
+}
+.kp-bilet {
+  --kesik: 88px;
+  --r: 11px;
+  --zemin: var(--tint-1);
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--kesik) minmax(0, 1fr);
+  min-height: 128px;
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--zemin) 38%, var(--surface));
+  color: var(--text);
+  -webkit-mask:
+    radial-gradient(circle at var(--kesik) 0, transparent var(--r), black calc(var(--r) + 0.5px)) top / 100% 51% no-repeat,
+    radial-gradient(circle at var(--kesik) 100%, transparent var(--r), black calc(var(--r) + 0.5px)) bottom / 100% 51% no-repeat;
+  mask:
+    radial-gradient(circle at var(--kesik) 0, transparent var(--r), black calc(var(--r) + 0.5px)) top / 100% 51% no-repeat,
+    radial-gradient(circle at var(--kesik) 100%, transparent var(--r), black calc(var(--r) + 0.5px)) bottom / 100% 51% no-repeat;
+}
+/* Delikli çizgi: iki çentiğin arasında */
+.kp-bilet::before {
+  content: '';
+  position: absolute;
+  top: calc(var(--r) + 6px);
+  bottom: calc(var(--r) + 6px);
+  left: calc(var(--kesik) - 1px);
+  border-left: 2px dashed color-mix(in srgb, var(--text) 22%, transparent);
+  pointer-events: none;
+}
+.kp-bilet[data-renk='2'] { --zemin: var(--tint-2); }
+.kp-bilet[data-renk='3'] { --zemin: var(--tint-3); }
+.kp-bilet[data-renk='4'] { --zemin: var(--tint-4); }
+.kp-bilet[data-renk='5'] { --zemin: var(--tint-5); }
+.kp-bilet[data-renk='6'] { --zemin: var(--tint-6); }
+
+.kp-kocan {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 6px;
+  background: var(--zemin);
+}
+.kp-emoji { font-size: 2.375rem; line-height: 1; }
+.kp-kocan-yazi {
+  color: color-mix(in srgb, var(--text) 62%, var(--zemin));
+  font-size: 0.6875rem;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  padding-left: 0.2em; /* harf aralığı ortalansın */
+}
+
+.kp-icerik {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+  padding: 14px 16px 14px 20px;
+}
+.kp-baslik {
+  font-family: var(--font-display);
+  font-variation-settings: 'SOFT' 100;
+  font-size: 1.3125rem;
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+.kp-aciklama {
+  color: color-mix(in srgb, var(--text) 78%, var(--zemin));
+  font-size: 0.9375rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+.kp-meta {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.8125rem;
+  font-weight: 650;
+  line-height: 1.35;
+}
+.kp-son {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 4px;
+  padding: 3px 10px 3px 8px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
+  color: var(--muted);
+  font-size: 0.8125rem;
+  font-weight: 750;
+}
+.kp-son svg { width: 15px; height: 15px; flex: none; }
+.kp-son.yakin { background: var(--accent-soft); color: var(--accent-strong); }
+.kp-not { margin-top: 2px; color: var(--muted); font-size: 0.875rem; font-style: italic; line-height: 1.4; }
+.kp-eylem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  align-self: stretch;
+  margin-top: 8px;
+}
+.kp-eylem .btn svg { width: 18px; height: 18px; }
+.kp-sil { margin: -6px -10px -6px auto; color: var(--muted); }
+.kp-sil svg { width: 20px; height: 20px; }
+
+/* Damga: kullanılan / tutulan / süresi dolan kupon koçanına basılır */
+.kp-damga {
+  position: absolute;
+  left: 50%;
+  bottom: 22px;
+  z-index: 1;
+  width: max-content;
+  padding: 3px 5px;
+  border: 2px solid currentColor;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface) 72%, transparent);
+  color: var(--accent-strong);
+  font-size: 0.5625rem;
+  font-weight: 900;
+  letter-spacing: 0.03em;
+  line-height: 1.15;
+  text-align: center;
+  white-space: pre;
+  transform: translateX(-50%) rotate(-10deg);
+}
+.kp-bilet[data-durum='tamam'] .kp-damga { color: var(--good); }
+.kp-bilet[data-durum='suresi'] .kp-damga { color: var(--muted); }
+.kp-damga.vur { animation: kp-damga 0.46s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+@keyframes kp-damga {
+  0% { opacity: 0; transform: translateX(-50%) rotate(-10deg) scale(2.2); }
+  55% { opacity: 1; transform: translateX(-50%) rotate(-10deg) scale(0.92); }
+  100% { opacity: 1; transform: translateX(-50%) rotate(-10deg) scale(1); }
+}
+.kp-bilet:not([data-durum='hazir']) .kp-emoji { transform: translateY(-14px); }
+.kp-bilet:not([data-durum='hazir']) .kp-kocan-yazi { visibility: hidden; } /* damga yerini alır */
+
+/* Biten kuponlar: renk çekilir */
+.kp-bilet[data-durum='tamam'],
+.kp-bilet[data-durum='suresi'] { --zemin: var(--surface-2); }
+.kp-bilet[data-durum='tamam'] .kp-emoji,
+.kp-bilet[data-durum='suresi'] .kp-emoji { filter: grayscale(0.5); opacity: 0.8; }
+.kp-bilet[data-durum='suresi'] .kp-baslik { color: var(--muted); }
+
+.kp-kupon.yeni { animation: kp-gir 0.42s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+@keyframes kp-gir { from { opacity: 0; transform: translateY(14px) scale(0.98); } }
+
+/* ---------- Boş durum ---------- */
+.kp-bos {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 4px 0;
+  text-align: center;
+}
+.kp-bos-bilet { width: min(100%, 320px); margin-bottom: 14px; transform: rotate(-3deg); opacity: 0.92; }
+.kp-bos-baslik { font-family: var(--font-display); font-variation-settings: 'SOFT' 100; font-size: 1.5rem; font-weight: 600; }
+.kp-bos-metin { max-width: 30em; color: var(--muted); line-height: 1.5; text-wrap: pretty; }
+.kp-bos .btn { margin-top: 8px; }
+.kp-bos .btn svg { width: 20px; height: 20px; }
+
+/* ---------- Kupon ver penceresi ---------- */
+html:has(dialog.kp-dlg[open]) { overflow: hidden; }
+dialog.kp-dlg {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 0;
+  background-color: var(--bg);
+  background-image: var(--grain);
+  color: var(--text);
+}
+dialog.kp-dlg::backdrop {
+  background: var(--overlay);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+}
+dialog.kp-dlg[open] { display: flex; flex-direction: column; animation: kp-dlg-gir 0.26s var(--ease); }
+@keyframes kp-dlg-gir { from { opacity: 0; transform: translateY(18px); } }
+@media (min-width: 720px) {
+  dialog.kp-dlg {
+    width: min(600px, calc(100% - 48px));
+    height: auto;
+    max-height: calc(100dvh - 48px);
+    margin: auto;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+  }
+}
+.kp-dlg-ust {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  align-items: center;
+  gap: 4px;
+  padding: calc(6px + var(--safe-top)) calc(8px + var(--safe-right)) 6px calc(8px + var(--safe-left));
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--line);
+}
+.kp-dlg-ust .icon-btn[hidden] { display: block !important; visibility: hidden; }
+.kp-dlg-baslik {
+  font-size: 1.0625rem;
+  font-weight: 800;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kp-dlg-baslik:focus { outline: none; }
+.kp-dlg-icerik {
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+  padding: 16px var(--gutter) 0;
+}
+.kp-dlg-alt { color: var(--muted); line-height: 1.45; }
+
+/* Seçim adımı */
+.kp-secim { display: flex; flex-direction: column; gap: 14px; padding-bottom: calc(24px + var(--safe-bottom)); }
+.kp-ozel {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 72px;
+  padding: 12px 16px;
+  border: 2px dashed color-mix(in srgb, var(--accent) 45%, var(--line));
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--accent-soft) 55%, var(--surface));
+  color: var(--text);
+  text-align: left;
+  touch-action: manipulation;
+  transition: transform 0.12s var(--ease), border-color 0.15s ease;
+}
+.kp-ozel:active { transform: scale(0.98); }
+.kp-ozel-ikon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.kp-ozel-ikon svg { width: 22px; height: 22px; }
+.kp-ozel-yazi { display: flex; flex-direction: column; gap: 2px; }
+.kp-ozel-yazi strong { font-size: 1.0625rem; }
+.kp-ozel-yazi span { color: var(--muted); font-size: 0.875rem; }
+.kp-secim-baslik { margin-top: 6px; font-size: 1rem; font-weight: 800; }
+.kp-sablonlar {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr));
+  gap: 8px;
+}
+.kp-sablon {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 100%;
+  min-height: 60px;
+  padding: 10px;
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.875rem;
+  font-weight: 750;
+  line-height: 1.2;
+  text-align: left;
+  touch-action: manipulation;
+  transition: transform 0.12s var(--ease), border-color 0.15s ease, background-color 0.15s ease;
+}
+.kp-sablon:active { transform: scale(0.97); }
+.kp-sablon-emoji { flex: none; font-size: 1.5rem; line-height: 1; }
+.kp-sablon-ad { min-width: 0; overflow-wrap: anywhere; }
+@media (hover: hover) {
+  .kp-sablon:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+  .kp-ozel:hover { border-color: var(--accent); }
+}
+
+/* Yazma adımı */
+.kp-form { display: flex; flex-direction: column; gap: 18px; }
+.kp-onizleme { margin: 4px 0 2px; }
+.kp-alan { display: flex; flex-direction: column; gap: 8px; }
+.kp-alan > label,
+.kp-etiket { font-weight: 800; font-size: 0.9375rem; }
+.kp-istege { color: var(--muted); font-weight: 650; }
+.kp-aciklama-girdi { min-height: 84px; }
+.kp-emojiler { display: flex; flex-wrap: wrap; gap: 6px; }
+.kp-emoji-sec {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1.5px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  font-size: 1.375rem;
+  line-height: 1;
+  transition: transform 0.12s var(--ease), border-color 0.15s ease, background-color 0.15s ease;
+}
+.kp-emoji-sec:active { transform: scale(0.92); }
+.kp-emoji-sec[aria-checked='true'] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+.kp-son-seg { display: flex; width: 100%; }
+.kp-son-seg > button { flex: 1 1 0; padding: 0 10px; }
+.kp-son-alan { display: flex; flex-direction: column; gap: 6px; }
+.kp-ipucu { color: var(--muted); font-size: 0.875rem; }
+.kp-hata {
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  background: var(--bad-soft);
+  color: var(--bad);
+  font-weight: 700;
+}
+.kp-dlg-alt-cubuk {
+  position: sticky;
+  bottom: 0;
+  z-index: 4;
+  display: flex;
+  gap: 10px;
+  margin: 4px calc(-1 * var(--gutter)) 0;
+  padding: 12px var(--gutter) calc(12px + var(--safe-bottom));
+  border-top: 1px solid var(--line);
+  background: color-mix(in srgb, var(--bg) 94%, transparent);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+.kp-dlg-alt-cubuk .btn { flex: 1 1 0; }
+.kp-dlg-alt-cubuk .btn.primary { flex-grow: 2; }
+
+@media (prefers-reduced-motion: reduce) {
+  .kp-damga.vur,
+  .kp-kupon.yeni,
+  dialog.kp-dlg[open] { animation: none; }
+  .kp-sablon,
+  .kp-ozel,
+  .kp-emoji-sec { transition: none; }
+}

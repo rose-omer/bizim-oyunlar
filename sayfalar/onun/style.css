@@ -1,0 +1,208 @@
+/* Onun Hakkında — sevgilinin kartı ve kendi kartını düzenleme. Renkler yalnız css/base.css değişkenlerinden. */
+
+.on {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 16px var(--gutter) 32px;
+}
+.on-yukleniyor { padding: 24px 0; text-align: center; }
+
+.on-seg { display: flex; width: 100%; }
+.on-seg > button {
+  flex: 1 1 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 0 6px;
+  font-size: 0.875rem;
+}
+.on-seg > button > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.on-rozet {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 0.75rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.on-govde { display: flex; flex-direction: column; gap: 22px; }
+
+/* ---------- Sevgilinin kartı ---------- */
+.on-kart-bas {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px;
+  border-radius: var(--radius-lg);
+  background: var(--hero);
+  color: var(--hero-ink);
+  box-shadow: var(--shadow);
+}
+.on-kart-bas .avatar { --av: 56px; box-shadow: 0 0 0 3px color-mix(in srgb, var(--hero-accent) 70%, transparent); }
+.on-kart-yazi { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.on-kart-baslik {
+  font-family: var(--font-display);
+  font-variation-settings: 'SOFT' 100;
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+.on-kart-ozet { color: var(--hero-muted); font-size: 0.875rem; font-weight: 650; line-height: 1.35; }
+
+.on-grup { display: flex; flex-direction: column; gap: 10px; }
+.on-grup-baslik {
+  padding: 0;
+  color: var(--muted);
+  font-size: 0.8125rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.on-satirlar {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+.on-satir {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 60px;
+  padding: 10px 14px;
+}
+.on-satir + .on-satir { border-top: 1px solid var(--line); }
+.on-emoji { flex: none; width: 28px; font-size: 1.375rem; line-height: 1; text-align: center; }
+.on-satir-yazi { display: flex; flex-direction: column; gap: 1px; flex: 1 1 auto; min-width: 0; }
+.on-etiket { color: var(--muted); font-size: 0.8125rem; font-weight: 700; line-height: 1.3; }
+.on-deger {
+  font-size: 1rem;
+  font-weight: 750;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+.on-bos-deger { color: var(--muted); font-size: 0.9375rem; font-style: italic; line-height: 1.35; opacity: 0.85; }
+.on-sor { flex: none; }
+.on-soruldu {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  color: var(--good);
+  font-size: 0.875rem;
+  font-weight: 750;
+}
+.on-soruldu:focus { outline: none; }
+.on-soruldu svg { width: 16px; height: 16px; }
+.on-onemli {
+  flex: none;
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 2px 9px;
+  border-radius: var(--radius-pill);
+  background: var(--bad-soft);
+  color: var(--bad);
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+.on-satir[data-alan='alerji'][data-dolu='1'] { background: color-mix(in srgb, var(--bad-soft) 45%, var(--surface)); }
+
+/* Ölçüler: 2×2 kutucuk */
+.on-satirlar.izgara {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--line);
+}
+.on-satirlar.izgara .on-satir {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-height: 0;
+  padding: 12px 14px 14px;
+  border-top: 0;
+  background: var(--surface);
+}
+.on-satirlar.izgara .on-emoji { width: auto; font-size: 1.25rem; }
+.on-satirlar.izgara .on-deger { font-family: var(--font-display); font-variation-settings: 'SOFT' 100; font-size: 1.5rem; font-weight: 600; line-height: 1.1; }
+.on-satirlar.izgara .on-sor { margin-top: 2px; }
+
+/* ---------- Boş (sevgili yok) ---------- */
+.on-bos {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 24px 8px;
+  text-align: center;
+}
+.on-bos-emoji { font-size: 2.75rem; line-height: 1; }
+.on-bos-baslik { font-family: var(--font-display); font-variation-settings: 'SOFT' 100; font-size: 1.5rem; font-weight: 600; }
+.on-bos-metin { max-width: 30em; color: var(--muted); line-height: 1.5; text-wrap: pretty; }
+.on-bos .btn { margin-top: 6px; }
+
+/* ---------- Benim kartım ---------- */
+.on-duzen-bas { display: flex; flex-direction: column; gap: 4px; }
+.on-bilgi { color: var(--muted); font-size: 0.9375rem; line-height: 1.45; }
+.on-kayit { min-height: 1.3em; color: var(--good); font-size: 0.875rem; font-weight: 750; }
+.on-duzen { display: flex; flex-direction: column; gap: 24px; }
+.on-duzen-grup {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.on-duzen-grup > legend { margin-bottom: 12px; }
+.on-duzen-grup.izgara {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: end; /* "merak ediyor" çipi etiketi uzatsa da girdiler aynı hizada */
+  gap: 14px 10px;
+}
+.on-alan { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.on-alan-etiket {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  font-size: 0.9375rem;
+  font-weight: 800;
+}
+.on-alan-etiket .on-emoji { width: auto; font-size: 1.125rem; }
+.on-merak {
+  padding: 2px 9px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+.on-alan[data-merak='1'] .on-girdi { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
+textarea.on-girdi { min-height: 76px; }
+
+@media (min-width: 560px) {
+  .on-satirlar.izgara,
+  .on-duzen-grup.izgara { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}

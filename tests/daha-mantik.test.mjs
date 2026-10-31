@@ -10,7 +10,7 @@ const idler = (gruplar) => gruplar.map((g) => [g.id, g.sayfalar.map((x) => x.id)
 test('DAHA_GRUPLARI: dört grup, talimattaki sıra', () => {
   assert.deepEqual(DAHA_GRUPLARI.map((g) => [g.baslik, g.uyeler]), [
     ['Konuşalım', ['mektup', 'gunsorusu', 'haftalik', 'gunfoto']],
-    ['Planlayalım', ['listeler', 'randevu', 'harcama', 'onun']],
+    ['Planlayalım', ['listeler', 'randevu', 'harcama', 'onun', 'cark']],
     ['Biz', ['ruh', 'sevgidili', 'yilimiz', 'rozetler', 'skor']],
     ['Birlikte', ['yavru', 'kupon', 'izle', 'oyunlar']],
   ]);

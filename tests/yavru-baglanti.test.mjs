@@ -1,0 +1,165 @@
+// Yavrumuz: kişilik, keyifsizlik ve günlük görevin mantik.js'e bağlanması. Saf mantık, DOM yok.
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import {
+  DK, SAAT, GUN, IHTIYACLAR, UYKU_ENERJI, ILAC,
+  oku, yeniYumurta, ihtiyacDegeri, ihtiyaclar, eylemYap, durumMetni, catlamaYamasi, acikmaZamani,
+  bildirimMetni, bakimSatiri,
+} from '../sayfalar/yavru/mantik.js';
+import { KISILIKLER, FAVORI_BONUS, kisilikSec } from '../sayfalar/yavru/kisilik.js';
+import { ILAC as SAGLIK_ILAC, keyifsizMi, dusukBaslangic, puanArtisi } from '../sayfalar/yavru/saglik.js';
+import { gorevOzeti, odulYamasi, GOREV_BONUS } from '../sayfalar/yavru/gorev.js';
+import { applyPatch } from '../js/core/veri.js';
+import { toDay } from '../js/core/gunler.js';
+
+const A = 'omer-test-id';
+const B = 'gul-test-id';
+const T0 = Date.UTC(2026, 9, 30, 9, 0, 0);
+const iso = (ms) => new Date(ms).toISOString();
+const kayit = (v, ms = T0) => ({ v, t: iso(ms) });
+
+function kucuk(ihtiyac = {}, ek = {}) {
+  const ih = {};
+  for (const ad of IHTIYACLAR) ih[ad] = kayit(ihtiyac[ad] ?? 50);
+  return oku({
+    asama: 'kucuk', ad: 'Pamuk', renk: 3, dogum: iso(T0 - 2 * GUN), catlama: iso(T0 - GUN),
+    ihtiyac: ih, uyku: null, puan: {}, isitma: {}, son: {}, ...ek,
+  });
+}
+const uygula = (y, yama) => oku(applyPatch(y, yama));
+
+test('oku: kişilik ve görev alanı; eski ve bozuk belge kişiliksiz, görev {}', () => {
+  assert.equal(kucuk({}, { kisilik: 'obur' }).kisilik, 'obur');
+  assert.equal(kucuk().kisilik, null, 'eski belge');
+  assert.equal(kucuk({}, { kisilik: 'uzayli' }).kisilik, null);
+  assert.equal(kucuk({}, { kisilik: 7 }).kisilik, null);
+  const g = { '2026-10-30': { id: 'ikisi-sev', at: iso(T0) } };
+  assert.deepEqual(kucuk({}, { gorev: g }).gorev, g);
+  assert.deepEqual(kucuk({}, { gorev: [1] }).gorev, {});
+  assert.deepEqual(kucuk({}, { gorev: 'x' }).gorev, {});
+  assert.deepEqual(oku(null).gorev, {});
+});
+
+test('ihtiyacDegeri: kişilik çarpanı düşüşe uygulanır; kişiliksiz 1', () => {
+  const k = kayit(80);
+  assert.equal(ihtiyacDegeri(k, 'tokluk', null, T0 + 4 * SAAT), 64);
+  assert.equal(ihtiyacDegeri(k, 'tokluk', null, T0 + 4 * SAAT, null), 64);
+  assert.equal(ihtiyacDegeri(k, 'tokluk', null, T0 + 4 * SAAT, 'obur'), 60, '4 × 1.25 × 4 sa');
+  assert.ok(Math.abs(ihtiyacDegeri(k, 'mutluluk', null, T0 + 10 * SAAT, 'neseli') - 56) < 1e-9, '3 × 0.8 × 10 sa');
+  assert.equal(ihtiyacDegeri(k, 'temizlik', null, T0 + 4 * SAAT, 'obur'), 72, 'çarpanı olmayan ihtiyaç');
+  assert.equal(ihtiyacDegeri(k, 'tokluk', null, T0 + 4 * SAAT, 'bozuk'), 64);
+  const y = kucuk({ tokluk: 80 }, { kisilik: 'obur' });
+  assert.equal(ihtiyaclar(y, T0 + 4 * SAAT).tokluk, 60, 'ihtiyaclar y.kisilik geçirir');
+});
+
+test('ihtiyacDegeri: uykudaki enerji artışı çarpandan etkilenmez, diğerleri yarı hız × çarpan', () => {
+  const uyku = { bas: iso(T0), bit: iso(T0 + 8 * SAAT) };
+  const k = kayit(20);
+  assert.equal(ihtiyacDegeri(k, 'enerji', uyku, T0 + 2 * SAAT, 'uykucu'), 20 + 2 * UYKU_ENERJI);
+  assert.equal(ihtiyacDegeri(k, 'enerji', uyku, T0 + 2 * SAAT), 20 + 2 * UYKU_ENERJI);
+  // Uyanınca çarpan: 8 sa uyku → 100 (kırpılır), sonra 3 × 1.25 / sa.
+  assert.equal(ihtiyacDegeri(k, 'enerji', uyku, T0 + 10 * SAAT, 'uykucu'), 100 - 2 * 3.75);
+  assert.equal(ihtiyacDegeri(kayit(80), 'tokluk', uyku, T0 + 4 * SAAT, 'obur'), 80 - 4 * 2.5);
+});
+
+test('acikmaZamani: tokluk çarpanı uyanık ve uyku diliminde', () => {
+  assert.equal(acikmaZamani(kucuk({ tokluk: 85 }, { kisilik: 'obur' }), T0), T0 + 12 * SAAT, '60 / 5');
+  assert.equal(acikmaZamani(kucuk({ tokluk: 85 }, { kisilik: 'titiz' }), T0), Math.round(T0 + (60 / 3.6) * SAAT));
+  assert.equal(acikmaZamani(kucuk({ tokluk: 85 }), T0), T0 + 15 * SAAT, 'kişiliksiz değişmez');
+  const uyku = { bas: iso(T0), bit: iso(T0 + 8 * SAAT) };
+  // Obur uykuda 2.5/sa: 8 sa → 20 düşer (45 → 25), tam uyanırken.
+  assert.equal(acikmaZamani(kucuk({ tokluk: 45 }, { kisilik: 'obur', uyku }), T0), T0 + 8 * SAAT);
+});
+
+test('eylemYap: favori yiyecekte ek mutluluk ve "En sevdiği!"; başka yiyecekte yok', () => {
+  const y = kucuk({ tokluk: 40, mutluluk: 50 }, { kisilik: 'obur' }); // favori: mama
+  const r = eylemYap(y, { eylem: 'mama', kim: A, simdi: T0 });
+  assert.equal(r.yama['ihtiyac.tokluk'].v, 70);
+  assert.equal(r.yama['ihtiyac.mutluluk'].v, 50 + FAVORI_BONUS);
+  assert.equal(r.mesaj, 'En sevdiği! 😍');
+  assert.equal(r.yama[`puan.${A}`], 1);
+  const m = eylemYap(y, { eylem: 'meyve', kim: A, simdi: T0 });
+  assert.equal(m.yama['ihtiyac.mutluluk'].v, 55, 'yalnız meyvenin kendi etkisi');
+  assert.equal(m.mesaj, null);
+  const eski = eylemYap(kucuk({ tokluk: 40, mutluluk: 50 }), { eylem: 'mama', kim: A, simdi: T0 });
+  assert.equal(eski.yama['ihtiyac.mutluluk'], undefined, 'kişiliksiz: favori yok');
+  assert.equal(eski.mesaj, null);
+  assert.equal(KISILIKLER.obur.favori, 'mama');
+});
+
+test('eylemYap: karnı tokken favori bonus puan getirmez (puan yalnız yiyeceğin etkisine bakar)', () => {
+  const y = kucuk({ tokluk: 100, mutluluk: 50 }, { kisilik: 'obur' });
+  const r = eylemYap(y, { eylem: 'mama', kim: A, simdi: T0 });
+  assert.equal(r.puan, false);
+  assert.equal(r.yama[`puan.${A}`], undefined);
+  assert.equal(r.mesaj, 'Karnı tok 😊');
+  assert.equal(r.yama['ihtiyac.mutluluk'].v, 55, 'mutluluk yine artar');
+});
+
+test('eylemYap: puanArtis (keyifsizken 0.5) puana eklenir; varsayılan 1', () => {
+  const y = kucuk({ tokluk: 40 }, { puan: { [A]: 3 } });
+  assert.equal(eylemYap(y, { eylem: 'mama', kim: A, simdi: T0 }).yama[`puan.${A}`], 4);
+  const r = eylemYap(y, { eylem: 'mama', kim: A, simdi: T0, puanArtis: 0.5 });
+  assert.equal(r.yama[`puan.${A}`], 3.5);
+  assert.equal(uygula(y, r.yama).puan[A], 3.5, 'oku kesirli puanı korur');
+  // Keyifsiz yavru (hepsi ≤ 5): puanArtisi 0.5.
+  const bitkin = kucuk({ tokluk: 3, mutluluk: 3, temizlik: 3, enerji: 3 });
+  assert.equal(puanArtisi(bitkin, T0), 0.5);
+  assert.equal(eylemYap(bitkin, { eylem: 'mama', kim: A, simdi: T0, puanArtis: puanArtisi(bitkin, T0) }).yama[`puan.${A}`], 0.5);
+});
+
+test('durumMetni: keyifsizken "Biraz keyifsiz 🤒" (uyurken uyuyor kalır); yumurtada etkisiz', () => {
+  const bitkin = kucuk({ tokluk: 3, mutluluk: 3, temizlik: 3, enerji: 3 });
+  assert.equal(durumMetni(bitkin, T0, keyifsizMi(bitkin, T0)), 'Biraz keyifsiz 🤒');
+  assert.equal(durumMetni(bitkin, T0), 'Karnı acıkmış', 'parametre yoksa eski davranış');
+  const uyku = { bas: iso(T0), bit: iso(T0 + 8 * SAAT) };
+  assert.equal(durumMetni(kucuk({}, { uyku }), T0 + SAAT, true), 'Mışıl mışıl uyuyor');
+  assert.equal(durumMetni(oku(yeniYumurta({ roomId: 'x', simdi: T0 })), T0, true), 'Isıtılmayı bekliyor 🥚');
+  // Keyifsiz ama uzun süredir bakılmamış: keyifsizlik önce gelir.
+  const eski = kucuk({ tokluk: 3, mutluluk: 3, temizlik: 3, enerji: 3 });
+  assert.equal(durumMetni(eski, T0 + 13 * SAAT, true), 'Biraz keyifsiz 🤒');
+});
+
+test('ILAC tek tanım; bakımSatiri ve bildirimMetni ilaç için', () => {
+  assert.equal(SAGLIK_ILAC, ILAC, 'saglik.js aynı nesneyi dışa verir');
+  assert.equal(bildirimMetni({ ad: 'Gül', eylem: 'ilac' }), 'Gül yavrunuza ilaç verdi 💊');
+  assert.equal(bildirimMetni({ ad: '', eylem: 'ilac' }), 'Sevgilin yavrunuza ilaç verdi 💊');
+  assert.equal(bakimSatiri({ eylem: 'ilac', ad: 'Gül' }), 'Gül ilaç verdi 💊');
+  assert.equal(bakimSatiri({ eylem: 'ilac', ad: 'Sen' }), 'Sen ilaç verdin 💊');
+});
+
+test('catlamaYamasi: kişilik bir kez yazılır, ısıtma geçmişinden ve oda kimliğinden', () => {
+  const yum = oku({ ...yeniYumurta({ roomId: 'testpaka23', simdi: T0 }), isitma: { [A]: [iso(T0)], [B]: [iso(T0 + 20 * DK)] } });
+  const yama = catlamaYamasi(yum, { roomId: 'testpaka23', simdi: T0 + GUN });
+  assert.equal(yama.kisilik, kisilikSec(yum, 'testpaka23'));
+  assert.ok(Object.hasOwn(KISILIKLER, yama.kisilik));
+  assert.equal(catlamaYamasi(yum, { roomId: 'testpaka23', simdi: T0 + 2 * GUN }).kisilik, yama.kisilik, 'aynı belge → aynı kişilik');
+  assert.equal(uygula(yum, yama).kisilik, yama.kisilik);
+});
+
+test('keyifsizMi ve dusukBaslangic kişilik çarpanını kullanır', () => {
+  // Obur: tokluk 5/sa. 30'dan 25 altına 1 saatte iner (kişiliksiz 1.25 sa).
+  const k = kayit(30);
+  assert.equal(dusukBaslangic(k, 'tokluk', null, T0 + 2 * SAAT, 'obur'), T0 + SAAT);
+  assert.equal(dusukBaslangic(k, 'tokluk', null, T0 + 2 * SAAT), T0 + 1.25 * SAAT);
+  const y = kucuk({ tokluk: 30, mutluluk: 100, temizlik: 30, enerji: 100 }, { kisilik: 'obur' });
+  // Tokluk 1 sa sonra, temizlik 2.5 sa sonra (titiz değil) altta; 24 sa daha bekle.
+  assert.equal(keyifsizMi(y, T0 + 2.5 * SAAT + 24 * SAAT - DK), false);
+  assert.equal(keyifsizMi(y, T0 + 2.5 * SAAT + 24 * SAAT), true);
+});
+
+test('görev: oku sonucu gorevOzeti ve odulYamasi ile çalışır; ödül iki kişiye', () => {
+  const gun = toDay(new Date(T0));
+  const y = kucuk({}, { puan: { [A]: 4, [B]: 2 } });
+  const oz = gorevOzeti(y, { roomId: 'testpaka23', gun, kayitlar: [], kisiler: [A, B] });
+  assert.ok(oz && oz.gorev && oz.ilerleme.gerek > 0);
+  assert.equal(oz.odullendi, false);
+  const yama = odulYamasi(y, gun, [A, B], { gorevId: oz.gorev.id, simdi: T0 });
+  assert.equal(yama[`puan.${A}`], 4 + GOREV_BONUS);
+  assert.equal(yama[`puan.${B}`], 2 + GOREV_BONUS);
+  const sonra = uygula(y, yama);
+  assert.equal(sonra.gorev[gun].id, oz.gorev.id);
+  assert.equal(odulYamasi(sonra, gun, [A, B], { simdi: T0 }), null, 'bir kez');
+  assert.equal(gorevOzeti(sonra, { roomId: 'testpaka23', gun, kayitlar: [], kisiler: [A, B] }).odullendi, true);
+  assert.equal(gorevOzeti(oku(yeniYumurta({ roomId: 'x', simdi: T0 })), { roomId: 'x', gun, kayitlar: [], kisiler: [A, B] }), null, 'yumurtada yok');
+});

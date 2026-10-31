@@ -9,6 +9,7 @@ import { h, icon } from '../../js/core/ui.js';
 import {
   TUR, BELGE_ID, oku, ruhHali, ozledi, durumMetni, renkSec, catlamaHazir, DK, dogumGunuMu, DOGUM_GUNU_METNI,
 } from './mantik.js';
+import { keyifsizMi } from './saglik.js';
 import { yavruSvg, CIZIM_CSS } from './cizim.js';
 
 const CSS = `
@@ -66,7 +67,8 @@ export async function mountYavruKart(el, { room } = {}) {
     const hazir = asama === 'yumurta' && !!y && catlamaHazir(y, simdi);
     // Doğum gününde durum satırı kutlar (o gün ihtiyaç rengi yok; ihtiyaçlar sayfada görünür).
     const dogumGunu = dogumGunuMu(y, simdi);
-    const metin = dogumGunu ? DOGUM_GUNU_METNI : durumMetni(y, simdi);
+    const keyifsiz = keyifsizMi(y, simdi);
+    const metin = dogumGunu ? DOGUM_GUNU_METNI : durumMetni(y, simdi, keyifsiz);
     const baslik = asama === 'yumurta' ? 'Yavrumuz' : y.ad || 'Yavrumuz';
     const k = [asama, renk, ruh, hazir, metin, baslik].join('|');
     if (k === anahtar) return;
@@ -76,7 +78,7 @@ export async function mountYavruKart(el, { room } = {}) {
     ad.textContent = baslik;
     durum.textContent = metin;
     kart.dataset.dogumgunu = String(dogumGunu);
-    kart.dataset.ihtiyac = String(!dogumGunu && asama !== 'yumurta' && (ozledi(y, simdi) || ['ac', 'kirli', 'uykulu', 'uzgun'].includes(ruh)));
+    kart.dataset.ihtiyac = String(!dogumGunu && asama !== 'yumurta' && (keyifsiz || ozledi(y, simdi) || ['ac', 'kirli', 'uykulu', 'uzgun'].includes(ruh)));
     kart.setAttribute('aria-label', `${baslik}: ${metin}`);
   };
   const off = col.on('change', ciz);

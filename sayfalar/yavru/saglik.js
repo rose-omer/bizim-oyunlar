@@ -3,8 +3,9 @@
 // ihtiyaç kayıtlarını yeniler; düşüklük süresi sıfırdan başlar.
 // Yazım mantik.js gibi alan düzeyinde yama: 'ihtiyac.<ad>', 'son.<clientId>', 'puan.<clientId>'.
 import {
-  DK, SAAT, IHTIYACLAR, DUSUS, UYKU_ENERJI, DUSUK, ihtiyacDegeri, ihtiyaclar, uyuyorMu,
+  SAAT, IHTIYACLAR, DUSUS, UYKU_ENERJI, DUSUK, ILAC, ihtiyacDegeri, ihtiyaclar, uyuyorMu,
 } from './mantik.js';
+import { kisilikCarpan } from './kisilik.js';
 
 export const KEYIFSIZ_SURE = 24 * SAAT; // bu kadar süredir DUSUK altındaki ihtiyaç sayılır
 export const KEYIFSIZ_SAYI = 2; // en az bu kadar ihtiyaç
@@ -12,8 +13,8 @@ export const BITKIN = 5; // hepsi bunun altında ya da eşitse hemen keyifsiz
 export const ILAC_TABAN = 50; // ilaçtan sonra her ihtiyaç en az bu
 export const KEYIFSIZ_PUAN = 0.5; // keyifsizken bir bakımın büyüme puanı
 
-/** EYLEMLER biçiminde. fiil: [üçüncü kişi, "Sen" için]. */
-export const ILAC = { ad: 'İlaç', emoji: '💊', bekleme: 60 * DK, fiil: ['ilaç verdi', 'ilaç verdin'], tok: null };
+/** EYLEMLER biçiminde. fiil: [üçüncü kişi, "Sen" için]. Tanım mantik.js'te (bakım satırı ve bildirim metni de kullanır). */
+export { ILAC };
 
 const zaman = (s) => {
   if (typeof s !== 'string' || !s) return NaN;
@@ -26,15 +27,15 @@ const yuvarla = (x) => Math.round(x * 10) / 10;
 /**
  * İhtiyacın DUSUK altına indiği an (ms): o andan simdi'ye kadar kesintisiz altında. Şimdi altında değilse null.
  * Dilimler mantik.js ihtiyacDegeri ile aynı (uyanık → uyku → uyanık). Uykuda enerji artar, diğerleri yarı hızla düşer.
- * Kayıt zaten düşükse kayıt anı döner (öncesi bilinmez). Zamanı geçersiz kayıt: null.
+ * Kayıt zaten düşükse kayıt anı döner (öncesi bilinmez). Zamanı geçersiz kayıt: null. kisilik: düşüş çarpanı.
  */
-export function dusukBaslangic(kayit, ad, uyku, simdi) {
+export function dusukBaslangic(kayit, ad, uyku, simdi, kisilik = null) {
   const t = zaman(kayit?.t);
   if (!Number.isFinite(t)) return null;
-  const deger = (an) => ihtiyacDegeri(kayit, ad, uyku, an);
+  const deger = (an) => ihtiyacDegeri(kayit, ad, uyku, an, kisilik);
   if (deger(simdi) >= DUSUK) return null;
   if (simdi <= t) return t;
-  const hiz = DUSUS[ad] ?? 0;
+  const hiz = (DUSUS[ad] ?? 0) * kisilikCarpan(kisilik, ad);
   const uykuHiz = ad === 'enerji' ? -UYKU_ENERJI : hiz / 2;
   let dilimler = [[t, simdi, hiz]];
   const bas = zaman(uyku?.bas);
@@ -60,7 +61,7 @@ export function keyifsizMi(y, simdi) {
   const d = ihtiyaclar(y, simdi);
   if (IHTIYACLAR.every((ad) => d[ad] <= BITKIN)) return true;
   const uzun = IHTIYACLAR.filter((ad) => {
-    const bas = dusukBaslangic(y.ihtiyac?.[ad], ad, y.uyku, simdi);
+    const bas = dusukBaslangic(y.ihtiyac?.[ad], ad, y.uyku, simdi, y.kisilik);
     return bas != null && simdi - bas >= KEYIFSIZ_SURE;
   });
   return uzun.length >= KEYIFSIZ_SAYI;
@@ -94,7 +95,7 @@ export function ilacEylemi(y, { kim, simdi }) {
   return { yama, puan: true, mesaj: null, kayit: { eylem: 'ilac', kim, at } };
 }
 
-/** Bir bakımın büyüme puanı: keyifsizken yarım. (Bağlama: eylemYap puan yamasında +1 yerine.) */
+/** Bir bakımın büyüme puanı: keyifsizken yarım. (app.js eylemYap'a puanArtis olarak verir.) */
 export function puanArtisi(y, simdi) {
   return keyifsizMi(y, simdi) ? KEYIFSIZ_PUAN : 1;
 }

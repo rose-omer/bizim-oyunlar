@@ -3,7 +3,7 @@
 // İlerleme bakım günlüğünden ('yavrubakim' { eylem, kim, at }) yalnız o yerel günün kayıtlarıyla hesaplanır.
 // Ödül: iki kişiye GOREV_BONUS puan + gün işareti. Belgede alan: gorev: { [gün]: { id, at } } (son GOREV_TUT gün).
 // Yama anahtarları en çok iki düzey: 'puan.<clientId>', 'gorev.<YYYY-MM-DD>'.
-// Not: mantik.js oku() 'gorev' alanını taşımaz; ödül kontrolü ham belge verisiyle (doc.data) yapılır.
+// veri: ham belge verisi (doc.data) ya da mantik.js oku() sonucu (oku 'gorev' alanını taşır).
 import { toDay, parseDay } from '../../js/core/gunler.js';
 import { gunNo, soruSecici } from '../gunun-sorusu/mantik.js';
 

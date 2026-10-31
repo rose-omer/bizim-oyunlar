@@ -3,12 +3,15 @@
 //   { asama: 'yumurta'|'kucuk'|'buyuk', ad, renk (1–6), dogum (ISO), catlama?, buyume?,
 //     ihtiyac: { tokluk|mutluluk|temizlik|enerji: { v, t } }, uyku: { bas, bit } | null,
 //     puan: { [clientId]: n }, isitma: { [clientId]: [ISO] (son 10) },
-//     son: { [clientId]: { [eylem]: ISO, sevGun?, sevPuan? } } }
+//     son: { [clientId]: { [eylem]: ISO, sevGun?, sevPuan? } },
+//     kisilik?: kisilik.js adı (çatlarken bir kez), gorev?: { [gün]: { id, at } } (gorev.js) }
 // Değer saklanmaz, hesaplanır: şimdiki = v − düşüş × geçen saat (uyku aralığı ayrı), 0–100 kırpılır.
 // Yazım yalnız alan düzeyinde yama (veri.js patch; anahtar en çok iki düzey: 'ihtiyac.tokluk', 'son.<clientId>').
 // Bakım günlüğü: tür 'yavrubakim', id uuid, { eylem, kim, at, deger? }.
+// Keyifsizlik saglik.js'te; o bu modülü içe alır, döngü olmasın diye burada import yok (gereken bilgi parametreyle gelir).
 import { toDay, addDays, parseDay, nextOccurrence } from '../../js/core/gunler.js';
 import { hashStr } from '../gunun-sorusu/mantik.js';
+import { kisilikSec, kisilikOku, kisilikCarpan, favoriBonus } from './kisilik.js';
 
 export const TUR = 'yavru';
 export const BAKIM_TUR = 'yavrubakim';
@@ -51,11 +54,13 @@ export const EYLEMLER = {
   uyandir: { ad: 'Uyandır', emoji: '☀️', fiil: ['uyandırdı', 'uyandırdın'], tok: null },
 };
 const ISIT = { emoji: '🥚', fiil: ['ısıttı', 'ısıttın'] };
+/** İlaç (saglik.js ilacEylemi). Metinler burada kullanıldığı için tanım burada; saglik.js yeniden dışa verir. */
+export const ILAC = { ad: 'İlaç', emoji: '💊', bekleme: 60 * DK, fiil: ['ilaç verdi', 'ilaç verdin'], tok: null };
 
 const IHTIYAC_RUH = { tokluk: 'ac', mutluluk: 'uzgun', temizlik: 'kirli', enerji: 'uykulu' };
 const DURUM = {
   uyuyor: 'Mışıl mışıl uyuyor', ac: 'Karnı acıkmış', kirli: 'Banyo vakti gelmiş', uykulu: 'Uykusu gelmiş',
-  uzgun: 'Biraz ilgi istiyor', mutlu: 'Keyfi yerinde', normal: 'İyi görünüyor',
+  uzgun: 'Biraz ilgi istiyor', mutlu: 'Keyfi yerinde', normal: 'İyi görünüyor', keyifsiz: 'Biraz keyifsiz 🤒',
 };
 
 // ---------- Küçük yardımcılar ----------
@@ -109,6 +114,8 @@ export function oku(data) {
     ihtiyac,
     uyku: gecerli(uyku.bas) && gecerli(uyku.bit) ? { bas: uyku.bas, bit: uyku.bit } : null,
     puan, isitma, son,
+    kisilik: kisilikOku(d.kisilik),
+    gorev: nesne(d.gorev),
   };
 }
 
@@ -117,13 +124,14 @@ export function oku(data) {
 /**
  * Şimdiki değer. kayit = { v, t }. Uyku aralığında enerji +12/sa, diğerleri yarı hız.
  * Dilimler sırayla (uyanık → uyku → uyanık) işlenir; her dilimden sonra 0–100 kırpılır.
+ * kisilik: düşüş hızı × kisilikCarpan (kişiliksiz 1). Uykudaki enerji artışı çarpandan etkilenmez.
  */
-export function ihtiyacDegeri(kayit, ad, uyku, simdi) {
+export function ihtiyacDegeri(kayit, ad, uyku, simdi, kisilik = null) {
   const v = Number(kayit?.v);
   if (!Number.isFinite(v)) return 0;
   const t = zaman(kayit?.t);
   if (!Number.isFinite(t) || simdi <= t) return kirp(v);
-  const hiz = DUSUS[ad] ?? 0;
+  const hiz = (DUSUS[ad] ?? 0) * kisilikCarpan(kisilik, ad);
   const uykuHiz = ad === 'enerji' ? -UYKU_ENERJI : hiz / 2;
   const bas = zaman(uyku?.bas);
   const bit = zaman(uyku?.bit);
@@ -144,7 +152,7 @@ export function ihtiyacDegeri(kayit, ad, uyku, simdi) {
 /** Dört ihtiyacın şimdiki değerleri (yuvarlanmamış). */
 export function ihtiyaclar(y, simdi) {
   const out = {};
-  for (const ad of IHTIYACLAR) out[ad] = ihtiyacDegeri(y?.ihtiyac?.[ad], ad, y?.uyku, simdi);
+  for (const ad of IHTIYACLAR) out[ad] = ihtiyacDegeri(y?.ihtiyac?.[ad], ad, y?.uyku, simdi, y?.kisilik);
   return out;
 }
 
@@ -181,10 +189,11 @@ export function ozledi(y, simdi) {
   return Number.isFinite(son) && simdi - son >= OZLEDI_SURE;
 }
 
-/** Kısa durum cümlesi (sahne altı ve ana sayfa kartı). y null: belge yok. */
-export function durumMetni(y, simdi) {
+/** Kısa durum cümlesi (sahne altı ve ana sayfa kartı). y null: belge yok. keyifsiz: saglik.js keyifsizMi (uyurken değil). */
+export function durumMetni(y, simdi, keyifsiz = false) {
   if (!y) return 'Bir yumurtanız var 🥚 Isıtalım mı?';
   if (y.asama === 'yumurta') return catlamaHazir(y, simdi) ? 'Çatlamaya hazır! 🐣' : 'Isıtılmayı bekliyor 🥚';
+  if (keyifsiz && !uyuyorMu(y.uyku, simdi)) return DURUM.keyifsiz;
   if (ozledi(y, simdi)) return 'Sizi özledi 🥺';
   return DURUM[ruhHali(y, simdi)] || DURUM.normal;
 }
@@ -204,8 +213,10 @@ export function kalanBekleme(y, kim, eylem, simdi) {
  *                | { yama, puan: bool, mesaj: string|null, kayit: { eylem, kim, at } }
  * Bekleme kişi başınadır. Değer 100'deyse eylem yapılır ama puan vermez. Sev günde en çok 5 puan.
  * Uyut puanı kişi başına 8 saatte bir (uyut/uyandır döngüsüyle puan toplanmasın).
+ * puanArtis: bir bakımın büyüme puanı (saglik.js puanArtisi: keyifsizken 0.5). Favori yiyecek ek mutluluk
+ * verir (kisilik.js favoriBonus); puan yine yalnız yiyeceğin kendi etkisine bakar.
  */
-export function eylemYap(y, { eylem, kim, simdi }) {
+export function eylemYap(y, { eylem, kim, simdi, puanArtis = 1 }) {
   const tanim = EYLEMLER[eylem];
   if (!tanim) return { hata: 'bilinmiyor' };
   if (y.asama === 'yumurta') return { hata: 'yumurta' };
@@ -220,6 +231,7 @@ export function eylemYap(y, { eylem, kim, simdi }) {
   const benimSon = { ...(y.son?.[kim] || {}) };
   let yama = {};
   let etkili;
+  let favori = 0;
   if (eylem === 'uyut') {
     yama = { ...sabitle(y, simdi), uyku: { bas: at, bit: iso(simdi + UYKU_SURE) } };
     const onceki = zaman(benimSon.uyut);
@@ -229,10 +241,11 @@ export function eylemYap(y, { eylem, kim, simdi }) {
     etkili = false;
   } else {
     etkili = false;
-    for (const [ad, artis] of Object.entries(tanim.etki)) {
-      if (artis > 0 && Math.round(d[ad]) < 100) etkili = true;
-      yama[`ihtiyac.${ad}`] = { v: yuvarla(kirp(d[ad] + artis)), t: at };
-    }
+    const etki = { ...tanim.etki };
+    for (const [ad, artis] of Object.entries(etki)) if (artis > 0 && Math.round(d[ad]) < 100) etkili = true;
+    favori = favoriBonus(y.kisilik, eylem);
+    if (favori) etki.mutluluk = (etki.mutluluk || 0) + favori;
+    for (const [ad, artis] of Object.entries(etki)) yama[`ihtiyac.${ad}`] = { v: yuvarla(kirp(d[ad] + artis)), t: at };
   }
   benimSon[eylem] = at;
   if (eylem === 'sev' && etkili) {
@@ -245,8 +258,9 @@ export function eylemYap(y, { eylem, kim, simdi }) {
     }
   }
   yama[`son.${kim}`] = benimSon;
-  if (etkili) yama[`puan.${kim}`] = (y.puan?.[kim] || 0) + 1;
-  return { yama, puan: etkili, mesaj: etkili ? null : tanim.tok, kayit: { eylem, kim, at } };
+  if (etkili) yama[`puan.${kim}`] = (y.puan?.[kim] || 0) + puanArtis;
+  const mesaj = etkili ? (favori ? 'En sevdiği! 😍' : null) : tanim.tok;
+  return { yama, puan: etkili, mesaj, kayit: { eylem, kim, at } };
 }
 
 // ---------- Yumurta ----------
@@ -306,12 +320,12 @@ export function yumurtaDurumu(y, { benId, simdi }) {
   };
 }
 
-/** Çatlama yaması: küçük aşama, başlangıç ihtiyaçları, renk (oda kimliğinden). */
+/** Çatlama yaması: küçük aşama, başlangıç ihtiyaçları, renk (oda kimliğinden), kişilik (ısıtma geçmişinden; bir kez). */
 export function catlamaYamasi(y, { roomId, simdi }) {
   const at = iso(simdi);
   const ihtiyac = {};
   for (const ad of IHTIYACLAR) ihtiyac[ad] = { v: BASLANGIC_IHTIYAC[ad], t: at };
-  return { asama: 'kucuk', catlama: at, renk: renkSec(roomId), ihtiyac, uyku: null };
+  return { asama: 'kucuk', catlama: at, renk: renkSec(roomId), ihtiyac, uyku: null, kisilik: kisilikSec(y, roomId) };
 }
 
 /**
@@ -397,21 +411,22 @@ export function saatKalanMetni(ms) {
 
 // ---------- Hatırlatıcı ve bildirim ----------
 
-/** Tokluğun 25'e ineceği an (ms). Zaten 25 altındaysa ya da yumurtaysa null. Uyku yarı hız. */
+/** Tokluğun 25'e ineceği an (ms). Zaten 25 altındaysa ya da yumurtaysa null. Uyku yarı hız. Kişilik çarpanı dahil. */
 export function acikmaZamani(y, simdi) {
   if (!y || y.asama === 'yumurta') return null;
-  let x = ihtiyacDegeri(y.ihtiyac?.tokluk, 'tokluk', y.uyku, simdi);
+  let x = ihtiyacDegeri(y.ihtiyac?.tokluk, 'tokluk', y.uyku, simdi, y.kisilik);
   if (x < DUSUK) return null;
+  const tokHiz = DUSUS.tokluk * kisilikCarpan(y.kisilik, 'tokluk');
   let t = simdi;
   if (uyuyorMu(y.uyku, simdi)) {
     const bit = zaman(y.uyku.bit);
-    const hiz = DUSUS.tokluk / 2;
+    const hiz = tokHiz / 2;
     const gerek = ((x - DUSUK) / hiz) * SAAT;
     if (t + gerek <= bit) return Math.round(t + gerek);
     x -= (hiz * (bit - t)) / SAAT;
     t = bit;
   }
-  return Math.round(t + ((x - DUSUK) / DUSUS.tokluk) * SAAT);
+  return Math.round(t + ((x - DUSUK) / tokHiz) * SAAT);
 }
 
 /** Yerel hatırlatıcılar (mobil.js yerelHatirlaticilar, grup 'yavru'). */
@@ -444,6 +459,7 @@ export function bildirimMetni({ ad, eylem, deger = '', yavruAd = '' }) {
     case 'uyut': return `${kim} yavrunuzu uyuttu 🌙`;
     case 'uyandir': return `${kim} yavrunuzu uyandırdı ☀️`;
     case 'isit': return `${kim} yumurtanızı ısıttı 🥚`;
+    case 'ilac': return `${kim} yavrunuza ${ILAC.fiil[0]} ${ILAC.emoji}`;
     case 'catlama': return 'Yumurtanız çatladı! Yavrunuz dünyaya geldi 🐣';
     case 'buyume': return `${String(yavruAd || '').trim() || 'Yavrunuz'} büyüdü ✨`;
     case 'ad': return `${kim} yavrunuza “${deger}” adını verdi 💛`;
@@ -457,7 +473,7 @@ export function bakimSatiri({ eylem, ad, deger = '' }) {
   if (eylem === 'catlama') return 'Yumurta çatladı 🐣';
   if (eylem === 'buyume') return 'Yavrumuz büyüdü ✨';
   if (eylem === 'ad') return `${ad} adını “${deger}” ${sen ? 'koydun' : 'koydu'}`;
-  const e = eylem === 'isit' ? ISIT : EYLEMLER[eylem];
+  const e = eylem === 'isit' ? ISIT : eylem === 'ilac' ? ILAC : EYLEMLER[eylem];
   if (!e) return '';
   return `${ad} ${e.fiil[sen ? 1 : 0]} ${e.emoji}`;
 }

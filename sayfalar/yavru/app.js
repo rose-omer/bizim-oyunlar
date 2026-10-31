@@ -1,6 +1,7 @@
 // Yavrumuz: çiftin birlikte baktığı sanal yavru (yumurta → küçük → büyük).
 // Saf mantık mantik.js'te, SVG çizimi cizim.js'te (ana sayfa kartı da kullanır).
-// Veri: 'yavru' türünde tek belge 'bizim' (alan düzeyinde yama), bakım günlüğü 'yavrubakim' (son 10).
+// Kişilik kisilik.js, keyifsizlik ve ilaç saglik.js, günlük ortak görev gorev.js (hepsi saf).
+// Veri: 'yavru' türünde tek belge 'bizim' (alan düzeyinde yama), bakım günlüğü 'yavrubakim' (son 50: günlük görev sayımı; liste son 10).
 import { bootPage } from '../../js/core/sayfa.js';
 import { openCollection } from '../../js/core/veri.js';
 import { openProfil } from '../../js/core/profil.js';
@@ -11,6 +12,10 @@ import { h, toast, knownPartner, formatDay, celebrate, ICONS } from '../../js/co
 import { sfx } from '../../js/core/sound.js';
 import { titret, yerelHatirlaticilar } from '../../js/core/mobil.js';
 import * as M from './mantik.js';
+import * as S from './saglik.js';
+import * as G from './gorev.js';
+import { KISILIKLER, favoriBonus } from './kisilik.js';
+import { toDay } from '../../js/core/gunler.js';
 import { yavruSvg, catlamaSvg, CIZIM_CSS } from './cizim.js';
 
 const { room, roomId, me } = await bootPage({ ns: 'yavru', title: 'Yavrumuz', tab: 'daha' });
@@ -20,7 +25,7 @@ app.replaceChildren(h('div', { class: 'yv' }, h('p', { class: 'yv-yukleniyor mut
 
 const [col, bakim, profil] = await Promise.all([
   openCollection(room, M.TUR),
-  openCollection(room, M.BAKIM_TUR, { recent: 10 }),
+  openCollection(room, M.BAKIM_TUR, { recent: 50 }),
   openProfil(room).catch((e) => { console.warn('[yavru] profil açılamadı', e); return null; }),
 ]);
 
@@ -28,6 +33,9 @@ const azHareket = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 const bekle = (ms) => new Promise((r) => setTimeout(r, ms));
 const YEMEK = ['mama', 'meyve', 'tatli'];
 const BAKIM = ['oyna', 'yika', 'sev', 'uyut'];
+const tanim = (eylem) => (eylem === 'ilac' ? S.ILAC : M.EYLEMLER[eylem]);
+/** Puan: keyifsizken yarım puan olabilir ("12,5"). */
+const puanMetni = (n) => n.toLocaleString('tr-TR', { maximumFractionDigits: 1 });
 const ASAMA_ADI = { yumurta: 'Yumurta', kucuk: 'Küçük', buyuk: 'Büyük' };
 const IHTIYAC_ADI = { tokluk: 'Tokluk', mutluluk: 'Mutluluk', temizlik: 'Temizlik', enerji: 'Enerji' };
 const IKON = 'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"';
@@ -51,6 +59,12 @@ function kisiAdi(id) {
   const p = room.partner?.();
   const k = knownPartner(roomId);
   return profil?.kisiler?.get(id)?.data?.ad || (p?.clientId === id && p.name) || (k?.clientId === id && k.name) || partnerAdi();
+}
+/** Sevgilinin clientId'si: çevrimiçi, profil, bilinen; yoksa belgedeki ısıtma ve puan kayıtlarından. Bilinmiyorsa null. */
+function partnerId() {
+  const id = room.partner?.()?.clientId || profil?.partner()?.clientId || knownPartner(roomId)?.clientId;
+  if (id && id !== me.clientId) return id;
+  return [...Object.keys(y?.isitma || {}), ...Object.keys(y?.puan || {})].find((k) => k !== me.clientId) || null;
 }
 
 // ---------- Durum ----------
@@ -120,11 +134,14 @@ const ihtiyacEl = h('div', { class: 'yv-ihtiyaclar', role: 'group', 'aria-label'
 function eylemDugmesi(eylem) {
   const emoji = h('span', { class: 'yv-eylem-emoji', 'aria-hidden': 'true' });
   const ad = h('span', { class: 'yv-eylem-ad' });
-  const btn = h('button', { type: 'button', class: 'yv-eylem', dataset: { eylem }, onclick: () => eylemTikla(btn.dataset.eylem) }, emoji, ad);
-  return { btn, emoji, ad };
+  const fav = h('span', { class: 'yv-eylem-favori', 'aria-hidden': 'true', hidden: true }, '💛');
+  const btn = h('button', { type: 'button', class: 'yv-eylem', dataset: { eylem }, onclick: () => eylemTikla(btn.dataset.eylem) }, emoji, ad, fav);
+  return { btn, emoji, ad, fav };
 }
 const dugmeler = [...YEMEK, ...BAKIM].map(eylemDugmesi);
-const eylemlerEl = h('div', { class: 'yv-eylemler' },
+const ilacDugme = eylemDugmesi('ilac'); // yalnız keyifsizken görünür
+const ilacGrup = h('div', { class: 'yv-eylem-grup ilac', role: 'group', 'aria-label': 'Sağlık', hidden: true }, ilacDugme.btn);
+const eylemlerEl = h('div', { class: 'yv-eylemler' }, ilacGrup,
   h('div', { class: 'yv-eylem-grup yemek', role: 'group', 'aria-label': 'Besle' }, dugmeler.slice(0, 3).map((d) => d.btn)),
   h('div', { class: 'yv-eylem-grup', role: 'group', 'aria-label': 'Bakım' }, dugmeler.slice(3).map((d) => d.btn)));
 
@@ -140,7 +157,19 @@ const bakimBos = h('p', { class: 'yv-bos' });
 const bakimSec = h('section', { class: 'yv-son', 'aria-labelledby': 'yv-son-baslik' },
   h('h2', { id: 'yv-son-baslik' }, 'Son bakımlar'), bakimListe, bakimBos);
 
-const kok = h('div', { class: 'yv' }, sahne, bilgi, ihtiyacEl, panel, bakimSec);
+const gorevEmoji = h('span', { class: 'yv-gorev-emoji', 'aria-hidden': 'true' });
+const gorevMetin = h('p', { class: 'yv-gorev-metin' });
+const gorevSayi = h('span', { class: 'yv-gorev-sayi' });
+const gorevDolu = h('span', { class: 'yv-cubuk-dolu' });
+const gorevCubuk = h('span', { class: 'yv-cubuk', role: 'meter', 'aria-valuemin': '0', 'aria-labelledby': 'yv-gorev-baslik' }, gorevDolu);
+const gorevDurum = h('p', { class: 'yv-gorev-durum' });
+const gorevSec = h('section', { class: 'yv-gorev', 'aria-labelledby': 'yv-gorev-baslik', hidden: true },
+  h('div', { class: 'yv-gorev-bas' }, gorevEmoji,
+    h('div', { class: 'yv-gorev-govde' }, h('h2', { class: 'yv-gorev-baslik', id: 'yv-gorev-baslik' }, 'Günün görevi'), gorevMetin),
+    gorevSayi),
+  gorevCubuk, gorevDurum);
+
+const kok = h('div', { class: 'yv' }, sahne, bilgi, ihtiyacEl, gorevSec, panel, bakimSec);
 app.replaceChildren(kok);
 
 // ---------- Çizim ----------
@@ -159,13 +188,14 @@ function cizSahne() {
   const uyuyor = ruh === 'uyuyor';
   sahne.toggleAttribute('data-gece', uyuyor);
   dokunBtn.setAttribute('aria-label', asama === 'yumurta' ? 'Yumurtayı ısıt' : `${y?.ad || 'Yavrunuzu'} sev`);
-  let soz = M.durumMetni(y, simdi);
+  const keyifsiz = S.keyifsizMi(y, simdi);
+  let soz = M.durumMetni(y, simdi, keyifsiz);
   if (uyuyor) {
     const kalan = M.kalanMetni(Date.parse(y.uyku.bit) - simdi);
     if (kalan) soz += ` · ${kalan}`;
   }
   if (sozEl.textContent !== soz) sozEl.textContent = soz;
-  sozEl.dataset.ton = asama !== 'yumurta' && (M.ozledi(y, simdi) || ['ac', 'kirli', 'uykulu', 'uzgun'].includes(ruh)) ? 'ihtiyac' : '';
+  sozEl.dataset.ton = asama !== 'yumurta' && (keyifsiz || M.ozledi(y, simdi) || ['ac', 'kirli', 'uykulu', 'uzgun'].includes(ruh)) ? 'ihtiyac' : '';
 }
 
 function cizBilgi() {
@@ -186,11 +216,15 @@ function cizBilgi() {
       adForm.scrollIntoView({ block: 'nearest', behavior: azHareket() ? 'auto' : 'smooth' });
     }
   }
+  const kisilik = !yumurta && Object.hasOwn(KISILIKLER, y.kisilik ?? '') ? KISILIKLER[y.kisilik] : null;
   metaEl.replaceChildren(
     M.dogumGunuMu(y, simdi)
       ? h('span', { style: { color: 'var(--accent-strong)' } }, M.DOGUM_GUNU_METNI)
       : h('span', {}, y ? M.yasMetni(y, simdi) : 'Yeni yumurta'),
-    h('span', { class: 'chip yv-asama' }, ASAMA_ADI[y?.asama || 'yumurta']));
+    h('span', { class: 'chip yv-asama' }, ASAMA_ADI[y?.asama || 'yumurta']),
+    ...(kisilik ? [h('span', { class: 'chip yv-kisilik', title: kisilik.aciklama },
+      h('span', { 'aria-hidden': 'true' }, kisilik.emoji), kisilik.ad,
+      h('span', { class: 'sr-only' }, `: ${kisilik.aciklama}`))] : []));
 
   let buyume = '';
   if (y?.asama === 'kucuk') {
@@ -198,13 +232,13 @@ function cizBilgi() {
     const benP = y.puan[me.clientId] || 0;
     const oP = b.kisiler.find((k) => k.id !== me.clientId)?.puan || 0;
     if (b.kalanGun > 0 || b.toplam < b.gerekToplam) {
-      buyume = `Büyümesine ${b.kalanGun > 0 ? `${b.kalanGun} gün · ` : ''}${Math.min(b.toplam, b.gerekToplam)}/${b.gerekToplam} bakım`;
+      buyume = `Büyümesine ${b.kalanGun > 0 ? `${b.kalanGun} gün · ` : ''}${puanMetni(Math.min(b.toplam, b.gerekToplam))}/${b.gerekToplam} bakım`;
     } else {
       buyume = `İkinizin de en az ${b.gerekKisi} bakımı olunca büyür`;
     }
-    buyume += ` (sen ${benP}, ${partnerAdi()} ${oP})`;
+    buyume += ` (sen ${puanMetni(benP)}, ${partnerAdi()} ${puanMetni(oP)})`;
   } else if (y?.asama === 'buyuk') {
-    buyume = `Birlikte ${M.buyumeDurumu(y, simdi).toplam} bakım`;
+    buyume = `Birlikte ${puanMetni(M.buyumeDurumu(y, simdi).toplam)} bakım`;
   }
   buyumeEl.textContent = buyume;
   buyumeEl.hidden = !buyume;
@@ -252,28 +286,33 @@ function cizPanel() {
     return;
   }
   const uyuyor = M.uyuyorMu(y.uyku, simdi);
-  for (const d of dugmeler) {
+  ilacGrup.hidden = !S.keyifsizMi(y, simdi);
+  for (const d of [...dugmeler, ilacDugme]) {
     const eylem = d.btn.dataset.eylem === 'uyut' || d.btn.dataset.eylem === 'uyandir' ? (uyuyor ? 'uyandir' : 'uyut') : d.btn.dataset.eylem;
-    const e = M.EYLEMLER[eylem];
+    const e = tanim(eylem);
     d.btn.dataset.eylem = eylem;
     d.emoji.textContent = e.emoji;
-    const kalan = M.kalanBekleme(y, me.clientId, eylem, simdi);
+    const kalan = eylem === 'ilac' ? S.ilacKalan(y, me.clientId, simdi) : M.kalanBekleme(y, me.clientId, eylem, simdi);
     const kapali = uyuyor && eylem !== 'sev' && eylem !== 'uyandir';
+    const favori = favoriBonus(y.kisilik, eylem) > 0;
+    const ad = favori ? `${e.ad} (en sevdiği)` : e.ad;
+    d.fav.hidden = !favori;
     if (kapali) {
       d.btn.dataset.durum = 'uyku';
       d.ad.textContent = e.ad;
       d.btn.setAttribute('aria-disabled', 'true');
-      d.btn.setAttribute('aria-label', `${e.ad} (uyuyor)`);
+      d.btn.setAttribute('aria-label', `${ad} (uyuyor)`);
     } else if (kalan > 0) {
       d.btn.dataset.durum = 'bekle';
       d.ad.textContent = M.kalanMetni(kalan);
       d.btn.setAttribute('aria-disabled', 'true');
-      d.btn.setAttribute('aria-label', `${e.ad}: ${M.kalanMetni(kalan)} sonra`);
+      d.btn.setAttribute('aria-label', `${ad}: ${M.kalanMetni(kalan)} sonra`);
     } else {
       delete d.btn.dataset.durum;
       d.ad.textContent = e.ad;
       d.btn.removeAttribute('aria-disabled');
-      d.btn.removeAttribute('aria-label');
+      if (favori) d.btn.setAttribute('aria-label', ad);
+      else d.btn.removeAttribute('aria-label');
     }
   }
 }
@@ -297,6 +336,60 @@ function cizBakimlar() {
     : 'Henüz bakım yok. İlk ilgiyi siz gösterin 💛';
 }
 
+// ---------- Günün görevi: iki kişinin bugünkü bakımları; tamamlanınca ikisine +2 puan (bir kez) ----------
+let gorevOdulGun = null; // bu cihazın ödül yazdığı gün (yazım sürerken yinelenmesin)
+
+function cizGorev() {
+  const pid = partnerId();
+  const gun = toDay(new Date(simdi));
+  const oz = y ? G.gorevOzeti(y, { roomId, gun, kayitlar: bakim.all(), kisiler: [me.clientId, pid].filter(Boolean) }) : null;
+  gorevSec.hidden = !oz;
+  if (!oz) return;
+  const { gorev, tamam, odullendi, kisiBasi, ilerleme: { n, gerek } } = oz;
+  const bitti = tamam || odullendi;
+  gorevEmoji.textContent = gorev.emoji;
+  gorevMetin.textContent = gorev.metin;
+  gorevSec.dataset.tamam = String(bitti);
+  const goster = bitti ? gerek : n;
+  gorevSayi.textContent = `${goster}/${gerek}`;
+  gorevDolu.style.width = `${Math.round((goster / gerek) * 100)}%`;
+  gorevCubuk.setAttribute('aria-valuemax', String(gerek));
+  gorevCubuk.setAttribute('aria-valuenow', String(goster));
+  gorevCubuk.setAttribute('aria-valuetext', `${goster}/${gerek}`);
+  if (!pid) {
+    gorevDurum.textContent = 'Sevgilin katılınca başlar 💛';
+  } else if (bitti) {
+    gorevDurum.textContent = `Tamamlandı! İkiniz de +${G.GOREV_BONUS} puan kazandınız ✨`;
+  } else {
+    // herkes: kişi başı "1/3"; toplam ve ayri: katkı var mı.
+    const adet = gorev.kosul.tur === 'herkes' ? gorev.kosul.adet : 0;
+    const kisi = (id) => {
+      const k = kisiBasi[id] || 0;
+      const ok = adet ? k >= adet : k > 0;
+      return h('span', { class: 'yv-gorev-kisi', dataset: { tamam: String(ok) } },
+        `${id === me.clientId ? 'Sen' : kisiAdi(id)} `, h('strong', {}, adet ? `${Math.min(k, adet)}/${adet}` : ok ? '✓' : 'bekliyor'));
+    };
+    gorevDurum.replaceChildren(kisi(me.clientId), ' · ', kisi(pid));
+  }
+  if (tamam && !odullendi && pid && gorevOdulGun !== gun) gorevOdul(gun, pid, gorev.id);
+}
+
+/** Ödül yaması mutlak puanla yazılır: iki cihaz aynı anda yazsa da bonus bir kez (gorev.js odulYamasi). */
+async function gorevOdul(gun, pid, gorevId) {
+  const yama = G.odulYamasi(y, gun, [me.clientId, pid], { gorevId, simdi: Date.now() });
+  if (!yama) return;
+  gorevOdulGun = gun;
+  try {
+    await col.patch(M.BELGE_ID, yama);
+  } catch (e) {
+    gorevOdulGun = null;
+    console.warn('[yavru] görev ödülü yazılamadı', e);
+    return;
+  }
+  sfx('win');
+  toast(`Günün görevi tamam! İkinize +${G.GOREV_BONUS} puan 💛`);
+}
+
 function cizPartner() {
   const burada = partnerGoruyor(partner, 'yavru');
   buradaEl.hidden = !burada;
@@ -316,6 +409,7 @@ function ciz() {
   cizSahne();
   cizBilgi();
   cizIhtiyac();
+  cizGorev();
   cizPanel();
   cizBakimlar();
   cizPartner();
@@ -329,10 +423,8 @@ function zamanla() {
   clearTimeout(sonrakiZaman);
   let ms = M.DK;
   if (y && y.asama !== 'yumurta') {
-    for (const e of Object.keys(M.EYLEMLER)) {
-      const k = M.kalanBekleme(y, me.clientId, e, simdi);
-      if (k > 0) ms = Math.min(ms, k % M.DK || M.DK);
-    }
+    const kalanlar = [...Object.keys(M.EYLEMLER).map((e) => M.kalanBekleme(y, me.clientId, e, simdi)), S.ilacKalan(y, me.clientId, simdi)];
+    for (const k of kalanlar) if (k > 0) ms = Math.min(ms, k % M.DK || M.DK);
   } else if (y) {
     const r = M.isit(y, { kim: me.clientId, simdi });
     if (r.hata === 'erken') ms = Math.min(ms, r.kalan % M.DK || M.DK);
@@ -488,19 +580,28 @@ function isitTikla() {
   yaz(r.yama, r.kayit, 'isit');
 }
 
+/** Bakım ve ilaç aynı yoldan: yama + bakım kaydı + partner bildirimi (yaz). Keyifsizken bakım yarım puan. */
 function eylemTikla(eylem) {
   if (!y || y.asama === 'yumurta') return;
-  const r = M.eylemYap(y, { eylem, kim: me.clientId, simdi: Date.now() });
+  const t = Date.now();
+  const r = eylem === 'ilac'
+    ? S.ilacEylemi(y, { kim: me.clientId, simdi: t })
+    : M.eylemYap(y, { eylem, kim: me.clientId, simdi: t, puanArtis: S.puanArtisi(y, t) });
   if (r.hata === 'bekle') {
-    toast(`${M.EYLEMLER[eylem].ad} için ${M.kalanMetni(r.kalan)} bekleyelim.`);
+    toast(`${tanim(eylem).ad} için ${M.kalanMetni(r.kalan)} bekleyelim.`);
     return;
   }
   if (r.hata === 'uyuyor') {
     toast('Şşş, uyuyor 🌙 Önce uyandıralım.');
     return;
   }
+  if (r.hata === 'iyi') {
+    toast('Keyfi yerine gelmiş bile 😊');
+    ciz();
+    return;
+  }
   if (r.hata) return;
-  tepki(eylem);
+  tepki(eylem === 'ilac' ? 'dokun' : eylem);
   sfx(eylem === 'uyut' ? 'tick' : 'pop');
   titret(15);
   yaz(r.yama, r.kayit, eylem);
@@ -641,9 +742,9 @@ const hataGoster = (err) => {
 col.on('error', hataGoster);
 bakim.on('error', hataGoster);
 col.on('change', ciz);
-bakim.on('change', () => { yeniBakimlar(); cizBakimlar(); });
+bakim.on('change', () => { yeniBakimlar(); cizBakimlar(); cizGorev(); });
 profil?.on('change', ciz);
-room.on('presence', (p) => { partner = p || null; cizPartner(); cizPanel(); });
+room.on('presence', (p) => { partner = p || null; cizPartner(); cizPanel(); cizGorev(); });
 adGirdi.addEventListener('input', () => adGirdi.removeAttribute('aria-invalid'));
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') ciz(); });
 

@@ -6,12 +6,12 @@ import { openCollection } from '../../js/core/veri.js';
 import { openProfil } from '../../js/core/profil.js';
 import { bildir } from '../../js/core/bildirim.js';
 import { partnerGoruyor } from '../../js/core/room.js';
-import { readStore, writeStore } from '../../js/core/identity.js';
+import { readStore, writeStore, isLocalMode } from '../../js/core/identity.js';
 import { h, toast, knownPartner, formatDay, celebrate, ICONS } from '../../js/core/ui.js';
 import { sfx } from '../../js/core/sound.js';
 import { titret, yerelHatirlaticilar } from '../../js/core/mobil.js';
 import * as M from './mantik.js';
-import { yavruSvg, CIZIM_CSS } from './cizim.js';
+import { yavruSvg, catlamaSvg, CIZIM_CSS } from './cizim.js';
 
 const { room, roomId, me } = await bootPage({ ns: 'yavru', title: 'Yavrumuz', tab: 'daha' });
 const app = document.getElementById('app');
@@ -178,7 +178,7 @@ function cizBilgi() {
   adBaslik.textContent = yumurta ? 'Yumurtamız' : y.ad || 'Yavrumuz';
   adBtn.hidden = yumurta;
   if (formAcik) {
-    adBaslikForm.textContent = adYok ? 'Yavrunuza bir ad koyalım' : 'Yeni adı';
+    adBaslikForm.textContent = adYok ? 'Yavrumuza bir ad koyalım 💛' : 'Yeni adı';
     if (adOdak) {
       adOdak = false;
       if (!adYok || !adGirdi.value) adGirdi.value = y.ad || '';
@@ -340,13 +340,16 @@ function zamanla() {
 
 // ---------- Geçişler: çatlama ve büyüme ----------
 function gecisler() {
-  if (y && gorunenAsama && y.asama !== gorunenAsama) {
+  const degisti = y && gorunenAsama && y.asama !== gorunenAsama;
+  gorunenAsama = y?.asama || null;
+  if (!sahneOynuyor && M.catlamaSahnesiGerekli(y, !!readStore(sahneDepo(), SAHNE_KEY), simdi)) {
+    catlamaSahnesi();
+  } else if (degisti && !sahneOynuyor) {
     olay(y.asama === 'buyuk' ? 'buyudu' : 'dogdu', 1600);
     sfx('win');
   }
-  gorunenAsama = y?.asama || null;
   if (y?.asama === 'yumurta' && !catliyor && M.catlamaHazir(y, simdi)) catla();
-  if (y?.asama === 'kucuk' && !buyuyor && M.buyumeDurumu(y, simdi).hazir) buyu();
+  if (y?.asama === 'kucuk' && !buyuyor && !sahneOynuyor && M.buyumeDurumu(y, simdi).hazir) buyu();
 }
 
 function olay(ad, ms) {
@@ -358,27 +361,81 @@ function olay(ad, ms) {
   olayZaman = setTimeout(() => { delete sahne.dataset.olay; }, azHareket() ? 0 : ms);
 }
 
-/** Koşul sağlanınca sayfayı ilk açan cihazda: sallanma ve çatlak, sonra durum yazılır. */
+/** Koşul sağlanınca sayfayı ilk açan cihazda durum yazılır; an, çatlama sahnesiyle (gecisler) oynar. */
 async function catla() {
   catliyor = true;
   cizPanel();
-  olay('catliyor', 1500);
-  sfx('tick');
-  await bekle(azHareket() ? 0 : 1400);
   const t = Date.now();
   try {
     await col.patch(M.BELGE_ID, M.catlamaYamasi(y, { roomId, simdi: t }));
   } catch (e) {
     toast(e?.message || 'Kaydedilemedi.');
     catliyor = false;
+    cizPanel();
     return;
   }
   bakim.put({ eylem: 'catlama', kim: me.clientId, at: new Date(t).toISOString() }).catch(() => {});
   partnerBildir('catlama');
-  adOdak = true;
   catliyor = false;
-  toast('Yumurtanız çatladı! 🐣 Ona bir ad koyalım.');
   ciz();
+}
+
+// ---------- Çatlama sahnesi: cihaz başına bir kez (çatlatan da sonra açan sevgili de görür) ----------
+// Yerel modda (?yerel=1) iki sekme iki ayrı kişi: kimlik gibi sekmeye özel depo. Gerçekte cihazın localStorage'ı.
+const SAHNE_KEY = `bizim.yavru.catlamaGoruldu.${roomId}`;
+const sahneDepo = () => (isLocalMode() ? 'session' : 'local');
+let sahneOynuyor = false;
+
+/** Sahne sırasında arkadaki sayfa odak ve dokunuş almaz. */
+function sayfaKilit(on) {
+  for (const id of ['shell', 'app', 'tabbar']) {
+    const el = document.getElementById(id);
+    if (el) el.inert = on;
+  }
+  document.documentElement.classList.toggle('ui-locked', on);
+}
+
+/** Yumurta sallanır, çatlar, üst kabuk uçar, yavru çıkar; sonra kutlama ve (ad yoksa) ad formu. ~3 sn. */
+async function catlamaSahnesi() {
+  sahneOynuyor = true;
+  writeStore(sahneDepo(), SAHNE_KEY, '1'); // başta: yarıda kapansa da yeniden oynamaz
+  const az = azHareket();
+  const { renk } = y;
+  const T = M.catlamaMetinleri();
+  // Hareket azaltmada animasyon yok: çatlak yumurta, sonra tek karede yavru.
+  const cizim = h('span', { class: 'yv-cs-cizim', html: az ? yavruSvg({ asama: 'yumurta', renk, hazir: true }) : catlamaSvg({ renk }) });
+  const metin = h('p', { class: 'yv-cs-metin', role: 'status' }, T.catliyor);
+  const kat = h('div', { class: 'yv-cs', style: { '--yv-govde': `var(--yv-r${renk})` } },
+    h('div', { class: 'yv-cs-sahne', 'aria-hidden': 'true' }, h('span', { class: 'yv-cs-hale' }), cizim), metin);
+  sayfaKilit(true);
+  document.body.append(kat);
+  sfx('tick');
+  await bekle(az ? 700 : 1750);
+  if (az) cizim.innerHTML = yavruSvg({ asama: 'kucuk', ruh: 'mutlu', renk });
+  metin.textContent = T.geldi;
+  metin.dataset.n = '2';
+  sfx('win');
+  titret([30, 70, 40]);
+  await bekle(az ? 1100 : 1150);
+  sayfaKilit(false);
+  kat.classList.add('kapaniyor');
+  setTimeout(() => kat.remove(), az ? 0 : 300);
+  sahneOynuyor = false;
+  // Ad o arada sevgiliden gelmiş olabilir: güncel belgeye göre.
+  const k = M.catlamaMetinleri(y?.ad);
+  celebrate({
+    title: k.baslik,
+    lines: [k.satir],
+    buttons: [{
+      label: k.dugme,
+      primary: true,
+      onClick: () => {
+        if (!y || y.asama === 'yumurta' || y.ad) return;
+        adOdak = true; // ad formu öne çıkar: odak ve görünür alan (cizBilgi)
+        ciz();
+      },
+    }],
+  });
 }
 
 async function buyu() {

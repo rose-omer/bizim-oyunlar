@@ -66,20 +66,24 @@ function yumurta(hazir) {
     + '</g>';
 }
 
-function kucuk(ruh) {
-  return '<ellipse class="yv-zemin" cx="100" cy="182" rx="48" ry="6.5"/>'
-    + '<g class="yv-beden">'
-    + '<ellipse class="yv-govde" cx="55" cy="140" rx="8" ry="10" transform="rotate(-24 55 140)"/>'
+// Küçük yavru üç parça: zemin, gövde (kabuktan çıkan kısım), kabuğun alt yarısı. Çatlama sahnesi de bunları kullanır.
+const KUCUK_ZEMIN = '<ellipse class="yv-zemin" cx="100" cy="182" rx="48" ry="6.5"/>';
+// Kabuğun alt yarısı hâlâ üstünde: 🐣
+const KUCUK_KABUK = '<path class="yv-kabuk" d="M54 154 L64 146 L74 155 L86 145 L100 156 L114 145 L126 155 L136 146 L146 154 C146 172 128 182 100 182 C72 182 54 172 54 154 Z"/>'
+  + '<ellipse class="yv-benek" cx="76" cy="168" rx="6" ry="4"/><ellipse class="yv-benek" cx="124" cy="166" rx="7" ry="4.5"/>';
+
+function kucukGovde(ruh) {
+  return '<ellipse class="yv-govde" cx="55" cy="140" rx="8" ry="10" transform="rotate(-24 55 140)"/>'
     + '<ellipse class="yv-govde" cx="145" cy="140" rx="8" ry="10" transform="rotate(24 145 140)"/>'
     + '<path class="yv-govde" d="M100 88 C129 88 151 110 152 140 C153 165 130 174 100 174 C70 174 47 165 48 140 C49 110 71 88 100 88 Z"/>'
     + '<path class="yv-govde" d="M97 90 C92 80 99 72 106 77 C110 80 107 85 103 84"/>'
     + '<ellipse class="yv-isik" cx="74" cy="108" rx="9" ry="5.5" transform="rotate(-34 74 108)"/>'
     + yuz(ruh, 100, 128)
-    + isaret(ruh, 140, 86, [[72, 146, 5], [126, 118, 4], [114, 150, 3.5]])
-    // Kabuğun alt yarısı hâlâ üstünde: 🐣
-    + '<path class="yv-kabuk" d="M54 154 L64 146 L74 155 L86 145 L100 156 L114 145 L126 155 L136 146 L146 154 C146 172 128 182 100 182 C72 182 54 172 54 154 Z"/>'
-    + '<ellipse class="yv-benek" cx="76" cy="168" rx="6" ry="4"/><ellipse class="yv-benek" cx="124" cy="166" rx="7" ry="4.5"/>'
-    + '</g>';
+    + isaret(ruh, 140, 86, [[72, 146, 5], [126, 118, 4], [114, 150, 3.5]]);
+}
+
+function kucuk(ruh) {
+  return `${KUCUK_ZEMIN}<g class="yv-beden">${kucukGovde(ruh)}${KUCUK_KABUK}</g>`;
 }
 
 function buyuk(ruh) {
@@ -115,6 +119,55 @@ export function yavruSvg({ asama = 'kucuk', ruh = 'normal', renk = 1, hazir = fa
   return `<svg viewBox="0 0 200 200" class="yv-svg" data-asama="${a}" data-ruh="${r}" style="--yv-govde:var(--yv-r${k})" ${erisim} focusable="false">${ic}</svg>`;
 }
 
+// ---------- Çatlama sahnesi ----------
+// Yumurta = üst kabuk + küçük yavrunun alt kabuğu (dişli kenar ortak). Yumurta çizimi 4 birim aşağıda (zemin 182).
+const UST_KABUK = 'M54 154 C51 147.5 50 141.8 50 136 C50 106 69 54 100 54 C131 54 150 106 150 136 C150 141.8 149 147.5 146 154'
+  + ' L136 146 L126 155 L114 145 L100 156 L86 145 L74 155 L64 146 Z';
+// Dişli kenarın tepelerinden yukarı dallanan çatlaklar: [yol, gecikme (sn)]
+const CATLAKLAR = [
+  ['M86 145 L83 135 L89 128 L86 120', 0.45],
+  ['M114 145 L118 136 L113 129', 0.8],
+  ['M64 146 L61 139 L66 133', 1.05],
+  ['M136 146 L140 138 L135 132', 1.25],
+];
+// Kabuk kırıntıları: [yol, uçuş x, uçuş y, dönüş]
+const KIRINTILAR = [
+  ['M92 150 l8 -5 l2 8 z', -46, -54, -160],
+  ['M108 150 l7 4 l-7 4 z', 52, -46, 140],
+  ['M70 152 l6 -6 l3 7 z', -64, -12, -220],
+  ['M128 152 l7 -4 l1 7 z', 66, -6, 200],
+];
+// Parıltılar: [x, y, gecikme (sn), ölçek]
+const YILDIZLAR = [[46, 96, 0, 1], [156, 88, 0.08, 1.2], [36, 136, 0.16, 0.8], [166, 130, 0.1, 0.9], [72, 62, 0.22, 0.75], [130, 58, 0.04, 0.95]];
+const YILDIZ = 'M0 -7 L1.8 -1.8 L7 0 L1.8 1.8 L0 7 L-1.8 1.8 L-7 0 L-1.8 -1.8 Z';
+
+/**
+ * Çatlama anı SVG'si (metin): yumurta sallanır, çatlaklar belirir, üst kabuk uçar, yavru alt kabuktan çıkar.
+ * Hareket CIZIM_CSS'te (.yv-cs-*; yalnız hareket isteyene). Son kare küçük yavru çizimiyle aynıdır.
+ */
+export function catlamaSvg({ renk = 1, ruh = 'mutlu' } = {}) {
+  const k = Number.isInteger(renk) && renk >= 1 && renk <= 6 ? renk : 1;
+  const r = RUHLAR.includes(ruh) ? ruh : 'mutlu';
+  const catlaklar = CATLAKLAR.map(([d, g]) => `<path class="yv-cs-catlak" d="${d}" pathLength="1" style="--gecik:${g}s"/>`).join('');
+  const kirintilar = KIRINTILAR.map(([d, x, y, don]) =>
+    `<path class="yv-cs-kirinti" d="${d}" style="--dx:${x}px;--dy:${y}px;--don:${don}deg"/>`).join('');
+  const yildizlar = YILDIZLAR.map(([x, y, g, s]) =>
+    `<g transform="translate(${x} ${y}) scale(${s})"><path class="yv-cs-yildiz" d="${YILDIZ}" style="--gecik:${g}s"/></g>`).join('');
+  return `<svg viewBox="0 0 200 200" class="yv-svg yv-cs-svg" data-asama="catlama" style="--yv-govde:var(--yv-r${k})" aria-hidden="true" focusable="false">`
+    + KUCUK_ZEMIN
+    + `<g class="yv-cs-yavru">${kucukGovde(r)}</g>`
+    + '<g class="yv-cs-yumurta">'
+    + `<g class="yv-cs-alt">${KUCUK_KABUK}</g>`
+    + `<g class="yv-cs-ust"><path class="yv-kabuk" d="${UST_KABUK}"/>`
+    + '<ellipse class="yv-benek" cx="83" cy="101" rx="9" ry="7"/><ellipse class="yv-benek" cx="121" cy="90" rx="5" ry="4"/>'
+    + '<ellipse class="yv-benek" cx="116" cy="131" rx="9" ry="6.5"/>'
+    + '<ellipse class="yv-isik" cx="79" cy="86" rx="7" ry="12" transform="rotate(24 79 86)"/>'
+    + `${catlaklar}</g>`
+    + '</g>'
+    + kirintilar + yildizlar
+    + '</svg>';
+}
+
 /** Yavru stili: renk jetonları, çizgi, boşta nefes ve göz kırpma. Hareket azaltmada hareket yok. */
 export const CIZIM_CSS = `
 :root {
@@ -127,14 +180,20 @@ export const CIZIM_CSS = `
   --yv-yanak: #F2879F;
   --yv-damla: #8EC5F0;
   --yv-sicak: #B85F17;
+  --yv-cs-sis: 46%;
+  --yv-cs-isik: 95%;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-mod="acik"]) {
     --yv-sicak: #F0A35A;
+    --yv-cs-sis: 20%;
+    --yv-cs-isik: 30%;
   }
 }
 :root[data-mod="koyu"] {
   --yv-sicak: #F0A35A;
+  --yv-cs-sis: 20%;
+  --yv-cs-isik: 30%;
 }
 .yv-svg {
   display: block; width: 100%; height: 100%; overflow: visible;
@@ -188,4 +247,95 @@ export const CIZIM_CSS = `
 @keyframes yv-salla { 0%, 100% { transform: rotate(0deg); } 25% { transform: rotate(-2.2deg); } 75% { transform: rotate(2.2deg); } }
 @keyframes yv-kirp { 0%, 93%, 100% { transform: scaleY(1); } 96% { transform: scaleY(0.12); } }
 @keyframes yv-z { 0% { opacity: 0; transform: translate(0, 4px); } 30% { opacity: 1; } 100% { opacity: 0; transform: translate(6px, -12px); } }
+
+/* Çatlama sahnesi: tam ekran kat (sayfa dokunuşları sahneyi bozmasın). Hareket azaltmada durağan iki kare (app.js). */
+.yv-cs {
+  position: fixed; inset: 0; z-index: 880;
+  display: grid; place-content: center; justify-items: center; gap: 14px;
+  padding: calc(24px + var(--safe-top)) 20px calc(24px + var(--safe-bottom));
+  overflow: hidden;
+  background:
+    radial-gradient(72% 48% at 50% 44%, color-mix(in srgb, var(--yv-govde) var(--yv-cs-sis), var(--bg)) 0%, transparent 100%),
+    var(--bg);
+  touch-action: none; overscroll-behavior: contain;
+  user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent;
+}
+.yv-cs-sahne { position: relative; width: min(320px, 82vw); aspect-ratio: 1; }
+/* Kabuğun içinden gelen sıcak krem ışık (iki temada da açık; yavru rengiyle bulanmaz) */
+.yv-cs-hale {
+  position: absolute; inset: -12%; border-radius: 50%; opacity: 0.5;
+  background: radial-gradient(closest-side,
+    color-mix(in srgb, color-mix(in srgb, var(--yv-r6) 38%, var(--hero-ink)) var(--yv-cs-isik), transparent), transparent);
+}
+.yv-cs-cizim { position: relative; display: block; width: 100%; height: 100%; }
+.yv-cs-metin {
+  max-width: 22ch; min-height: 2.6em; margin: 0;
+  color: var(--text); font-family: var(--font-display); font-size: clamp(1.375rem, 1.2rem + 1vw, 1.75rem);
+  font-weight: 600; font-variation-settings: 'SOFT' 100; letter-spacing: -0.01em; line-height: 1.3;
+  text-align: center; text-wrap: balance;
+}
+.yv-cs-catlak { fill: none; stroke: var(--yv-murekkep); stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1; }
+.yv-cs-kirinti { fill: var(--yv-kabuk); stroke: var(--yv-murekkep); stroke-width: 1.6; stroke-linejoin: round; opacity: 0; }
+.yv-cs-yildiz { fill: var(--accent); opacity: 0; }
+.yv-cs-yumurta, .yv-cs-ust, .yv-cs-yavru, .yv-cs-kirinti, .yv-cs-yildiz { transform-box: fill-box; }
+.yv-cs-yumurta, .yv-cs-ust, .yv-cs-yavru { transform-origin: 50% 100%; }
+.yv-cs-kirinti, .yv-cs-yildiz { transform-origin: center; }
+@media (prefers-reduced-motion: no-preference) {
+  .yv-cs { animation: yv-cs-gir 0.3s ease-out both; }
+  .yv-cs.kapaniyor { animation: yv-cs-kapan 0.28s ease-in forwards; }
+  .yv-cs-hale { animation: yv-cs-hale 2.7s ease-in-out both; }
+  .yv-cs-yumurta { animation: yv-cs-salla 1.6s 0.15s ease-in-out both; }
+  .yv-cs-catlak { animation: yv-cs-catlak 0.3s var(--gecik, 0s) ease-out both; }
+  .yv-cs-ust { animation: yv-cs-ust 0.85s 1.75s both; }
+  .yv-cs-yavru { animation: yv-cs-cik 0.78s 1.82s cubic-bezier(0.16, 1, 0.3, 1) both; }
+  .yv-cs-kirinti { animation: yv-cs-kirinti 0.7s 1.76s cubic-bezier(0.16, 1, 0.3, 1) both; }
+  .yv-cs-yildiz { animation: yv-cs-yildiz 0.9s calc(2.05s + var(--gecik, 0s)) ease-out both; }
+  .yv-cs-metin[data-n="2"] { animation: yv-cs-metin 0.45s cubic-bezier(0.16, 1, 0.3, 1) both; }
+}
+@keyframes yv-cs-gir { from { opacity: 0; } }
+@keyframes yv-cs-kapan { to { opacity: 0; } }
+@keyframes yv-cs-metin { from { opacity: 0; transform: translateY(8px); } }
+@keyframes yv-cs-hale {
+  0% { opacity: 0; transform: scale(0.7); }
+  50% { opacity: 0.5; transform: scale(0.95); }
+  64% { opacity: 1; transform: scale(1.2); }
+  100% { opacity: 0.55; transform: scale(1.05); }
+}
+@keyframes yv-cs-salla {
+  0% { transform: rotate(0); }
+  7% { transform: rotate(-3deg); }
+  14% { transform: rotate(3deg); }
+  21%, 32% { transform: rotate(0); }
+  38% { transform: rotate(-5deg); }
+  44% { transform: rotate(5deg); }
+  50% { transform: rotate(-6.5deg); }
+  56% { transform: rotate(6.5deg); }
+  62%, 70% { transform: rotate(0); }
+  84% { transform: scale(1.07, 0.92); }
+  94% { transform: scale(0.98, 1.03); }
+  100% { transform: none; }
+}
+@keyframes yv-cs-catlak { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+@keyframes yv-cs-ust {
+  0% { opacity: 1; transform: none; animation-timing-function: cubic-bezier(0.2, 0.8, 0.3, 1); }
+  38% { opacity: 1; transform: translate(-16px, -62px) rotate(-28deg); animation-timing-function: cubic-bezier(0.5, 0, 0.9, 0.4); }
+  100% { opacity: 0; transform: translate(-78px, 40px) rotate(-118deg); }
+}
+@keyframes yv-cs-cik {
+  0% { opacity: 0; transform: translateY(34px) scale(0.84, 0.9); }
+  22% { opacity: 1; }
+  58% { transform: translateY(-10px) scale(0.97, 1.05); }
+  80% { transform: translateY(0) scale(1.04, 0.96); }
+  100% { opacity: 1; transform: none; }
+}
+@keyframes yv-cs-kirinti {
+  0% { opacity: 0; transform: none; }
+  12% { opacity: 1; }
+  100% { opacity: 0; transform: translate(var(--dx), var(--dy)) rotate(var(--don)); }
+}
+@keyframes yv-cs-yildiz {
+  0% { opacity: 0; transform: scale(0.2); }
+  35% { opacity: 1; transform: scale(1.15); }
+  100% { opacity: 0; transform: scale(0.4) rotate(60deg); }
+}
 `;

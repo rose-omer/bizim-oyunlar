@@ -314,6 +314,30 @@ export function catlamaYamasi(y, { roomId, simdi }) {
   return { asama: 'kucuk', catlama: at, renk: renkSec(roomId), ihtiyac, uyku: null };
 }
 
+/**
+ * Çatlama sahnesi oynasın mı: yavru çıkmış (küçük), çatlama son SAHNE_SURE içinde ve bu cihaz sahneyi
+ * görmemiş (goruldu: cihaz deposu). Çatlatan da sonra açan sevgili de bir kez görür. Büyümüş ya da
+ * günler önce çatlamış yavruda (bu özellikten önce çatlamış olan dahil) oynamaz.
+ */
+export const SAHNE_SURE = 3 * GUN;
+export function catlamaSahnesiGerekli(y, goruldu, simdi = Date.now()) {
+  const t = Date.parse(y?.catlama);
+  return y?.asama === 'kucuk' && !goruldu && Number.isFinite(t) && simdi - t < SAHNE_SURE;
+}
+
+/** Sahne ve kutlama metinleri. Ad yoksa ad sorulur (adSor); varsa (sevgili koyduysa) ad gösterilir. */
+export function catlamaMetinleri(ad = '') {
+  const a = String(ad ?? '').trim();
+  return {
+    catliyor: 'Kabuk çatlıyor…',
+    geldi: 'Hoş geldin, minik! 🐣',
+    baslik: 'Yavrumuz dünyaya geldi!',
+    satir: a ? `Adı ${a} 💛` : 'Birlikte ısıttınız, birlikte büyüteceksiniz 💛',
+    dugme: a ? `Merhaba ${a}` : 'Ona bir ad koyalım',
+    adSor: !a,
+  };
+}
+
 // ---------- Büyüme ----------
 
 /** -> { hazir, kalanGun, toplam, gerekToplam, gerekKisi, kisiler: [{ id, puan }] (çoktan aza) } */

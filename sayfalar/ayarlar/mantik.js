@@ -229,6 +229,7 @@ export const YEDEK_TURLERI = [
   'skor',
   'gunfoto', 'haftalik', 'harcama',
   'yavru', 'yavrubakim',
+  'kupon', 'bilgi',
 ];
 
 /**
@@ -265,7 +266,10 @@ const TUR_ADLARI = {
   kisi: 'profil', cift: 'çift bilgisi', gun: 'özel gün', mesaj: 'mesaj', okundu: 'okundu bilgisi', ani: 'anı',
   mektup: 'mektup', liste: 'liste öğesi', randevu: 'randevu fikri', gs: 'soru cevabı', sevgidili: 'sevgi dili sonucu',
   ruh: 'ruh hâli', dokunus: 'dokunuş', konum: 'konum', oyunkayit: 'oyun kaydı',
+  ruhgecmis: 'ruh hâli geçmişi', skor: 'skor', gunfoto: 'günün fotoğrafı', haftalik: 'haftalık kontrol',
+  harcama: 'harcama', yavru: 'yavru', yavrubakim: 'yavru bakımı', kupon: 'kupon', bilgi: 'kişi bilgisi',
 };
+const turAdi = (tur) => TUR_ADLARI[tur] || tur;
 const YEDEK_DEGIL = 'Bu dosya bir Biz İkimiz yedeği değil.';
 const tarihMi = (v) => typeof v === 'string' && Number.isFinite(Date.parse(v));
 
@@ -299,7 +303,7 @@ export function yedektenBelgeler(json) {
       continue;
     }
     if (!Array.isArray(docs)) {
-      hatalar.push(`${TUR_ADLARI[tur]}: okunamadı`);
+      hatalar.push(`${turAdi(tur)}: okunamadı`);
       continue;
     }
     let atlanan = 0;
@@ -315,7 +319,7 @@ export function yedektenBelgeler(json) {
       belgeler.push(b);
       sayilar[tur] = (sayilar[tur] || 0) + 1;
     }
-    if (atlanan) hatalar.push(`${TUR_ADLARI[tur]}: ${atlanan} kayıt atlandı`);
+    if (atlanan) hatalar.push(`${turAdi(tur)}: ${atlanan} kayıt atlandı`);
   }
   return { belgeler, hatalar, sayilar };
 }

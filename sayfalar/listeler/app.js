@@ -79,6 +79,7 @@ const grupBen = h('button', { type: 'button', onclick: () => grupSec('ben') }, '
 const grupO = h('button', { type: 'button', onclick: () => grupSec('o') }, 'Onun istek listesi');
 const grupSeg = h('div', { class: 'seg ls-grup', role: 'group', 'aria-label': 'Kimin istek listesi' }, grupBen, grupO);
 const bilgi = h('p', { class: 'ls-bilgi' });
+const onunBag = h('a', { class: 'btn small ls-onun', href: pageUrl('sayfalar/onun/'), style: { alignSelf: 'flex-start' } }, '💝 Onun hakkında: ölçüler, sevdikleri');
 
 const girdi = h('input', {
   class: 'input', type: 'text', name: 'metin', maxlength: L.MAX_METIN, autocomplete: 'off', enterkeyhint: 'done',
@@ -113,7 +114,7 @@ const arac = h('div', { class: 'ls-arac' },
 const liste = h('ul', { class: 'ls-ogeler' });
 const bos = h('div', { class: 'ls-bos', hidden: true });
 const panel = h('section', { class: 'ls-panel', id: 'ls-panel', role: 'tabpanel' },
-  h('header', { class: 'ls-bas' }, baslik, ozet), grupSeg, bilgi, form, arac, liste, bos);
+  h('header', { class: 'ls-bas' }, baslik, ozet), onunBag, grupSeg, bilgi, form, arac, liste, bos);
 
 app.replaceChildren(h('div', { class: 'ls' }, sekmeler, panel));
 
@@ -142,6 +143,7 @@ function ciz() {
   ozet.textContent = !s.toplam ? '' : l.isaretsiz ? `${s.toplam} şarkı` : `${s.yapilan} / ${s.toplam} tamam`;
 
   grupSeg.hidden = !hediye;
+  onunBag.hidden = !hediye;
   grupBen.setAttribute('aria-pressed', String(durum.grup === 'ben'));
   grupO.setAttribute('aria-pressed', String(durum.grup === 'o'));
   bilgi.hidden = !hediye;

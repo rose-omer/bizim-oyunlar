@@ -21,13 +21,14 @@ test('gün anahtarı ve saat yerel zamana göre', () => {
   assert.equal(saatEtiketi(null), '');
 });
 
-test('gün etiketi: Bugün, Dün, gün ay, başka yılda yıl da', () => {
+test('gün etiketi: Bugün, Dün, gün ay haftanın günü, başka yılda yıl da', () => {
   const simdi = new Date(2026, 9, 30, 10, 0);
   assert.equal(gunEtiketi(an(2026, 10, 30, 1), simdi), 'Bugün');
   assert.equal(gunEtiketi(an(2026, 10, 29, 23, 50), simdi), 'Dün');
-  assert.equal(gunEtiketi(an(2026, 10, 12), simdi), '12 Ekim');
-  assert.equal(gunEtiketi(an(2026, 2, 1), simdi), '1 Şubat');
-  assert.equal(gunEtiketi(an(2025, 12, 31), simdi), '31 Aralık 2025');
+  assert.equal(gunEtiketi(an(2026, 10, 28), simdi), '28 Ekim Çarşamba');
+  assert.equal(gunEtiketi(an(2026, 10, 12), simdi), '12 Ekim Pazartesi');
+  assert.equal(gunEtiketi(an(2026, 2, 1), simdi), '1 Şubat Pazar');
+  assert.equal(gunEtiketi(an(2025, 12, 31), simdi), '31 Aralık 2025 Çarşamba');
   assert.equal(gunEtiketi(an(2026, 1, 1), new Date(2026, 0, 2, 0, 30)), 'Dün');
 });
 
@@ -199,7 +200,7 @@ test('gunEtiketi aynı biçimleyiciyi yeniden kullanır (sonuç değişmez)', as
   const { gunEtiketi } = await import('../sayfalar/sohbet/mantik.js');
   const simdi = new Date(2026, 9, 31, 12);
   for (let i = 0; i < 3; i++) {
-    assert.equal(gunEtiketi(new Date(2026, 9, 12, 9).toISOString(), simdi), '12 Ekim');
-    assert.equal(gunEtiketi(new Date(2025, 11, 31, 9).toISOString(), simdi), '31 Aralık 2025');
+    assert.equal(gunEtiketi(new Date(2026, 9, 12, 9).toISOString(), simdi), '12 Ekim Pazartesi');
+    assert.equal(gunEtiketi(new Date(2025, 11, 31, 9).toISOString(), simdi), '31 Aralık 2025 Çarşamba');
   }
 });

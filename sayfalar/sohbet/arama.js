@@ -132,6 +132,50 @@ export function mesajAra(docs, sorgu, { enCok = ARA_EN_COK_SONUC } = {}) {
   return out;
 }
 
+/**
+ * Balon parçalarını (mantik.js baglantilar) eşleşme aralıklarıyla böler; parçaların metni değişmez.
+ * araliklar: asıl metinde [[bas, son), ...] soldan sağa. -> parçalar + bolumler: [{ metin, vurgu }]
+ */
+export function araliklaBol(parcalar, araliklar) {
+  const ar = araliklar || [];
+  let ofset = 0;
+  let k = 0;
+  return (parcalar || []).map((p) => {
+    const bas = ofset;
+    const son = ofset + p.metin.length;
+    ofset = son;
+    const bolumler = [];
+    const ekle = (a, b, vurgu) => { if (b > a) bolumler.push({ metin: p.metin.slice(a - bas, b - bas), vurgu }); };
+    let i = bas;
+    while (k < ar.length && ar[k][0] < son) {
+      const [a, b] = ar[k];
+      if (b > i) {
+        ekle(i, Math.max(i, a), false);
+        ekle(Math.max(i, a), Math.min(b, son), true);
+        i = Math.min(b, son);
+      }
+      if (b > son) break; // aralık sonraki parçaya taşıyor
+      k++;
+    }
+    ekle(i, son, false);
+    return { ...p, bolumler };
+  });
+}
+
+/**
+ * Sohbet içi arama gezintisi. ids: sonuçlar yeniden eskiye (mesajAra sırası). simdiki: seçili sonuç;
+ * yoksa ya da artık sonuçlarda değilse en yeni. yon: 1 daha eski (yukarı), -1 daha yeni (aşağı), 0 yerinde.
+ * Sınırda kalır. -> { id, sira (1 = en yeni), toplam, enYeni, enEski } | null (sonuç yok)
+ */
+export function gezinti(ids, simdiki, yon = 0) {
+  const list = ids || [];
+  if (!list.length) return null;
+  let i = simdiki != null ? list.indexOf(simdiki) : -1;
+  if (i < 0) i = 0;
+  else i = Math.min(list.length - 1, Math.max(0, i + Math.sign(yon)));
+  return { id: list[i], sira: i + 1, toplam: list.length, enYeni: i === 0, enEski: i === list.length - 1 };
+}
+
 /** Mesajı yıldızlayanlar (clientId listesi). */
 export function yildizlayanlar(doc) {
   const y = doc?.data?.yildiz;

@@ -1,6 +1,6 @@
 // Sohbet: saf mantık (DOM yok; Node'da test edilir).
-// Mesaj belgesi: { id, author, data: { metin?, foto?, en?, boy?, ses?, yanit?, tepki?, yildiz?, duzenlendi?, kimden }, created_at, pending? }
-// ses = { url, sure (sn), tur }; yildiz = { [clientId]: true }.
+// Mesaj belgesi: { id, author, data: { metin?, foto?, en?, boy?, ses?, yanit?, tepki?, yildiz?, sabit?, duzenlendi?, kimden }, created_at, pending? }
+// ses = { url, sure (sn), tur }; yildiz = { [clientId]: true }; sabit = { at: ISO, kim: clientId } (ikimiz için ortak).
 // data.kimden = gönderenin clientId'si. Gerekli: karşı taraf tepki yazınca belge 'author'u değişir.
 
 export const MAX_METIN = 4000;
@@ -8,6 +8,7 @@ export const GRUP_MS = 5 * 60 * 1000;
 export const YAZIYOR_GONDER_MS = 2000;
 export const YAZIYOR_GOSTER_MS = 4000;
 export const HIZLI_TEPKILER = ['❤️', '😂', '😍', '😮', '😢', '👍'];
+export const SABIT_EN_COK = 10;
 
 const zaman = (s) => {
   const t = Date.parse(s);
@@ -23,7 +24,7 @@ export function gunAnahtari(deger) {
   return `${d.getFullYear()}-${iki(d.getMonth() + 1)}-${iki(d.getDate())}`;
 }
 
-/** 'Bugün' | 'Dün' | '12 Ekim' | '31 Aralık 2025' */
+/** 'Bugün' | 'Dün' | '28 Ekim Çarşamba' | '31 Aralık 2025 Çarşamba' */
 export function gunEtiketi(deger, simdi = new Date()) {
   const t = zaman(deger);
   if (Number.isNaN(t)) return '';
@@ -33,11 +34,12 @@ export function gunEtiketi(deger, simdi = new Date()) {
   if (fark === 0) return 'Bugün';
   if (fark === 1) return 'Dün';
   // Intl.DateTimeFormat yerine sabit adlar: ilk kurulumu telefonda açılışı onlarca ms uzatıyor.
-  const s = `${d.getDate()} ${AYLAR[d.getMonth()]}`;
-  return d.getFullYear() !== simdi.getFullYear() ? `${s} ${d.getFullYear()}` : s;
+  const yil = d.getFullYear() !== simdi.getFullYear() ? ` ${d.getFullYear()}` : '';
+  return `${d.getDate()} ${AYLAR[d.getMonth()]}${yil} ${GUNLER[d.getDay()]}`;
 }
 
 const AYLAR = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
+const GUNLER = ['Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi'];
 
 /** '09:05' */
 export function saatEtiketi(deger) {
@@ -206,6 +208,46 @@ export function tepkiYamasi(doc, benId, emoji) {
 /** Yıldız yaması: { 'yildiz.<benId>': true | null } (yıldızlıysa kaldırır). Partnerin yıldızına dokunmaz. */
 export function yildizYamasi(doc, benId) {
   return gonderenKoru(doc, { [`yildiz.${benId}`]: doc?.data?.yildiz?.[benId] === true ? null : true });
+}
+
+/** Mesaj sabitli mi? sabit = { at: ISO, kim } */
+export function sabitMi(doc) {
+  const s = doc?.data?.sabit;
+  return !!doc && !doc.deleted && !!s && typeof s === 'object' && typeof s.at === 'string' && !!s.at;
+}
+
+/** Sabit yaması: { sabit: { at, kim: benId } } ya da sabitse { sabit: null }. Eski belgede gönderen korunur. */
+export function sabitYamasi(doc, benId, at = new Date().toISOString()) {
+  return gonderenKoru(doc, { sabit: sabitMi(doc) ? null : { at, kim: benId } });
+}
+
+const SABIT_ALANLAR = ['id', 'data', 'author', 'created_at', 'updated_at', 'pending'];
+
+/**
+ * Sabit mesaj önbelleği (yalnız son 100 mesaj yüklü; eski sabitler kaybolmasın).
+ * liste: önbellekteki sabit belgeler; docs: yeni gelen sürümler (silinmiş ya da sabitsiz olabilir).
+ * Daha yeni updated_at kazanır; sunucu onaylı sürüm bekleyen (iyimser) sürümü her zaman ezer.
+ * -> { liste (en son sabitlenen başta), degisti }
+ */
+export function sabitBirlestir(liste, docs) {
+  const harita = new Map((liste || []).map((d) => [d.id, d]));
+  let degisti = false;
+  for (const d of docs || []) {
+    if (!d || typeof d.id !== 'string' || !d.id) continue;
+    const eski = harita.get(d.id);
+    if (eski && !(eski.pending && !d.pending) && zaman(d.updated_at) < zaman(eski.updated_at)) continue;
+    if (!sabitMi(d)) {
+      if (eski) { harita.delete(d.id); degisti = true; }
+      continue;
+    }
+    const yeni = {};
+    for (const k of SABIT_ALANLAR) if (d[k] !== undefined) yeni[k] = d[k];
+    if (eski && JSON.stringify(eski) === JSON.stringify(yeni)) continue;
+    harita.set(d.id, yeni);
+    degisti = true;
+  }
+  const sirali = [...harita.values()].sort((a, b) => zaman(b.data.sabit.at) - zaman(a.data.sabit.at));
+  return { liste: sirali, degisti };
 }
 
 /** -> [{ emoji, sayi, benim }] ilk görülme sırasıyla */

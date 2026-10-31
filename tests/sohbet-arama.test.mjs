@@ -2,7 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   katla, eslesmeler, vurguParcalari, mesajAra, yildizlilar, eskiSayfalardaAra, ARA_EN_COK_SAYFA,
+  araliklaBol, gezinti,
 } from '../sayfalar/sohbet/arama.js';
+import { baglantilar } from '../sayfalar/sohbet/mantik.js';
 
 const mesaj = (id, kimden, at, data = {}) => ({
   id, author: kimden, data: { metin: id, kimden, ...data }, created_at: at, updated_at: at,
@@ -129,4 +131,39 @@ test('eskiSayfalardaAra: yeni sonuç bulunca, eski kalmayınca ya da sınırda d
   const r5 = await eskiSayfalardaAra({ yukle: async () => { e++; return 50; }, dahaVar: () => e < 3, sonucSayisi: () => e, ilkSonuctaDur: false });
   assert.equal(r5.sayfa, 3);
   assert.equal(r5.bitti, true);
+});
+
+test('araliklaBol: balon parçaları (metin / bağlantı) eşleşme aralıklarıyla bölünür', () => {
+  const metin = 'Bak https://ornek.com/kalp kalpten';
+  const ar = eslesmeler(metin, 'KALP');
+  assert.deepEqual(ar, [[22, 26], [27, 31]]);
+  const p = araliklaBol(baglantilar(metin), ar);
+  assert.deepEqual(p.map((x) => x.tur), ['metin', 'baglanti', 'metin']);
+  assert.deepEqual(p[0].bolumler, [{ metin: 'Bak ', vurgu: false }]);
+  assert.equal(p[1].href, 'https://ornek.com/kalp');
+  assert.deepEqual(p[1].bolumler, [{ metin: 'https://ornek.com/', vurgu: false }, { metin: 'kalp', vurgu: true }]);
+  assert.deepEqual(p[2].bolumler, [{ metin: ' ', vurgu: false }, { metin: 'kalp', vurgu: true }, { metin: 'ten', vurgu: false }]);
+  // Parça sınırını aşan eşleşme iki parçada da vurgulanır; parçaların metni hiç değişmez.
+  const m2 = 'a https://x.co b';
+  const q = araliklaBol(baglantilar(m2), [[0, 4]]);
+  assert.deepEqual(q[0].bolumler, [{ metin: 'a ', vurgu: true }]);
+  assert.deepEqual(q[1].bolumler, [{ metin: 'ht', vurgu: true }, { metin: 'tps://x.co', vurgu: false }]);
+  assert.equal(q.map((x) => x.bolumler.map((b) => b.metin).join('')).join(''), m2);
+  // Aralık yoksa her parça tek bölüm.
+  assert.deepEqual(araliklaBol(baglantilar('selam'), []), [{ tur: 'metin', metin: 'selam', bolumler: [{ metin: 'selam', vurgu: false }] }]);
+});
+
+test('gezinti: yeniden eskiye sonuçlarda yukarı (eski) / aşağı (yeni); sınırda durur', () => {
+  const ids = ['c', 'b', 'a']; // c en yeni
+  assert.deepEqual(gezinti(ids, null), { id: 'c', sira: 1, toplam: 3, enYeni: true, enEski: false });
+  assert.deepEqual(gezinti(ids, 'c', 1), { id: 'b', sira: 2, toplam: 3, enYeni: false, enEski: false });
+  assert.deepEqual(gezinti(ids, 'b', 1), { id: 'a', sira: 3, toplam: 3, enYeni: false, enEski: true });
+  assert.equal(gezinti(ids, 'a', 1).id, 'a'); // sarmaz
+  assert.equal(gezinti(ids, 'b', -1).id, 'c');
+  assert.equal(gezinti(ids, 'c', -1).id, 'c');
+  assert.equal(gezinti(ids, 'yok').id, 'c'); // seçili sonuç kalmadıysa en yeni
+  assert.equal(gezinti(ids, 'yok', 1).id, 'c');
+  assert.equal(gezinti([], null), null);
+  // Eski mesajlar yüklenince sona eklenen sonuca geçilir.
+  assert.equal(gezinti(['c', 'b', 'a', 'z'], 'a', 1).id, 'z');
 });

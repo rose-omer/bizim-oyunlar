@@ -472,6 +472,7 @@ v3 bölümleri v1 ve v2'nin üstüne gelir. Çatışmada v3 geçerli.
 | `haftalik` | `<YYYY-Www>-<clientId>` | `{ puanlar: { iletisim, yakinlik, eglence, destek } (1–5), not?, at }` | Haftalık Kontrol |
 | `harcama` | uuid (hesaplaşma `hesap-<hash>-<tutar>`) | `{ baslik, tutar (kuruş), odeyen, pay: { [clientId]: ağırlık }, tarih, kategori, hesaplasma? }` | Ortak Harcamalar |
 - Ek alanlar: `ani.konum = { lat, lng }` (4 ondalık); `mesaj.ses = { url, sure, tur }`; `mesaj.yildiz = { [clientId]: true }` (patch `yildiz.<clientId>`);
+  `mesaj.sabit = { at: ISO, kim: clientId }` (ikimiz için ortak; patch `sabit`, kaldırınca `null`; en çok 10; eski sabitler istemcide `bizim.sohbet.sabit.<oda>` önbelleğinde);
   `liste.liste = 'sarki'` + `baglanti?` (yalnız https YouTube/Spotify/Apple Music) + `bizim?` (tek "Bizim şarkımız").
 - Yeni tür `sayfalar/ayarlar/mantik.js` `YEDEK_TURLERI` sonuna eklenir.
 

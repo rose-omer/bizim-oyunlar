@@ -1,11 +1,12 @@
 // Sohbet: satır ve balon kurucuları. Kullanıcı metni yalnız textContent / metin düğümü olarak basılır.
 import { h } from '../../js/core/ui.js';
-import { baglantilar, saatEtiketi, tepkiOzeti, sadeceEmoji, ozet, gonderen } from './mantik.js';
-import { yildizlayanlar } from './arama.js';
+import { baglantilar, saatEtiketi, tepkiOzeti, sadeceEmoji, ozet, gonderen, sabitMi } from './mantik.js';
+import { yildizlayanlar, araliklaBol } from './arama.js';
 import { sureYazisi } from './ses.js';
 
 const S = 'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"';
 const YILDIZ_D = 'M12 3.9l2.47 5.02 5.53.8-4 3.9.94 5.5L12 16.53 7.06 19.12 8 13.62l-4-3.9 5.53-.8z';
+const RAPTIYE = '<path d="M12 17v4.5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/>';
 const svg = (ic, kutu = '0 0 24 24', ek = S) => `<svg viewBox="${kutu}" ${ek} aria-hidden="true" focusable="false">${ic}</svg>`;
 
 // Sabit SVG'ler (kullanıcı verisi değil).
@@ -27,6 +28,11 @@ const IKONLAR = {
   yildiz: svg(`<path d="${YILDIZ_D}"/>`),
   yildizDolu: svg(`<path d="${YILDIZ_D}"/>`, '0 0 24 24', 'fill="currentColor" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"'),
   sol: svg('<path d="M14.5 6 8.5 12l6 6"/>'),
+  yukari: svg('<path d="m6.5 14.5 5.5-5.5 5.5 5.5"/>'),
+  asagiOk: svg('<path d="m6.5 9.5 5.5 5.5 5.5-5.5"/>'),
+  liste: svg('<path d="M9.5 6.5h10M9.5 12h10M9.5 17.5h10"/><path d="M4.8 6.5h.01M4.8 12h.01M4.8 17.5h.01" stroke-width="2.8"/>'),
+  sabit: svg(RAPTIYE),
+  sabitKaldir: svg(`${RAPTIYE}<path d="M3.5 3.5l17 17"/>`),
   mikrofon: svg('<rect x="9" y="3.5" width="6" height="11" rx="3"/><path d="M5.6 11.2a6.4 6.4 0 0 0 12.8 0M12 17.6V20.5"/>'),
   oynat: svg('<path d="M8.2 5.7v12.6a1 1 0 0 0 1.53.85l10-6.3a1 1 0 0 0 0-1.7l-10-6.3A1 1 0 0 0 8.2 5.7z"/>', '0 0 24 24', 'fill="currentColor"'),
   duraklat: svg('<rect x="6.6" y="5" width="3.8" height="14" rx="1.2"/><rect x="13.6" y="5" width="3.8" height="14" rx="1.2"/>', '0 0 24 24', 'fill="currentColor"'),
@@ -38,14 +44,20 @@ export function ikon(ad) {
   return t.content.firstElementChild;
 }
 
-/** Bağlantıları tıklanabilir yaparak metni bir öğeye ekler. */
-export function metniBas(el, metin) {
-  for (const p of baglantilar(metin)) {
-    if (p.tur === 'baglanti') {
-      el.append(h('a', { href: p.href, target: '_blank', rel: 'noopener noreferrer' }, p.metin));
-    } else {
-      el.append(document.createTextNode(p.metin));
-    }
+/** Parça bölümlerini (arama vurgusu) metin düğümü ve <mark> olarak basar. */
+function bolumleriBas(el, bolumler) {
+  for (const b of bolumler) el.append(b.vurgu ? h('mark', { class: 'sh-isaret' }, b.metin) : document.createTextNode(b.metin));
+  return el;
+}
+
+/** Bağlantıları tıklanabilir yaparak metni bir öğeye ekler. araliklar: arama eşleşmeleri (vurgulanır). */
+export function metniBas(el, metin, araliklar = null) {
+  const parcalar = araliklar?.length ? araliklaBol(baglantilar(metin), araliklar) : baglantilar(metin);
+  for (const p of parcalar) {
+    const hedef = p.tur === 'baglanti' ? h('a', { href: p.href, target: '_blank', rel: 'noopener noreferrer' }) : el;
+    if (p.bolumler) bolumleriBas(hedef, p.bolumler);
+    else hedef.append(document.createTextNode(p.metin));
+    if (hedef !== el) el.append(hedef);
   }
   return el;
 }
@@ -54,8 +66,13 @@ export function gunSatiri(etiket) {
   return h('li', { class: 'sh-gun' }, h('span', {}, etiket));
 }
 
-function zamanEl(doc, { duzenlendi = false, yildiz = false } = {}) {
+function zamanEl(doc, { duzenlendi = false, yildiz = false, sabit = false } = {}) {
   const z = h('span', { class: 'sh-zaman' });
+  if (sabit) {
+    const s = ikon('sabit');
+    s.classList.add('sh-yildiz-ik');
+    z.append(s, h('span', { class: 'sr-only' }, 'sabitlendi, '));
+  }
   if (yildiz) {
     const y = ikon('yildizDolu');
     y.classList.add('sh-yildiz-ik');
@@ -104,7 +121,8 @@ export function sesBoya(kutu, d) {
 
 /**
  * Mesaj satırı.
- * ctx: { benId, ad(clientId) -> ad, bul(id) -> doc|null, foto(img, url), durum: { durum, at } | null }
+ * ctx: { benId, ad(clientId) -> ad, bul(id) -> doc|null, foto(img, url), durum: { durum, at } | null,
+ *        vurgu: arama eşleşme aralıkları (metinde) | null }
  */
 export function mesajSatiri(satir, ctx) {
   const { doc, benim, ilk, son } = satir;
@@ -113,7 +131,7 @@ export function mesajSatiri(satir, ctx) {
   const kimAd = benim ? 'Sen' : ctx.ad(gonderen(doc));
   const ses = !d.foto && d.ses && typeof d.ses === 'object' && typeof d.ses.url === 'string';
   const buyuk = !d.foto && !ses && !d.yanit && sadeceEmoji(metin);
-  const zamanSec = { duzenlendi: !!d.duzenlendi, yildiz: yildizlayanlar(doc).length > 0 };
+  const zamanSec = { duzenlendi: !!d.duzenlendi, yildiz: yildizlayanlar(doc).length > 0, sabit: sabitMi(doc) };
 
   const cls = ['sh-satir', benim ? 'benim' : 'onun'];
   if (ilk) cls.push('ilk');
@@ -154,7 +172,7 @@ export function mesajSatiri(satir, ctx) {
 
   if (metin) {
     const p = h('p', { class: 'sh-metin' });
-    metniBas(p, metin);
+    metniBas(p, metin, ctx.vurgu);
     p.append(zamanEl(doc, zamanSec));
     balon.append(p);
   }

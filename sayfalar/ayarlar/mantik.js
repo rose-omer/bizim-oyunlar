@@ -348,7 +348,7 @@ export function yedekOzeti(sayilar) {
 
 // ---------- Son silinenler ----------
 // Silme veriyi korur (deleted = true, data kalır). Geri al = putDoc(roomId, tür, id, data).
-export const COP_TURLERI = ['mesaj', 'ani', 'mektup', 'gun', 'liste', 'randevu', 'harcama', 'kupon', 'gunfoto'];
+export const COP_TURLERI = ['mesaj', 'ani', 'mektup', 'gun', 'liste', 'randevu', 'harcama', 'kupon', 'gunfoto', 'kumbara'];
 const COP_EN_COK = 50;
 const ONIZLEME_MAX = 80;
 

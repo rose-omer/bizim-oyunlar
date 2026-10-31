@@ -5,6 +5,7 @@
 import { GAMES, gameById } from './core/games.js';
 import {
   me, setName, currentRoom, setRoom, newRoomId, inviteUrl, gameUrl, pageUrl, isLocalMode, parseInviteHash,
+  parseYapistirilanLink, setClientId,
 } from './core/identity.js';
 import { sonDurum, girisAcikMi, cihazlar, uyelikModu } from './core/uyelik.js';
 import { kapidanGec, davetSakla } from './core/kapi.js';
@@ -769,13 +770,46 @@ function welcomeScreen(name) {
     },
   }, 'Odamızı kur');
 
+  // Uygulama (APK) linki kendisi açamaz: davet ya da taşıma linki buraya yapıştırılır.
+  const linkInput = h('input', {
+    class: 'input', id: 'hub-link', name: 'link', type: 'url', inputmode: 'url',
+    autocomplete: 'off', spellcheck: 'false', enterkeyhint: 'go', placeholder: 'Linki buraya yapıştır',
+  });
+  const linkErr = h('p', { class: 'hub-error', id: 'hub-link-err', hidden: true }, 'Bu bir Biz İkimiz linkine benzemiyor.');
+  const linkForm = h('form', {
+    class: 'hub-form',
+    novalidate: true,
+    onsubmit: (e) => {
+      e.preventDefault();
+      const p = parseYapistirilanLink(linkInput.value);
+      if (!p) {
+        linkErr.hidden = false;
+        linkInput.setAttribute('aria-invalid', 'true');
+        linkInput.setAttribute('aria-describedby', 'hub-link-err');
+        sfx('wrong');
+        return;
+      }
+      if (p.kim) setClientId(p.kim);
+      if (p.ad) setName(p.ad);
+      if (p.davet) davetSakla(p.oda, p.davet);
+      setRoom(p.oda);
+      sfx('pop');
+      location.reload();
+    },
+  },
+    h('label', { class: 'sr-only', for: 'hub-link' }, 'Davet linki'),
+    linkInput,
+    linkErr,
+    h('button', { type: 'submit', class: 'btn ghost wide' }, 'Odaya katıl'));
+
   const el = h('div', { class: 'hub-wrap' },
     h('section', { class: 'hub-hero hub-narrow stack center' },
       pairEl({ meName: name, link: 'wait', lg: true }),
       h('h1', { class: 'title', tabindex: '-1' }, `Hoş geldin, ${name}`),
       h('p', { class: 'subtitle' }, 'Biz İkimiz, ikinize özel küçük bir dünya. Odanızı kur, linki sevgiline gönder; günlerinizi sayın, anılarınızı biriktirin, birlikte oynayın.'),
       create,
-      h('p', { class: 'hub-note' }, 'Sevgilin sana link gönderdiyse onu aç; oda kendiliğinden açılır.')),
+      h('p', { class: 'hub-note' }, 'Sevgilin sana link gönderdiyse onu aç ya da buraya yapıştır.'),
+      linkForm),
     solo.length
       ? h('section', { class: 'hub-section stack', 'aria-labelledby': 'solo-h' },
           h('div', { class: 'hub-section-head' },

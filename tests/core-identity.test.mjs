@@ -134,3 +134,25 @@ test('buildInviteUrl: davet kodu hash\'e eklenir; geçersiz kod eklenmez', async
   assert.equal(parseInviteHash('#ayar-kilit'), null);
   assert.equal(parseInviteHash(''), null);
 });
+
+test('parseYapistirilanLink: davet ve taşıma linki (APK\'da elle yapıştırılır)', async () => {
+  const { parseYapistirilanLink } = await import('../js/core/identity.js');
+  const kod = 'k'.repeat(32);
+  const kim = '20089765-2a3b-4c5d-8e9f-0123456789ab';
+  assert.deepEqual(parseYapistirilanLink(`${ROOT}#oda=abcdefghij`), { oda: 'abcdefghij', davet: null, kim: null, ad: null });
+  assert.deepEqual(parseYapistirilanLink(`  ${ROOT}#oda=ABCDEFGHIJ&davet=${kod}  `), { oda: 'abcdefghij', davet: kod, kim: null, ad: null });
+  assert.deepEqual(parseYapistirilanLink(`${ROOT}#oda=abcdefghij&kim=${kim}&ad=G%C3%BCl`), { oda: 'abcdefghij', davet: null, kim, ad: 'Gül' });
+  assert.deepEqual(parseYapistirilanLink(`Bunu aç: ${ROOT}#oda=abcdefghij&kim=kisa&ad=`), { oda: 'abcdefghij', davet: null, kim: null, ad: null });
+  assert.equal(parseYapistirilanLink(`${ROOT}#oda=ab`), null);
+  assert.equal(parseYapistirilanLink(ROOT), null);
+  assert.equal(parseYapistirilanLink(''), null);
+});
+
+test('setClientId: geçerli kimliği alır, geçersizi yok sayar', async () => {
+  const { setClientId } = await import('../js/core/identity.js');
+  const kim = '20089765-2a3b-4c5d-8e9f-0123456789ab';
+  setClientId(kim);
+  assert.equal(me().clientId, kim);
+  setClientId('x y');
+  assert.equal(me().clientId, kim);
+});

@@ -125,6 +125,13 @@ export function setName(name) {
   writeStore(idKind(), K_NAME, clean || null);
 }
 
+const KIM_RE = /^[A-Za-z0-9_-]{8,64}$/;
+
+/** Taşıma: bu cihaz o kişinin kimliğini alır (yalnız odasız ekranda elle yapıştırılan linkle; hub.js). */
+export function setClientId(id) {
+  if (KIM_RE.test(id || '')) writeStore(idKind(), K_CLIENT, id);
+}
+
 export function currentRoom() {
   return readStore('local', K_ROOM) || null;
 }
@@ -154,6 +161,21 @@ export function parseInviteHash(hash) {
   const m = /^#oda=([a-z0-9]{4,40})(?:&davet=([^&]*))?$/i.exec(String(hash || ''));
   if (!m) return null;
   return { oda: m[1].toLowerCase(), davet: DAVET_RE.test(m[2] || '') ? m[2] : null };
+}
+
+/**
+ * Saf: yapıştırılan metindeki davet ya da taşıma linki → { oda, davet, kim, ad } | null.
+ * APK linki kendisi açamaz; odasız ekrandaki alana yapıştırılır. kim/ad: cihaz o kişi olarak devam eder.
+ */
+export function parseYapistirilanLink(metin) {
+  const s = String(metin || '').trim();
+  const i = s.indexOf('#oda=');
+  if (i < 0) return null;
+  const p = new URLSearchParams(s.slice(i + 1).split(/\s/)[0]);
+  const oda = (p.get('oda') || '').toLowerCase();
+  if (!/^[a-z0-9]{4,40}$/.test(oda)) return null;
+  const al = (ad, re) => (re.test(p.get(ad) || '') ? p.get(ad) : null);
+  return { oda, davet: al('davet', DAVET_RE), kim: al('kim', KIM_RE), ad: (p.get('ad') || '').trim().slice(0, 40) || null };
 }
 
 export function buildLobbyUrl(root, local) {

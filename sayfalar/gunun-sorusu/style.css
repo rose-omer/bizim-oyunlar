@@ -204,6 +204,13 @@
   font-variant-numeric: lining-nums tabular-nums;
 }
 .gs-seri-birim { color: var(--muted); font-weight: 700; }
+.gs-seri-durum {
+  font-family: var(--font-display);
+  font-variation-settings: 'SOFT' 100;
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 1.15;
+}
 .gs-rekor { color: var(--muted); font-size: 0.9375rem; font-weight: 650; }
 .gs-rekor strong { color: var(--text); }
 

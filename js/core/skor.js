@@ -60,14 +60,25 @@ export function skorOku(data, ids, { yil = null } = {}) {
   };
 }
 
-/** Kutlama satırı: "Toplam: Ömer 5 · Gül 3 · 1 berabere". Hiç sonuç yoksa ''. kisiler = [{ id, ad }]. */
+const sayiFmt = new Intl.NumberFormat('tr-TR');
+
+/** Ortak toplam: "Birlikte 24 oyun oynadık" (birim 'kez': "Birlikte 9 kez oynadık"). Hiç sonuç yoksa ''. */
+export function birlikteMetni(toplam, birim = 'oyun') {
+  const n = sayi(toplam);
+  return n ? `Birlikte ${sayiFmt.format(n)} ${birim} oynadık` : '';
+}
+
+/**
+ * Kutlama satırı, iki satır: önce ortak toplam, altında kişi başı.
+ * "Birlikte 9 kez oynadık\nÖmer 5 · Gül 3 · 1 berabere". Hiç sonuç yoksa ''. kisiler = [{ id, ad }].
+ */
 export function toplamMetni(data, kisiler) {
   const list = kisiler || [];
   const s = skorOku(data, list.map((x) => x.id));
   if (!s.toplam) return '';
   const parca = s.kisiler.map((x, i) => `${list[i].ad || 'Sevgilin'} ${x.n}`);
   if (s.berabere) parca.push(`${s.berabere} berabere`);
-  return `Toplam: ${parca.join(' · ')}`;
+  return `${birlikteMetni(s.toplam, 'kez')}\n${parca.join(' · ')}`;
 }
 
 /** Belgeler → { [oyunId]: data }. */
@@ -183,7 +194,7 @@ function ilkDegisim(col, ms) {
 }
 
 /**
- * Kutlama satırı (celebrate lines içine konur): "Toplam: Ömer 5 · Gül 3"; veri değişince kendini günceller.
+ * Kutlama satırı (celebrate lines içine konur): toplamMetni, iki satır (pre-line); veri değişince kendini günceller.
  * ids = oyuncuların clientId'leri, adlar = { [clientId]: ad } (benim adım room.me.name).
  * kayit = ev sahibinin skorKaydet sözü: önce o biter. Misafir ilk değişikliği en çok BEKLE_MS bekler
  * (eski toplam bir an görünmesin). Metin boşken satırın <p>'si gizlenir. DOM gerekir.
@@ -191,6 +202,7 @@ function ilkDegisim(col, ms) {
 export function toplamSatiri(room, oyunId, ids, adlar = {}, kayit = null) {
   const el = document.createElement('span');
   el.className = 'skor-toplam';
+  el.style.whiteSpace = 'pre-line'; // ortak toplam üstte, kişi başı altta
   const gizle = () => { const p = el.parentElement; if (p) p.hidden = !el.textContent; };
   queueMicrotask(gizle); // celebrate satırı eşzamanlı ekler
   if (!room?.roomId) return el;

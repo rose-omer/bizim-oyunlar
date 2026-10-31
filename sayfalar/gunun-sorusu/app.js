@@ -8,7 +8,7 @@ import { sfx } from '../../js/core/sound.js';
 import { SORULAR } from './sorular.js';
 import {
   KATEGORILER, CEVAP_MAX, gunNo, gunTarihi, soruSecici, docId, gunlereGore, gunDurumu,
-  ortakGunler, seri, haftaSeridi, arsiv, cevapHatasi,
+  ortakGunler, seri, seriMetni, haftaSeridi, arsiv, cevapHatasi,
 } from './mantik.js';
 
 const { room, roomId, me } = await bootPage({ ns: 'gunsorusu', title: 'Günün Sorusu', tab: 'daha' });
@@ -170,22 +170,19 @@ const DURUM_METNI = {
 };
 
 function cizSeri(harita, pAd) {
-  const s = seri(ortakGunler(harita), bugun);
+  const m = seriMetni(seri(ortakGunler(harita), bugun));
   const hafta = haftaSeridi(harita, bugun, me.clientId);
-  let not;
-  if (s.bugunTamam) not = 'Bugün tamam. Yarın yeni bir soru gelecek.';
-  else if (s.simdi > 0) not = `Bugün de cevaplayın, seri ${s.simdi + 1} güne çıksın.`;
-  else not = 'İkiniz de bugün cevaplayın, seriniz başlasın.';
 
   seriEl.replaceChildren(
     h('div', { class: 'gs-seri-ust' },
       h('div', {},
-        h('h2', { id: 'gs-seri-baslik' }, 'Serimiz'),
+        h('h2', { id: 'gs-seri-baslik' }, 'Ortak günlerimiz'),
         h('p', { class: 'gs-seri-sayi' },
-          h('span', { class: 'gs-alev', 'aria-hidden': 'true' }, '🔥'),
-          h('strong', { class: 'gs-seri-n' }, String(s.simdi)),
-          h('span', { class: 'gs-seri-birim' }, 'gün üst üste'))),
-      h('p', { class: 'gs-rekor' }, 'En uzun: ', h('strong', {}, `${s.enUzun} gün`))),
+          h('span', { class: 'gs-alev', 'aria-hidden': 'true' }, m.simge),
+          m.sayi
+            ? [h('strong', { class: 'gs-seri-n' }, String(m.sayi)), h('span', { class: 'gs-seri-birim' }, m.durum)]
+            : h('strong', { class: 'gs-seri-durum' }, m.durum))),
+      m.rekor ? h('p', { class: 'gs-rekor' }, 'Rekorumuz: ', h('strong', {}, `${m.rekor} gün`)) : null),
     h('ol', { class: 'gs-hafta', 'aria-label': 'Son 7 gün' }, hafta.map((g) => {
       const tarih = yerelTarih(g.tarih);
       const bugunMu = g.gun === bugun;
@@ -198,7 +195,7 @@ function cizSeri(harita, pAd) {
       h('span', { dataset: { durum: 'ikisi' } }, h('span', { class: 'gs-nokta' }), 'İkiniz de'),
       h('span', { dataset: { durum: 'ben' } }, h('span', { class: 'gs-nokta' }), 'Sen'),
       h('span', { dataset: { durum: 'partner' } }, h('span', { class: 'gs-nokta' }), pAd)),
-    h('p', { class: 'gs-seri-not' }, not));
+    h('p', { class: 'gs-seri-not' }, m.not));
 }
 
 function mini(kim, ad, metin) {

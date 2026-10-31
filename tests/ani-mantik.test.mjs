@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   AY_ADLARI, gunYazi, aramaMetni, filtrele, zamanCizelgesi, buGunGecmisYillar, buGunBasligi,
   tumEtiketler, yillar, albumFotolari, etiketTemizle, etiketEkle, aniDogrula, aniVerisi,
-  fotoTasi, fotoKaldir, formParametreleri, begeniYamasi, aniYamasi, begeniSayisi, MAX_FOTO,
+  fotoTasi, fotoKaldir, formParametreleri, begeniYamasi, aniYamasi, begeniSayisi, begenGoster, MAX_FOTO,
 } from '../sayfalar/anilar/mantik.js';
 
 let seq = 0;
@@ -149,6 +149,15 @@ test('begeniYamasi aç/kapa yalnız kendi alanım; begeniSayisi', () => {
   assert.deepEqual(begeniYamasi({ omer: true, gul: true }, 'omer'), { 'begeni.omer': null });
   assert.equal(begeniSayisi({ omer: true, gul: true }), 2);
   assert.equal(begeniSayisi(null), 0);
+});
+
+test('begenGoster: kendi anında "Beğen" yok; önceden beğendiysen geri alabilsin; ekleyen bilinmiyorsa var', () => {
+  assert.equal(begenGoster({ ekleyen: 'omer' }, 'omer'), false);
+  assert.equal(begenGoster({ ekleyen: 'omer', begeni: { gul: true } }, 'omer'), false);
+  assert.equal(begenGoster({ ekleyen: 'omer', begeni: { omer: true } }, 'omer'), true);
+  assert.equal(begenGoster({ ekleyen: 'gul' }, 'omer'), true);
+  assert.equal(begenGoster({}, 'omer'), true);
+  assert.equal(begenGoster(null, 'omer'), true);
 });
 
 test('aniYamasi: yalnız form alanları, boşlar null, beğeni yok, ekleyen eksikse', () => {

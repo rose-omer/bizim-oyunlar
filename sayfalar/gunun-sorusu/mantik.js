@@ -119,6 +119,23 @@ export function seri(gunler, bugun) {
   return { simdi, enUzun, bugunTamam: set.has(bugun) };
 }
 
+/**
+ * Seri kartının metni (nazik dil: kayıp ve baskı yok). s = seri(...).
+ * -> { simge, sayi: number | null, durum, not, rekor: number | null }; sayi null ise durum sayının yerine yazılır.
+ */
+export function seriMetni(s) {
+  const simdi = s?.simdi || 0;
+  const rekor = s?.enUzun > 0 ? s.enUzun : null;
+  if (simdi > 0) {
+    return {
+      simge: '🌿', sayi: simdi, durum: 'gün üst üste', rekor,
+      not: s.bugunTamam ? 'Bugün birlikte cevapladınız. Yarın yeni bir soru gelecek.' : `Bugün de cevaplarsanız ${simdi + 1} gün olacak.`,
+    };
+  }
+  if (rekor) return { simge: '🌱', sayi: null, durum: 'Yeniden başlayalım', rekor, not: 'İkiniz de bugün cevaplayınca yeni günler başlar.' };
+  return { simge: '🌱', sayi: null, durum: 'Hadi başlayalım', rekor: null, not: 'İkiniz de bugün cevaplayınca ilk gününüz sayılır.' };
+}
+
 /** Son n gün (eskiden yeniye): { gun, tarih, durum: 'ikisi'|'ben'|'partner'|'yok' }. */
 export function haftaSeridi(harita, bugun, benId, n = 7) {
   const out = [];

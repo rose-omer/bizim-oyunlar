@@ -229,6 +229,12 @@ export function formParametreleri(search, bugun) {
   };
 }
 
+/** "Beğen" düğmesi görünsün mü: kendi eklediğin anıda yok; önceden beğendiysen geri alabilmen için var. */
+export function begenGoster(data, benId) {
+  if (!data?.ekleyen || data.ekleyen !== benId) return true;
+  return !!data.begeni?.[benId];
+}
+
 export function begeniSayisi(begeni) {
   return begeni && typeof begeni === 'object' ? Object.values(begeni).filter(Boolean).length : 0;
 }

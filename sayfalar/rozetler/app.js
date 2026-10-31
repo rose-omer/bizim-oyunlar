@@ -73,7 +73,7 @@ function rozetEl(r) {
     !r.acik && !r.bekliyor && r.oran > 0
       ? h('span', { class: 'rz-ilerleme', 'aria-hidden': 'true' }, h('span', { style: { transform: `scaleX(${r.oran.toFixed(3)})` } }))
       : null,
-    h('span', { class: 'rz-durum' }, h('span', { class: 'sr-only' }, r.acik ? 'Açık. ' : 'Kilitli. '), r.durum));
+    h('span', { class: 'rz-durum' }, h('span', { class: 'sr-only' }, r.acik ? 'Açık. ' : 'Henüz açılmadı. '), r.durum));
 }
 
 function ciz() {

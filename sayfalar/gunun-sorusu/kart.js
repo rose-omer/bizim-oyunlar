@@ -6,7 +6,7 @@ import { openCollection } from '../../js/core/veri.js';
 import { pageUrl } from '../../js/core/identity.js';
 import { h, knownPartner } from '../../js/core/ui.js';
 import { SORULAR } from './sorular.js';
-import { KATEGORILER, gunNo, soruSecici, gunlereGore, gunDurumu, ortakGunler, seri } from './mantik.js';
+import { KATEGORILER, gunNo, soruSecici, gunlereGore, gunDurumu, ortakGunler, seri, seriMetni } from './mantik.js';
 
 const CSS = `
 .gsk { display: flex; flex-direction: column; gap: 12px; padding: 18px 18px 16px; border: 1px solid var(--line);
@@ -60,7 +60,7 @@ export async function mountGununSorusuKart(el, { room, partnerAd } = {}) {
     const soru = sec(bugun);
     const harita = gunlereGore(col.all());
     const d = gunDurumu(harita, bugun, benId);
-    const s = seri(ortakGunler(harita), bugun);
+    const s = seriMetni(seri(ortakGunler(harita), bugun));
     const p = ad();
     let durum = 'yok';
     let metin = 'Bugün henüz kimse cevaplamadı. İlk sen yaz!';
@@ -72,9 +72,9 @@ export async function mountGununSorusuKart(el, { room, partnerAd } = {}) {
     const kart = h('section', { class: 'gsk', 'aria-labelledby': baslikId, dataset: { durum } },
       h('div', { class: 'gsk-ust' },
         h('h2', { class: 'gsk-baslik', id: baslikId }, 'Günün sorusu'),
-        s.simdi > 0
-          ? h('span', { class: 'gsk-seri', title: `En uzun seri: ${s.enUzun} gün` },
-            h('span', { 'aria-hidden': 'true' }, '🔥'), h('span', { class: 'sr-only' }, 'Seri: '), `${s.simdi} gün`)
+        s.sayi
+          ? h('span', { class: 'gsk-seri', title: `Rekorumuz: ${s.rekor} gün` },
+            h('span', { 'aria-hidden': 'true' }, s.simge), h('span', { class: 'sr-only' }, 'Üst üste '), `${s.sayi} gün`)
           : null),
       h('p', { class: 'gsk-soru' }, soru?.s || ''),
       soru ? h('span', { class: 'gsk-kat' }, KATEGORILER[soru.k] || '') : null,

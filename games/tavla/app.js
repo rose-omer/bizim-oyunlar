@@ -164,7 +164,7 @@ function renderPlate(el, s, p) {
   el.replaceChildren(
     h('span', { class: `tv-swatch p${p}`, 'aria-hidden': 'true' }),
     h('span', { class: 'tv-name' }, nameOf(s, id)),
-    h('span', { class: 'tv-meta' }, `${pip} pip${s.off[p] ? ` · ${s.off[p]} topladı` : ''}${s.bar[p] ? ` · ${s.bar[p]} kırık` : ''}`),
+    h('span', { class: 'tv-meta' }, `bitişe ${pip} adım${s.off[p] ? ` · ${s.off[p]} topladı` : ''}${s.bar[p] ? ` · ${s.bar[p]} kırık` : ''}`),
     h('span', { class: 'tv-score', 'aria-label': `${s.score[p]} puan` }, String(s.score[p])),
   );
 }
@@ -179,7 +179,7 @@ function renderStatus(s, mine) {
   const cur = s.players[s.turn];
   const curName = nameOf(s, cur);
   let t;
-  if (s.phase === 'setup') t = 'Kaç puanlık maç oynayalım?';
+  if (s.phase === 'setup') t = ''; // soru kurulum kartında; altta tekrar etmez
   else if (s.phase === 'gameover') t = gameOverText(s);
   else if (s.phase === 'matchover') t = s.players[s.result.winner] === me ? 'Maçı kazandın!' : `${nameOf(s, s.players[s.result.winner])} maçı kazandı.`;
   else if (s.phase === 'roll') {
@@ -200,8 +200,8 @@ function renderStatus(s, mine) {
 
 function gameOverText(s) {
   const r = s.result;
-  const who = s.players[r.winner] === me ? 'Sen' : nameOf(s, s.players[r.winner]);
-  return `${who} oyunu aldı · +${r.pts}${r.mars ? ' (mars!)' : ''}`;
+  const kim = s.players[r.winner] === me ? 'Oyunu sen aldın' : `${nameOf(s, s.players[r.winner])} oyunu aldı`;
+  return `${kim} · +${r.pts}${r.mars ? ' (mars)' : ''}`;
 }
 
 function renderActions(s, mine, tlist) {
@@ -251,7 +251,7 @@ function renderCover(s) {
     }, `${n} puan`)));
   cover.replaceChildren(h('div', { class: 'card stack masa-card' },
     h('h2', { class: 'masa-card-title' }, 'Tavla'),
-    h('p', { class: 'muted' }, 'Oyun 1 puan, mars 2 puan. Kaç puana kadar oynayalım?'),
+    h('p', { class: 'muted' }, 'Her oyun 1 puan. Rakip hiç pul toplayamadan biterse mars olur: 2 puan. Kaç puana kadar oynayalım?'),
     seg,
     h('div', { class: 'masa-card-actions' },
       h('button', {

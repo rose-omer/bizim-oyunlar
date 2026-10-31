@@ -478,6 +478,8 @@ v3 bölümleri v1 ve v2'nin üstüne gelir. Çatışmada v3 geçerli.
 | `yavrubakim` | uuid | `{ eylem, kim (clientId), at, deger? }` (bakım günlüğü; sayfa son 10'u gösterir) | Yavrumuz |
 | `kupon` | uuid | `{ baslik, emoji, aciklama?, veren, alan (clientId), durum: 'verildi'/'kullanildi'/'tamam', verildi: ISO, kullanildi?: ISO, tamam?: ISO, son?: gün }` (son gün dahil kullanılır) | Aşk Kuponları |
 | `bilgi` | clientId | `{ ust?, alt?, ayakkabi?, yuzuk?, cicek?, renk?, yemek?, tatli?, icecek?, markalar?, sevmedikleri?, alerji?, hediye?, not?, sorular?: { [alan]: ISO } }` (her kişi yalnız kendi belgesini alan alan yazar; `sorular` = sevgiliye "Sor" dediklerim) | Onun Hakkında |
+| `kumbara` | uuid | `{ baslik, emoji, hedef (kuruş), son?: gün, tamam?: ISO }` (`tamam` = hedefe ilk ulaşılan an; para alınsa da kalır) | Ortak Harcamalar → Kumbara (`sayfalar/harcama/kumbara-mantik.js`) |
+| `katki` | uuid | `{ kumbara (id), tutar (kuruş; eksi = kumbaradan alma), kim (clientId), not?, tarih: gün }` | Ortak Harcamalar → Kumbara |
 - Ek alanlar: `ani.konum = { lat, lng }` (4 ondalık); `mesaj.ses = { url, sure, tur }`; `mesaj.yildiz = { [clientId]: true }` (patch `yildiz.<clientId>`);
   `mesaj.sabit = { at: ISO, kim: clientId }` (ikimiz için ortak; patch `sabit`, kaldırınca `null`; en çok 10; eski sabitler istemcide `bizim.sohbet.sabit.<oda>` önbelleğinde);
   `liste.liste = 'sarki'` + `baglanti?` (yalnız https YouTube/Spotify/Apple Music) + `bizim?` (tek "Bizim şarkımız").

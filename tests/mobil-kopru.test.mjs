@@ -48,6 +48,10 @@ test('hatirlaticiId: kararlı, pozitif 31 bit tamsayı', () => {
     assert.ok(Number.isInteger(id) && id >= 1 && id <= 0x7fffffff, `${s} -> ${id}`);
   }
   assert.notEqual(hatirlaticiId('gun-1'), hatirlaticiId('gun-2'));
+  // Grup kimliğe girer: aynı olay kimliği iki grupta farklı bildirim kimliği alır.
+  assert.equal(hatirlaticiId('a', 'gunler'), hatirlaticiId('gunler:a'));
+  assert.notEqual(hatirlaticiId('ac', 'yavru'), hatirlaticiId('ac', 'gunler'));
+  assert.equal(hatirlaticiId('a', null), hatirlaticiId('a'));
 });
 
 test('bildirimListesi: geçmişi, geçersizi ve kimliksizi atar; sıralar; Capacitor biçimi', () => {
@@ -64,12 +68,12 @@ test('bildirimListesi: geçmişi, geçersizi ve kimliksizi atar; sıralar; Capac
   ], SIMDI);
   assert.deepEqual(liste.map((n) => n.extra.kaynak), ['a', 'b']);
   assert.deepEqual(liste[0], {
-    id: hatirlaticiId('a'),
+    id: hatirlaticiId('a', 'gunler'),
     title: 'Doğum günü',
     body: 'Bugün!',
     schedule: { at: ileri(5), allowWhileIdle: true },
     isExactNotification: false,
-    extra: { kaynak: 'a' },
+    extra: { kaynak: 'a', grup: 'gunler' },
   });
   // Android eklentisi "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'" (UTC) bekler.
   assert.match(liste[1].schedule.at, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/);
@@ -97,13 +101,22 @@ test('bildirimListesi: en çok 64, en yakınlar kalır; giriş dizi değilse bo�
 });
 
 test('bildirimListesi: kimlik çakışırsa ikincisi sonraki sayıyı alır (sıradan bağımsız)', () => {
-  assert.equal(hatirlaticiId('g260618'), hatirlaticiId('g808496')); // bilinen FNV çakışması
-  const h = hatirlaticiId('g260618');
-  const olay = (id) => ({ id, baslik: id, zaman: ileri(id === 'g260618' ? 1 : 2) });
-  const a = bildirimListesi([olay('g260618'), olay('g808496')], SIMDI);
-  const b = bildirimListesi([olay('g808496'), olay('g260618')], SIMDI);
+  assert.equal(hatirlaticiId('g35158', 'gunler'), hatirlaticiId('g530826', 'gunler')); // bilinen FNV çakışması
+  const h = hatirlaticiId('g35158', 'gunler');
+  const olay = (id) => ({ id, baslik: id, zaman: ileri(id === 'g35158' ? 1 : 2) });
+  const a = bildirimListesi([olay('g35158'), olay('g530826')], SIMDI);
+  const b = bildirimListesi([olay('g530826'), olay('g35158')], SIMDI, { grup: 'gunler' });
   assert.deepEqual(a.map((n) => n.id), [h, h + 1]);
   assert.deepEqual(b, a);
+});
+
+test('bildirimListesi: grup kimliğe ve extra alanına girer; başka grubun dolu kimliği atlanır', () => {
+  const ac = { id: 'ac', baslik: 'Yavrumuz', metin: 'Yavrunuz acıktı 🍼', zaman: ileri(30) };
+  const [n] = bildirimListesi([ac], SIMDI, { grup: 'yavru' });
+  assert.equal(n.id, hatirlaticiId('ac', 'yavru'));
+  assert.deepEqual(n.extra, { kaynak: 'ac', grup: 'yavru' });
+  const [m] = bildirimListesi([ac], SIMDI, { grup: 'yavru', dolu: [n.id, n.id + 1] });
+  assert.equal(m.id, n.id + 2, 'Özel Günler hatırlatıcısının kimliği ezilmez');
 });
 
 test('titresimAdimlari: sayı, desen, sınırlar', () => {
@@ -150,7 +163,8 @@ test('yerelHatirlaticilar: önce eskileri iptal eder, izin ister, yenileri planl
   assert.deepEqual(kayit.map((k) => k[0]), ['pending', 'cancel', 'check', 'request', 'schedule']);
   assert.deepEqual(kayit[1][1], { notifications: [{ id: 5 }, { id: 9 }] });
   const [bildirim] = kayit[4][1].notifications;
-  assert.equal(bildirim.id, hatirlaticiId('gun1'));
+  assert.equal(bildirim.id, hatirlaticiId('gun1', 'gunler'));
+  assert.equal(bildirim.extra.grup, 'gunler', 'grup verilmezse Özel Günler');
   assert.equal(bildirim.title, 'Yarın yıldönümü');
   assert.equal(bildirim.schedule.at, zaman);
 });
@@ -190,6 +204,45 @@ test('yerelHatirlaticilar: eklenti hatası fırlamaz; çağrılar sırayla işle
   assert.equal(uyari.mock.callCount(), 1);
   // İkinci çağrı, birincinin planlaması bitmeden bekleyenleri okumaz.
   assert.deepEqual(kayit.map((k) => k[0]), ['pending', 'check', 'pending', 'check', 'schedule']);
+});
+
+test('yerelHatirlaticilar: grup yalnız kendi bekleyenlerini iptal eder; grupsuz eski bekleyen Özel Günler sayılır', async () => {
+  const zaman = new Date(Date.now() + 3600000).toISOString();
+  const bekleyen = [
+    { id: 11 }, // eski sürümden: grubu yok → 'gunler'
+    { id: 12, extra: { kaynak: 'g1', grup: 'gunler' } },
+    { id: 13, extra: { kaynak: 'ac', grup: 'yavru' } },
+  ];
+  let kayit = sahteKopru({ bekleyen });
+  assert.equal(await yerelHatirlaticilar([{ id: 'ac', baslik: 'Yavrumuz', zaman }], { grup: 'yavru' }), 1);
+  assert.deepEqual(kayit.find((k) => k[0] === 'cancel')[1], { notifications: [{ id: 13 }] });
+  const [yeni] = kayit.find((k) => k[0] === 'schedule')[1].notifications;
+  assert.equal(yeni.extra.grup, 'yavru');
+
+  kayit = sahteKopru({ bekleyen });
+  assert.equal(await yerelHatirlaticilar([{ id: 'g1', baslik: 'Yarın', zaman }], { grup: 'gunler' }), 1);
+  assert.deepEqual(kayit.find((k) => k[0] === 'cancel')[1], { notifications: [{ id: 11 }, { id: 12 }] });
+
+  // Boş liste: yalnız o grubun bekleyenleri gider, izin sorulmaz.
+  kayit = sahteKopru({ bekleyen });
+  assert.equal(await yerelHatirlaticilar([], { grup: 'yavru' }), 0);
+  assert.deepEqual(kayit.map((k) => k[0]), ['pending', 'cancel']);
+  assert.deepEqual(kayit[1][1], { notifications: [{ id: 13 }] });
+
+  // Başka grubun bekleyeni yoksa iptal çağrılmaz.
+  kayit = sahteKopru({ bekleyen: [{ id: 11 }] });
+  await yerelHatirlaticilar([], { grup: 'yavru' });
+  assert.deepEqual(kayit.map((k) => k[0]), ['pending']);
+});
+
+test('yerelHatirlaticilar: yeni kimlik başka grubun bekleyen kimliğiyle çakışmaz', async () => {
+  const zaman = new Date(Date.now() + 3600000).toISOString();
+  const carpisan = hatirlaticiId('ac', 'yavru');
+  const kayit = sahteKopru({ bekleyen: [{ id: carpisan, extra: { kaynak: 'x', grup: 'gunler' } }] });
+  assert.equal(await yerelHatirlaticilar([{ id: 'ac', baslik: 'Yavrumuz', zaman }], { grup: 'yavru' }), 1);
+  assert.equal(kayit.some((k) => k[0] === 'cancel'), false, 'Özel Günler hatırlatıcısı silinmez');
+  const [yeni] = kayit.find((k) => k[0] === 'schedule')[1].notifications;
+  assert.equal(yeni.id, carpisan + 1);
 });
 
 test('renkHex: hex ve rgb biçimleri', () => {

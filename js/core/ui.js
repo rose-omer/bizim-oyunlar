@@ -110,6 +110,27 @@ export function genitive(name) {
   return `${t}'${'aeıioöuü'.includes(low[low.length - 1]) ? 'n' : ''}${suf}`;
 }
 
+/** Üst çubukta gösterilen ad: yalnız ilk ad ("Ayşe Gül" → "Ayşe"). */
+export function ilkAd(name) {
+  return String(name || '').trim().split(/\s+/)[0] || '';
+}
+
+/**
+ * Geri düğmesi tarayıcı geçmişine dönsün mü? Aynı siteden (site kökü altından, başka sayfadan) gelindiyse
+ * ve geçmişte önceki adım varsa evet. Değilse bağlantının kendi adresi (sekme sayfası ya da ana sayfa) açılır.
+ */
+export function geriGidilebilir({ referrer = '', kok = '', simdiki = '', gecmis = 0 } = {}) {
+  if (!referrer || !kok || !(gecmis > 1)) return false;
+  try {
+    const r = new URL(referrer);
+    const k = new URL(kok);
+    const s = new URL(simdiki || kok);
+    return r.origin === k.origin && r.pathname.startsWith(k.pathname) && r.pathname !== s.pathname;
+  } catch {
+    return false;
+  }
+}
+
 // Sayfalarda "nerede" metni; yoksa başlığın bulunma eki (locative) kullanılır.
 const SAYFA_YER = {
   biz: 'ana sayfada', anilar: 'Anılarda', mektup: 'Mektuplarda', listeler: 'Listelerde',
@@ -507,8 +528,10 @@ export function mountShell({ title = '', room = null } = {}) {
   if (chip) tools.append(chip);
   tools.append(muteButton());
 
+  const gecmisli = geriGecmisli();
   header.replaceChildren(h('div', { class: 'shell-bar' },
-    h('a', { class: 'shell-back', href: lobbyUrl(), 'aria-label': 'Ana sayfaya dön' }, icon('back'), h('span', {}, 'Biz')),
+    h('a', { class: 'shell-back', href: lobbyUrl(), 'aria-label': gecmisli ? 'Geri dön' : 'Ana sayfaya dön', onclick: geriTikla },
+      icon('back'), h('span', {}, gecmisli ? 'Geri' : 'Biz')),
     h('h1', { class: 'shell-title' }, title),
     tools));
 
@@ -516,6 +539,7 @@ export function mountShell({ title = '', room = null } = {}) {
   let status = 'online';
   const paint = () => {
     if (!chip) return;
+    // Çipte yalnız ilk ad; tam ad ipucunda. Yer daralınca önce ad kısalır (base.css), başlık değil.
     const name = partner?.name || knownPartner(roomId)?.name || 'Sevgilin';
     let w = partnerWhere(partner, ns);
     if (status === 'connecting') w = { kind: 'off', text: 'bağlanıyor…' };
@@ -524,7 +548,7 @@ export function mountShell({ title = '', room = null } = {}) {
     chip.title = `${name}: ${w.text}`;
     chip.replaceChildren(
       h('span', { class: 'dot', 'aria-hidden': 'true' }),
-      h('span', { class: 'shell-partner-name' }, name),
+      h('span', { class: 'shell-partner-name' }, ilkAd(name) || 'Sevgilin'),
       h('span', { class: 'shell-partner-state' }, w.text));
   };
 
@@ -700,9 +724,22 @@ function tabHref(s) {
   return s.path ? pageUrl(s.path) : lobbyUrl();
 }
 
+const geriGecmisli = () => geriGidilebilir({
+  referrer: document.referrer, kok: SITE_ROOT, simdiki: location.href, gecmis: history.length,
+});
+
+/** Geri: aynı siteden gelindiyse tarayıcı geçmişi (sayfa kaydırması da korunur); değilse bağlantının adresi. */
+function geriTikla(e) {
+  if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  if (!geriGecmisli()) return;
+  e.preventDefault();
+  history.back();
+}
+
 /**
  * Sekme sayfasında (ör. Sohbet) üst şeritteki geri bağlantısı gereksiz: gizlenir.
- * Sekmenin alt sayfasında (ör. Ayarlar, sekme 'daha') geri bağlantısı o sekmeye döner.
+ * Sekmenin alt sayfasında (ör. Ayarlar, sekme 'daha') geri bağlantısı o sekmeye döner
+ * (aynı siteden gelindiyse geçmişte bir adım geri; o zaman etiket "Geri").
  */
 function syncShellBack() {
   if (typeof document === 'undefined') return;
@@ -715,12 +752,10 @@ function syncShellBack() {
     return;
   }
   back.hidden = false;
-  if (s.id !== 'biz') {
-    const label = TAB_LABELS[s.id] || s.title;
-    back.href = href;
-    back.setAttribute('aria-label', `${label} sayfasına dön`);
-    back.replaceChildren(icon('back'), h('span', {}, label));
-  }
+  if (s.id !== 'biz') back.href = href;
+  const label = geriGecmisli() ? 'Geri' : s.id === 'biz' ? 'Biz' : TAB_LABELS[s.id] || s.title;
+  back.setAttribute('aria-label', label === 'Geri' ? 'Geri dön' : s.id === 'biz' ? 'Ana sayfaya dön' : `${label} sayfasına dön`);
+  back.replaceChildren(icon('back'), h('span', {}, label));
 }
 
 /** Altta sabit sekme çubuğu (SEKMELER). active = sayfa id'si ya da null. -> nav öğesi */

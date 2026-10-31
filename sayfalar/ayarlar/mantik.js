@@ -32,6 +32,27 @@ export const KISI_RENKLERI = [
   { ad: 'Bal', renk: '#A8741A' },
 ];
 
+// ---------- Katlanır bölümler ----------
+// localStorage: açık bölümlerin id dizisi (JSON). İlk açılışta yalnız Profilim açık.
+export const K_ACIK_BOLUMLER = 'bizim.ayarlar.acik';
+const VARSAYILAN_ACIK = ['profil'];
+
+/** Depodaki metin → açık bölüm id'leri. Bozuk ya da yoksa varsayılan. */
+export function acikBolumler(raw) {
+  let v = null;
+  try { v = JSON.parse(raw); } catch { v = null; }
+  if (!Array.isArray(v)) return [...VARSAYILAN_ACIK];
+  return [...new Set(v.filter((x) => typeof x === 'string' && /^[a-z]{2,20}$/.test(x)))];
+}
+
+/** Bir bölüm açılınca / kapanınca yeni liste. */
+export function acikGuncelle(liste, id, acik) {
+  const s = new Set(liste || []);
+  if (acik) s.add(id);
+  else s.delete(id);
+  return [...s];
+}
+
 // ---------- Biz: buluşma ----------
 const GUN_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
 const SAAT_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;

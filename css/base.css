@@ -303,7 +303,9 @@ p { text-wrap: pretty; }
   flex: none;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 4px;
+  min-width: 44px;
   min-height: 44px;
   padding: 0 12px 0 6px;
   border-radius: var(--radius-pill);
@@ -321,13 +323,16 @@ p { text-wrap: pretty; }
   font-size: 1.125rem;
   font-weight: 600;
 }
+/* Yer daralınca önce araçlar (sevgili çipi) küçülür, sonra başlık: büyük shrink katsayısı.
+   Çipin en küçük hâli "nokta + ilk harf…" (aşağıda ad satır içinde harften bölünebilir). */
 .shell-tools {
-  flex: none;
+  flex: 0 1000 auto;
   display: flex;
   align-items: center;
   gap: 4px;
   margin-left: auto;
 }
+.shell-tools > :not(.shell-partner) { flex-shrink: 0; }
 .shell-partner {
   display: inline-flex;
   align-items: center;
@@ -341,7 +346,16 @@ p { text-wrap: pretty; }
   font-weight: 700;
   line-height: 1.2;
 }
-.shell-partner-name { flex: none; max-width: 12ch; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+/* Tek satır, sığmazsa "…": harften bölünebildiği için en küçük genişliği tek harf olur. */
+.shell-partner-name {
+  display: -webkit-box;
+  flex: 0 1 auto;
+  max-width: 12ch;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+}
 .shell-partner-state { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--muted); font-weight: 600; white-space: nowrap; }
 .shell-local { background: var(--tint-6); color: var(--text); }
 .hub-brand {
@@ -1802,7 +1816,7 @@ dialog.kirp::backdrop { background: var(--kirp-zemin); }
   min-height: 56px;
   border-radius: var(--radius);
   color: var(--muted);
-  font-size: 0.71875rem; /* 11.5 px */
+  font-size: 0.78125rem; /* 12.5 px */
   font-weight: 700;
   line-height: 1.2;
   text-decoration: none;

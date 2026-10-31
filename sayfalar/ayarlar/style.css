@@ -8,14 +8,34 @@
   padding: 8px var(--gutter) 36px;
 }
 
-/* ---------- Bölüm ve kart ---------- */
-.ayar-bolum { display: flex; flex-direction: column; gap: 10px; scroll-margin-top: calc(var(--shell-h) + 12px); }
-.ayar-bolum + .ayar-bolum { margin-top: 28px; }
+/* ---------- Bölüm (katlanır) ve kart ---------- */
+.ayar-bolum { scroll-margin-top: calc(var(--shell-h) + 4px); }
+.ayar-bolum + .ayar-bolum { border-top: 1px solid var(--line); }
+.ayar-ozet {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 60px;
+  padding: 6px 6px 6px 4px;
+  border-radius: var(--radius);
+  list-style: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.ayar-ozet::-webkit-details-marker { display: none; }
+.ayar-ozet:focus-visible { outline-offset: -2px; }
 .ayar-baslik {
-  padding: 10px 4px 0;
-  font-size: 1.3125rem;
+  font-size: 1.25rem;
   letter-spacing: -0.015em;
 }
+.ayar-katla { color: var(--muted); transition: transform 0.2s var(--ease), color 0.15s ease; }
+.ayar-katla svg { width: 22px; height: 22px; }
+.ayar-bolum[open] > .ayar-ozet .ayar-katla { color: var(--accent-strong); transform: rotate(180deg); }
+.ayar-ozet:active .ayar-baslik { color: var(--accent-strong); }
+@media (hover: hover) { .ayar-ozet:hover .ayar-baslik, .ayar-ozet:hover .ayar-katla { color: var(--accent-strong); } }
+.ayar-icerik { display: flex; flex-direction: column; gap: 10px; padding: 2px 0 24px; }
 .ayar-kart {
   display: flex;
   flex-direction: column;
@@ -33,12 +53,6 @@
 .ayar-alan-ust { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; min-height: 22px; }
 .ayar-etiket { font-weight: 750; font-size: 0.9375rem; line-height: 1.3; }
 .ayar-etiket-ek { color: var(--muted); font-weight: 650; }
-.ayar-etiket-buyuk {
-  font-family: var(--font-display);
-  font-variation-settings: 'SOFT' 100;
-  font-size: 1.125rem;
-  font-weight: 600;
-}
 .ayar-yardim { color: var(--muted); font-size: 0.875rem; line-height: 1.45; }
 .ayar-hata { color: var(--bad); font-size: 0.875rem; font-weight: 700; line-height: 1.4; }
 .ayar-ok {
@@ -57,7 +71,6 @@
 .ayar-ok svg { width: 15px; height: 15px; }
 .ayar-mini { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .ayar-mini-etiket { color: var(--muted); font-size: 0.8125rem; font-weight: 750; }
-.ayar-iki { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 10px; }
 .ayar-eylemler { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .ayar-eylemler .btn.small { min-height: 44px; }
 .ayar-svg { display: inline-grid; place-items: center; flex: none; }
@@ -241,10 +254,17 @@ label.ayar-satir-baslik { cursor: pointer; }
 }
 .ayar-kapak-bos .ayar-svg svg { width: 30px; height: 30px; color: var(--accent-strong); }
 
-/* ---------- Buluşma ---------- */
-.ayar-bulusma { gap: 12px; }
-.ayar-bulusma-durum { color: var(--muted); font-size: 0.9375rem; line-height: 1.45; }
-.ayar-bulusma-durum strong { color: var(--accent-strong); font-weight: 800; }
+/* ---------- Başlangıç ve buluşma (yalnız gösterim; düzenleme Özel Günler'de) ---------- */
+.ayar-gunler { gap: 14px; }
+.ayar-degerler { display: flex; flex-direction: column; gap: 14px; margin: 0; }
+.ayar-degerler dd { display: flex; flex-direction: column; gap: 2px; margin: 4px 0 0; }
+.ayar-deger {
+  font-family: var(--font-display);
+  font-variation-settings: 'SOFT' 100;
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
 
 /* ---------- Bilgi kutusu, adımlar ---------- */
 .ayar-bilgi {
@@ -383,6 +403,7 @@ ul.ayar-riza {
 @media (prefers-reduced-motion: reduce) {
   .ayar-avatar.yukleniyor::after, .ayar-kapak.yukleniyor::after { animation: none; }
   .ayar-avatar:active { transform: none; }
+  .ayar-katla { transition: none; }
 }
 
 /* ---------- Cihazlar ---------- */

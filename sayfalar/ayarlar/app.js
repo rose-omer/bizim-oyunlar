@@ -2,7 +2,7 @@
 import { bootPage } from '../../js/core/sayfa.js';
 import { openProfil } from '../../js/core/profil.js';
 import { openCollection, listDocs, iceAktar, onbellekTemizle } from '../../js/core/veri.js';
-import { setName, inviteUrl, lobbyUrl, pageUrl, writeStore } from '../../js/core/identity.js';
+import { setName, inviteUrl, lobbyUrl, pageUrl, readStore, writeStore } from '../../js/core/identity.js';
 import {
   h, icon, toast, confirmDialog, shareInvite, copyInvite, copyText, initial, formatDay, readTema, parseTema, davetHazirla,
 } from '../../js/core/ui.js';
@@ -17,10 +17,10 @@ import { kilitAyarla, kilitVarMi, pinHatasi, pinDogruMu, cihazdanUnut } from '..
 import { daysTogether, toDay } from '../../js/core/gunler.js';
 import { isNative } from '../../js/core/mobil.js';
 import { IOS_ADIMLARI, apkGoster } from '../daha/mantik.js';
-import { bulusmaDogrula } from '../gunler/mantik.js';
+import { tarihYazi } from '../gunler/mantik.js';
 import {
-  SURUM, K_TEMA, TEMA_RENKLERI, TEMA_MODLARI, KISI_RENKLERI,
-  bulusmaAyir, bulusmaMetni, konumVerisi, mesafeKm, mesafeMetni,
+  SURUM, K_TEMA, TEMA_RENKLERI, TEMA_MODLARI, KISI_RENKLERI, K_ACIK_BOLUMLER, acikBolumler, acikGuncelle,
+  bulusmaMetni, konumVerisi, mesafeKm, mesafeMetni,
   KONUM_SECENEK, konumHataTuru, konumPlatformu, konumRehberi,
   bildirimGorunum, YEDEK_TURLERI, yedekVerisi, yedekSayisi, yedekDosyaAdi, yedektenBelgeler, parcala, yedekOzeti,
 } from './mantik.js';
@@ -50,6 +50,8 @@ const SVG = {
   kopya: '<rect x="8.5" y="8.5" width="11" height="11" rx="2.5"/><path d="M15.5 8.5V6.2A1.7 1.7 0 0 0 13.8 4.5H6.2A1.7 1.7 0 0 0 4.5 6.2v7.6a1.7 1.7 0 0 0 1.7 1.7h2.3"/>',
   cikis: '<path d="M14 4.5h3.5A1.5 1.5 0 0 1 19 6v12a1.5 1.5 0 0 1-1.5 1.5H14"/><path d="M10 8 6 12l4 4M6 12h9.5"/>',
   bilgi: '<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5M12 8h.01"/>',
+  asagi: '<path d="m6 9.5 6 6 6-6"/>',
+  takvim: '<rect x="4" y="5.5" width="16" height="14.5" rx="2.8"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/>',
   telefon: '<rect x="6.5" y="3" width="11" height="18" rx="2.8"/><path d="M10.5 17.6h3"/>',
 };
 const svg = (ad, cls = 'ayar-svg') => h('span', { class: cls, 'aria-hidden': 'true', html: `<svg viewBox="0 0 24 24" ${STROKE}>${SVG[ad]}</svg>` });
@@ -89,10 +91,19 @@ function degerKoy(input, deger) {
   if (!odakta(input) && input.value !== (deger ?? '')) input.value = deger ?? '';
 }
 
+// Bölümler katlanır: ilk açılışta yalnız Profilim açık; açık olanlar bu cihazda hatırlanır.
+const ilkAcik = acikBolumler(readStore('local', K_ACIK_BOLUMLER));
 function bolum(id, baslik, ...icerik) {
-  return h('section', { class: 'ayar-bolum', id: `ayar-${id}`, 'aria-labelledby': `ayar-${id}-h` },
-    h('h2', { class: 'ayar-baslik', id: `ayar-${id}-h` }, baslik),
-    ...icerik);
+  const d = h('details', { class: 'ayar-bolum', id: `ayar-${id}`, open: ilkAcik.includes(id) },
+    h('summary', { class: 'ayar-ozet' },
+      h('h2', { class: 'ayar-baslik', id: `ayar-${id}-h` }, baslik),
+      svg('asagi', 'ayar-katla')),
+    h('div', { class: 'ayar-icerik' }, ...icerik));
+  d.addEventListener('toggle', () => {
+    const liste = acikGuncelle(acikBolumler(readStore('local', K_ACIK_BOLUMLER)), id, d.open);
+    writeStore('local', K_ACIK_BOLUMLER, JSON.stringify(liste));
+  });
+  return d;
 }
 const kart = (...icerik) => h('div', { class: 'ayar-kart' }, ...icerik);
 
@@ -306,10 +317,6 @@ ciftAdInput.addEventListener('change', () => {
   yaz(profil.setCift({ ad: v || undefined }), ciftAdAlan);
 });
 
-const baslangicInput = h('input', { class: 'input', id: 'ayar-baslangic', type: 'date', max: toDay() });
-const baslangicAlan = alan('Başlangıç tarihimiz', baslangicInput, { yardim: '' });
-const baslangicYardim = baslangicAlan.querySelector('.ayar-yardim');
-baslangicInput.addEventListener('change', () => yaz(profil.setCift({ baslangic: baslangicInput.value || undefined }), baslangicAlan));
 function baslangicMetni(b) {
   if (!b) return 'Bu tarihten bu yana birlikte geçen günleri sayarız.';
   const n = daysTogether(b, new Date());
@@ -338,71 +345,28 @@ const kapakAlan = h('div', { class: 'ayar-alan' },
     kapakKaldirBtn),
   kapakSec);
 
-// Sonraki buluşma (tarih + saat + not birlikte kaydedilir).
-const bTarih = h('input', { class: 'input', id: 'ayar-bulusma-tarih', type: 'date', min: toDay() });
-const bSaat = h('input', { class: 'input', id: 'ayar-bulusma-saat', type: 'time' });
-const bNot = h('input', { class: 'input', id: 'ayar-bulusma-not', type: 'text', maxlength: 80, placeholder: 'Örn. Sahilde kahvaltı', enterkeyhint: 'done' });
-const bDurum = h('p', { class: 'ayar-bulusma-durum', id: 'ayar-bulusma-durum' });
-const bHata = h('p', { class: 'ayar-hata', hidden: true }, 'Önce bir tarih seç.');
-const bSil = h('button', {
-  type: 'button', class: 'btn small ghost',
-  onclick: async () => {
-    if (await yaz(profil.setCift({ bulusma: undefined, bulusmaNotu: undefined }), bulusmaAlan)) {
-      bTarih.value = ''; bSaat.value = ''; bNot.value = '';
-      bulusmaYenile();
-    }
-  },
-}, 'Temizle');
-const bulusmaAlan = h('form', {
-  class: 'ayar-alan ayar-bulusma', novalidate: true, 'aria-labelledby': 'ayar-bulusma-e',
-  onsubmit: async (e) => {
-    e.preventDefault();
-    // Günler sayfasıyla aynı kural: geçmiş zaman kabul edilmez.
-    const { hata, iso } = bulusmaDogrula(bTarih.value, bSaat.value);
-    if (hata) {
-      bHata.textContent = hata;
-      bHata.hidden = false;
-      bTarih.setAttribute('aria-invalid', 'true');
-      bTarih.focus();
-      return;
-    }
-    bHata.hidden = true;
-    bTarih.removeAttribute('aria-invalid');
-    if (!bSaat.value) bSaat.value = '20:00';
-    if (await yaz(profil.setCift({ bulusma: iso, bulusmaNotu: bNot.value.trim() || undefined }), bulusmaAlan)) {
-      sfx('pop');
-      bulusmaYenile();
-    }
-  },
-},
-h('div', { class: 'ayar-alan-ust' },
-  h('span', { class: 'ayar-etiket ayar-etiket-buyuk', id: 'ayar-bulusma-e' }, 'Sonraki buluşmamız'),
-  h('span', { class: 'ayar-ok', 'aria-hidden': 'true' })),
-bDurum,
-h('div', { class: 'ayar-iki' },
-  h('div', { class: 'ayar-mini' }, h('label', { class: 'ayar-mini-etiket', for: 'ayar-bulusma-tarih' }, 'Tarih'), bTarih),
-  h('div', { class: 'ayar-mini' }, h('label', { class: 'ayar-mini-etiket', for: 'ayar-bulusma-saat' }, 'Saat'), bSaat)),
-bHata,
-h('div', { class: 'ayar-mini' }, h('label', { class: 'ayar-mini-etiket', for: 'ayar-bulusma-not' }, 'Not (isteğe bağlı)'), bNot),
-h('div', { class: 'ayar-eylemler' }, h('button', { type: 'submit', class: 'btn primary small' }, 'Buluşmayı kaydet'), bSil));
-bTarih.addEventListener('input', () => { bHata.hidden = true; bTarih.removeAttribute('aria-invalid'); });
+// Başlangıç tarihi ve sonraki buluşma: burada yalnız gösterilir; tek düzenleme yeri Özel Günler.
+const baslangicDeger = h('p', { class: 'ayar-deger' });
+const baslangicAlt = h('p', { class: 'ayar-yardim' });
+const bulusmaDeger = h('p', { class: 'ayar-deger' });
+const bulusmaAlt = h('p', { class: 'ayar-yardim' });
+const gunlerAlan = h('div', { class: 'ayar-alan ayar-gunler' },
+  h('dl', { class: 'ayar-degerler' },
+    h('div', {}, h('dt', { class: 'ayar-etiket' }, 'Başlangıç tarihimiz'), h('dd', {}, baslangicDeger, baslangicAlt)),
+    h('div', {}, h('dt', { class: 'ayar-etiket' }, 'Sonraki buluşmamız'), h('dd', {}, bulusmaDeger, bulusmaAlt))),
+  h('div', { class: 'ayar-eylemler' },
+    h('a', { class: 'btn small', href: pageUrl('sayfalar/gunler/') }, svg('takvim'), 'Özel Günler\'de düzenle')));
 
 function bulusmaYenile() {
   const c = profil.cift();
-  const { tarih, saat } = bulusmaAyir(c.bulusma);
-  const formOdakta = bulusmaAlan.contains(document.activeElement);
-  if (!formOdakta) {
-    degerKoy(bTarih, tarih);
-    degerKoy(bSaat, saat);
-    degerKoy(bNot, c.bulusmaNotu || '');
-  }
-  bSil.hidden = !c.bulusma;
   if (c.bulusma) {
     const d = new Date(c.bulusma);
     const ne = `${formatDay(d)} ${d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}`;
-    bDurum.replaceChildren(h('strong', {}, bulusmaMetni(c.bulusma)), h('span', {}, ` · ${ne}`));
+    bulusmaDeger.textContent = bulusmaMetni(c.bulusma);
+    bulusmaAlt.textContent = [ne, c.bulusmaNotu].filter(Boolean).join(' · ');
   } else {
-    bDurum.textContent = 'Henüz plan yok. Bir tarih seçin, geri sayım ana sayfada başlasın.';
+    bulusmaDeger.textContent = 'Henüz plan yok';
+    bulusmaAlt.textContent = 'Özel Günler\'den bir tarih seçin; geri sayım başlasın.';
   }
 }
 
@@ -412,8 +376,8 @@ function bizYenile() {
   const pAd = profil.partner()?.ad || 'Sevgilin';
   ciftAdInput.placeholder = `${benAd} & ${pAd}`;
   degerKoy(ciftAdInput, c.ad || '');
-  degerKoy(baslangicInput, c.baslangic || '');
-  baslangicYardim.textContent = baslangicMetni(c.baslangic);
+  baslangicDeger.textContent = c.baslangic ? tarihYazi(c.baslangic, new Date(), { haftaGunu: false }) : 'Henüz seçilmedi';
+  baslangicAlt.textContent = baslangicMetni(c.baslangic);
   fotoKoy(kapakImg, c.kapak);
   kapakKaldirBtn.hidden = !c.kapak;
   bulusmaYenile();
@@ -1101,7 +1065,7 @@ const odaKart = kart(
 app.replaceChildren(h('div', { class: 'ayar' },
   canli,
   bolum('profil', 'Profilim', kart(profilBaslik, adAlan, dogumAlan, renkAlan)),
-  bolum('biz', 'Biz', kart(ciftAdAlan, baslangicAlan, kapakAlan), kart(bulusmaAlan)),
+  bolum('biz', 'Biz', kart(ciftAdAlan, gunlerAlan, kapakAlan)),
   bolum('bildirim', 'Bildirimler', bildirimKutu),
   bolum('kilit', 'Uygulama kilidi', kilitKutu),
   bolum('gorunum', 'Görünüm', kart(temaRenkAlan, modAlan), kart(sesSatiri)),
@@ -1137,5 +1101,14 @@ window.addEventListener('bizim:uyelik', (e) => { if (e.detail?.roomId === roomId
 setInterval(() => { if (document.visibilityState === 'visible' && uyeModu()) cihazYukle(); }, 20_000);
 setInterval(() => { if (document.visibilityState === 'visible') bulusmaYenile(); }, 60_000);
 
-// #ayar-kilit gibi bir bağlantıyla gelindiyse o bölüme kaydır.
-if (location.hash) document.getElementById(location.hash.slice(1))?.scrollIntoView({ block: 'start' });
+// #ayar-cihaz gibi bir bağlantıyla gelindiyse o bölümü aç ve oraya kaydır.
+function hashBolumu() {
+  let id = '';
+  try { id = decodeURIComponent(location.hash.slice(1)); } catch { return; }
+  const d = id ? document.getElementById(id)?.closest('details.ayar-bolum') : null;
+  if (!d) return;
+  d.open = true;
+  d.scrollIntoView({ block: 'start' });
+}
+hashBolumu();
+window.addEventListener('hashchange', hashBolumu);

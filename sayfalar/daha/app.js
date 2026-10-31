@@ -1,13 +1,14 @@
-// "Daha": tüm özellikler, oyunlar, davet, uygulamayı yükle, Android APK.
+// "Daha": gruplu özellik listesi, davet (sevgili yokken), uygulamayı yükle, Android APK. Ayarlar üst çubukta.
 import { bootPage } from '../../js/core/sayfa.js';
-import { SAYFALAR, GAMES } from '../../js/core/games.js';
-import { pageUrl, lobbyUrl } from '../../js/core/identity.js';
-import { h, icon, toast, shareInvite } from '../../js/core/ui.js';
+import { SAYFALAR, SEKMELER, sayfaById } from '../../js/core/games.js';
+import { pageUrl } from '../../js/core/identity.js';
+import { openProfil } from '../../js/core/profil.js';
+import { h, icon, toast, shareInvite, knownPartner } from '../../js/core/ui.js';
 import { kurulumDurumu } from '../../js/core/pwa.js';
 import { isNative } from '../../js/core/mobil.js';
-import { APK_URL, IOS_ADIMLARI, dahaOgeleri, apkGoster, kurulumGorunum } from './mantik.js';
+import { APK_URL, IOS_ADIMLARI, dahaGruplari, davetGoster, apkGoster, kurulumGorunum } from './mantik.js';
 
-const { roomId } = await bootPage({ ns: 'daha', title: 'Daha', tab: 'daha' });
+const { room, roomId } = await bootPage({ ns: 'daha', title: 'Daha', tab: 'daha' });
 const app = document.getElementById('app');
 
 const STROKE = 'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"';
@@ -19,26 +20,15 @@ const SVG = {
   ekle: '<rect x="4" y="4" width="16" height="16" rx="4"/><path d="M12 8.5v7M8.5 12h7"/>',
 };
 
-// ---------- Özellik kutucukları ----------
-function kutu(s, i) {
-  return h('a', { class: 'daha-kutu', href: pageUrl(s.path), dataset: { tint: String((i % 6) + 1) } },
-    h('span', { class: 'daha-ikon', 'aria-hidden': 'true' }, s.icon),
-    h('span', { class: 'daha-ad' }, s.title),
-    h('span', { class: 'daha-aciklama' }, s.desc));
+// ---------- Üst çubuk: Ayarlar ----------
+const ayarlar = sayfaById('ayarlar');
+if (ayarlar) {
+  document.querySelector('#shell .shell-tools')?.append(h('a', {
+    class: 'icon-btn', href: pageUrl(ayarlar.path), 'aria-label': ayarlar.title, title: ayarlar.title,
+  }, icon('settings')));
 }
 
-function oyunlarKutusu() {
-  const ornek = GAMES.slice(0, 5);
-  return h('a', { class: 'daha-oyunlar', href: `${lobbyUrl()}#oyunlar` },
-    h('span', { class: 'daha-oyun-yigin', 'aria-hidden': 'true' },
-      ornek.map((g, i) => h('span', { class: 'daha-oyun-pul', dataset: { tint: String((i % 6) + 1) } }, g.emoji))),
-    h('span', { class: 'daha-oyun-metin' },
-      h('span', { class: 'daha-ad' }, 'Oyunlarımız'),
-      h('span', { class: 'daha-aciklama' }, `${GAMES.length} oyun ana sayfada sizi bekliyor.`)),
-    svg(SVG.ileri));
-}
-
-// ---------- Uygulama satırları ----------
+// ---------- Satırlar ----------
 function satir({ ikon, baslik, aciklama, sag = null, ek = null, ...props }) {
   const tag = props.href ? 'a' : props.onclick ? 'button' : 'div';
   const attrs = tag === 'button' ? { type: 'button', ...props } : props;
@@ -50,6 +40,20 @@ function satir({ ikon, baslik, aciklama, sag = null, ek = null, ...props }) {
         aciklama ? h('span', { class: 'daha-satir-aciklama' }, aciklama) : null),
       sag),
     ek);
+}
+
+const sayfaSatiri = (s) => satir({
+  ikon: h('span', { class: 'daha-emoji', 'aria-hidden': 'true' }, s.icon),
+  baslik: s.title,
+  aciklama: s.desc,
+  href: pageUrl(s.path),
+  sag: svg(SVG.ileri),
+});
+
+function bolum(id, baslik, liste, grup = null) {
+  return h('section', { class: 'daha-bolum', 'aria-labelledby': `daha-h-${id}`, dataset: grup ? { grup } : null },
+    h('h2', { class: 'daha-baslik', id: `daha-h-${id}` }, baslik),
+    liste);
 }
 
 function kurulumSatiri() {
@@ -67,7 +71,7 @@ function kurulumSatiri() {
         try { ok = await k.kur(); } catch { ok = false; }
         btn.disabled = false;
         if (ok) toast('Yüklendi. Artık ana ekranında.');
-        ciz();
+        uygulamaCiz();
       },
       sag: h('span', { class: 'btn small primary daha-sag', 'aria-hidden': 'true' }, 'Yükle'),
     });
@@ -97,34 +101,43 @@ function apkSatiri() {
 }
 
 // ---------- Çizim ----------
-const listeKutusu = h('ul', { class: 'daha-liste', role: 'list' });
+// Davet: yalnız sevgili henüz yokken (önce hatırlanan partner, profil gelince kesinleşir).
+let profil = null;
+const davetBolumu = h('section', { class: 'daha-bolum', 'aria-label': 'Davet' },
+  h('ul', { class: 'daha-liste daha-davet', role: 'list' }, satir({
+    ikon: icon('share'),
+    baslik: 'Sevgilini davet et',
+    aciklama: 'Odanızın linkini gönder; açınca yanına gelir.',
+    onclick: () => shareInvite(roomId),
+    sag: svg(SVG.ileri),
+  })));
+function davetCiz() {
+  davetBolumu.hidden = !davetGoster(knownPartner(roomId), profil?.partner());
+}
 
-function ciz() {
-  listeKutusu.replaceChildren(...[
-    satir({
-      ikon: icon('share'),
-      baslik: 'Sevgilini davet et',
-      aciklama: 'Odanızın linkini gönder; açınca yanına gelir.',
-      onclick: () => shareInvite(roomId),
-      sag: svg(SVG.ileri),
-    }),
-    kurulumSatiri(),
-    apkSatiri(),
-  ].filter(Boolean));
+const uygulamaListesi = h('ul', { class: 'daha-liste', role: 'list' });
+const uygulamaBolumu = bolum('uyg', 'Uygulama', uygulamaListesi);
+function uygulamaCiz() {
+  const satirlar = [kurulumSatiri(), apkSatiri()].filter(Boolean);
+  uygulamaListesi.replaceChildren(...satirlar);
+  uygulamaBolumu.hidden = !satirlar.length;
 }
 
 app.replaceChildren(h('div', { class: 'daha' },
-  h('section', { class: 'daha-bolum', 'aria-labelledby': 'daha-h-ozellik' },
-    h('h2', { class: 'daha-baslik', id: 'daha-h-ozellik' }, 'İkimize özel'),
-    h('div', { class: 'daha-izgara' }, dahaOgeleri(SAYFALAR).map(kutu))),
-  h('section', { class: 'daha-bolum', 'aria-labelledby': 'daha-h-oyun' },
-    h('h2', { class: 'daha-baslik', id: 'daha-h-oyun' }, 'Birlikte oynayın'),
-    oyunlarKutusu()),
-  h('section', { class: 'daha-bolum', 'aria-labelledby': 'daha-h-uyg' },
-    h('h2', { class: 'daha-baslik', id: 'daha-h-uyg' }, 'Uygulama'),
-    listeKutusu)));
-ciz();
+  davetBolumu,
+  dahaGruplari(SAYFALAR, SEKMELER).map((g) => bolum(g.id, g.baslik,
+    h('ul', { class: 'daha-liste', role: 'list' }, g.sayfalar.map(sayfaSatiri)), g.id)),
+  uygulamaBolumu));
+davetCiz();
+uygulamaCiz();
+
+room.on('presence', davetCiz);
+openProfil(room).then((p) => {
+  profil = p;
+  p.on('change', davetCiz);
+  davetCiz();
+}).catch((e) => console.warn('[daha] profil', e));
 
 // Kurulum durumu sonradan değişebilir (tarayıcı izni geç verir, kurulum biter).
-window.addEventListener('beforeinstallprompt', () => setTimeout(ciz, 0));
-window.addEventListener('appinstalled', () => setTimeout(ciz, 0));
+window.addEventListener('beforeinstallprompt', () => setTimeout(uygulamaCiz, 0));
+window.addEventListener('appinstalled', () => setTimeout(uygulamaCiz, 0));

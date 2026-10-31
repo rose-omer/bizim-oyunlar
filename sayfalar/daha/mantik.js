@@ -10,9 +10,35 @@ export const IOS_ADIMLARI = [
   'Sağ üstte “Ekle”ye dokun.',
 ];
 
-/** Kutucuk olarak gösterilecek sayfalar: hepsi, 'biz' ve 'daha' hariç; kayıt sırası korunur. */
-export function dahaOgeleri(sayfalar) {
-  return (sayfalar || []).filter((s) => s && s.path && s.id !== 'biz' && s.id !== 'daha');
+/** Daha'daki gruplar. Grup üyeliği yalnız burada; grup içi sıra bu sıradır. */
+export const DAHA_GRUPLARI = [
+  { id: 'konusalim', baslik: 'Konuşalım', uyeler: ['mektup', 'gunsorusu', 'haftalik', 'gunfoto'] },
+  { id: 'planlayalim', baslik: 'Planlayalım', uyeler: ['listeler', 'randevu', 'harcama'] },
+  { id: 'biz', baslik: 'Biz', uyeler: ['ruh', 'sevgidili', 'yilimiz', 'rozetler', 'skor'] },
+  { id: 'birlikte', baslik: 'Birlikte', uyeler: ['izle', 'oyunlar'] },
+];
+const DIGER = { id: 'diger', baslik: 'Diğer' };
+// Ayarlar listede değil: başlığın sağında ikon düğme.
+const DAHA_DISI = ['ayarlar'];
+
+/**
+ * SAYFALAR → [{ id, baslik, sayfalar: [sayfa] }]. Alt çubuktaki sayfalar (sekmeler) ve Ayarlar çıkar.
+ * Haritada olmayan sayfa "Diğer" grubuna düşer (kayıt sırasıyla). Boş grup dönmez.
+ */
+export function dahaGruplari(sayfalar, sekmeler = []) {
+  const liste = (sayfalar || []).filter((s) => s?.id && s.path && !DAHA_DISI.includes(s.id) && !sekmeler.includes(s.id));
+  const byId = new Map(liste.map((s) => [s.id, s]));
+  const gruplar = DAHA_GRUPLARI.map((g) => ({
+    id: g.id, baslik: g.baslik, sayfalar: g.uyeler.map((id) => byId.get(id)).filter(Boolean),
+  }));
+  const grupta = new Set(DAHA_GRUPLARI.flatMap((g) => g.uyeler));
+  gruplar.push({ ...DIGER, sayfalar: liste.filter((s) => !grupta.has(s.id)) });
+  return gruplar.filter((g) => g.sayfalar.length);
+}
+
+/** "Sevgilini davet et" satırı: sevgili henüz hiç görünmediyse (knownPartner) ve profili yoksa. */
+export function davetGoster(bilinenPartner, profilPartner) {
+  return !bilinenPartner?.clientId && !profilPartner?.clientId;
 }
 
 /** APK bağlantısı yalnız Android tarayıcıda (uygulamanın içinde değil). */

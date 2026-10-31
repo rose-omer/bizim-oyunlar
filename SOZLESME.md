@@ -454,6 +454,7 @@ v3 bölümleri v1 ve v2'nin üstüne gelir. Çatışmada v3 geçerli.
 - **42501:** yazma giden kutusunda kalır, eşitleme durur, `kapi.js` tam ekran kapıyı gösterir.
 - Modüller: `js/core/uyelik.js` (API), `uyelik-mantik.js` (saf; yerel sıkı öykünme), `kapi.js` (onay bekleme ekranı). Yerel modda varsayılan gevşek (herkes onaylı); sessionStorage `bizim.yerel.uyelik` = `'1'` ise sıkı öykünme.
 - Davet linki: `inviteUrl(roomId, davet)` → `<kök>/#oda=<id>&davet=<kod>`.
+- Yeni telefon linki (kişiye bağlı davet): `davetOlustur(roomId, { kimlik })` + `buildTasimaUrl` → `#oda=&davet=&kim=&ad=` (anahtar yok). Yalnız o kimlik kullanır; çakışmayı çözer (anahtar yenilenir, kurtarma kodu kalır). Genel davet çakışmayı çözmez. Kimlik yalnız elle yapıştırınca uygulanır.
 - Sunucu: `supabase/schema.sql` 7. bölüm (`oda`, `oda_cihaz`, `oda_davet`, `oda_yetki`, `oda_katil`, `oda_durum`, `cihaz_*`, `davet_olustur`, `kurtarma_olustur`, `doc_ice_aktar`). Var olan RPC'ler sona `p_cihaz`, `p_anahtar` (`default null`) aldı.
 - Yedekten geri yükleme: Ayarlar › Verilerimiz. `doc_ice_aktar` 200'lük parçalar; yedekteki kopya daha yeniyse ya da mevcut kayıt silinmişse yazılır; yazılan `updated_at` = şimdi.
 

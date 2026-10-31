@@ -14,8 +14,9 @@ test('kapiIcerigi: her durumun metni, eylemleri ve yoklama aralığı', () => {
   assert.equal(kapiIcerigi('reddedildi').metin, 'Bu cihazın katılma isteği reddedildi.');
   assert.deepEqual(kapiIcerigi('reddedildi').eylemler, ['cik']);
   assert.equal(kapiIcerigi('cakisma').metin, "Bu cihaz başka bir anahtarla kayıtlı. Kurtarma kodun varsa gir; yoksa sevgilin Ayarlar\u00a0›\u00a0Cihazlar'dan bu cihazın eski kaydını çıkarsın.");
-  assert.deepEqual(kapiIcerigi('cakisma').eylemler, ['kurtarma', 'cik']);
-  assert.equal(kapiIcerigi('cakisma').not, undefined);
+  // Kısa yol: kişiye bağlı davet linki (sevgilinin "Yeni telefonu için link"i) yapıştırılır; kurtarma kodu da çözer.
+  assert.deepEqual(kapiIcerigi('cakisma').eylemler, ['link', 'kurtarma', 'cik']);
+  assert.equal(kapiIcerigi('cakisma').not, "Kısa yol: sevgilinden 'Yeni telefonu için link' iste ve buraya yapıştır.");
   assert.equal(kapiIcerigi('yok').metin, 'Bu cihaz odadan çıkarıldı.');
   assert.deepEqual(kapiIcerigi('yok').eylemler, ['yeniden', 'cik']);
   assert.equal(kapiIcerigi('yok').yokla, 0);
@@ -31,6 +32,29 @@ test('bekleyen davet: oda başına saklanır, silinir', () => {
   assert.equal(bekleyenDavet('baskaoda22'), null);
   davetSakla('abcdefghij', null);
   assert.equal(bekleyenDavet('abcdefghij'), null);
+});
+
+test('yapistirilanLinkiUygula: yeni telefon linki kimliği, adı, daveti ve odayı uygular; kimlik değişince durum önbelleği unutulur', async () => {
+  const { me, currentRoom, writeStore, readStore } = await import('../js/core/identity.js');
+  const { sonDurum } = await import('../js/core/uyelik.js');
+  const { yapistirilanLinkiUygula } = await import('../js/core/kapi.js');
+  const oda = 'yenitepe23';
+  const kod = 'k'.repeat(32);
+  const kim = '20089765-2a3b-4c5d-8e9f-0123456789ab';
+  const onbellek = `bizim.uyelik.${oda}`;
+  writeStore('local', onbellek, JSON.stringify({ durum: 'onayli', kanal: 'a'.repeat(32) })); // eski kimliğin durumu
+  const anahtar = readStore('local', `bizim.anahtar.${oda}`);
+
+  yapistirilanLinkiUygula({ oda, davet: kod, kim, ad: 'Gül', anahtar: null });
+  assert.deepEqual([me().clientId, me().name, currentRoom(), bekleyenDavet(oda)], [kim, 'Gül', oda, kod]);
+  assert.equal(sonDurum(oda), null, 'önbellekteki onay eski kimliğindi');
+  assert.equal(readStore('local', `bizim.anahtar.${oda}`), anahtar, 'anahtar değişmez (linkte anahtar yok)');
+
+  // Aynı kimlik: önbellek kalır.
+  writeStore('local', onbellek, JSON.stringify({ durum: 'cakisma' }));
+  yapistirilanLinkiUygula({ oda, davet: kod, kim, ad: 'Gül', anahtar: null });
+  assert.equal(sonDurum(oda).durum, 'cakisma');
+  davetSakla(oda, null);
 });
 
 test('yoklaMs: çevrimdışında artan bekleme (en çok 60 sn), diğerlerinde sabit', async () => {

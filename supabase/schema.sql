@@ -130,7 +130,8 @@ create policy "photos_insert_anon"
 -- ---------------------------------------------------------------------------
 -- 4. Çift verisi (js/core/veri.js): oda başına belgeler
 -- ---------------------------------------------------------------------------
--- Belge = (oda, tür, id) → data jsonb. Son yazan kazanır. Silme iz bırakır (deleted = true, data = {}).
+-- Belge = (oda, tür, id) → data jsonb. Son yazan kazanır. Silme veriyi korur (deleted = true; data kalır,
+-- geri alınabilir: deleted = false ile yazmak geri getirir). Hiç olmayan belgenin silinmesi {} yazar.
 create table if not exists public.room_doc (
   room text not null,
   kind text not null,
@@ -252,11 +253,12 @@ begin
 
   perform public.doc_sinir('doc_put', p_room, pg_catalog.octet_length(v_data::text));
 
+  -- Silme var olan belgenin verisini korur (geri alınabilir); yalnız deleted, author ve updated_at değişir.
   return query
   insert into public.room_doc as d (room, kind, id, data, author, deleted, created_at, updated_at)
   values (p_room, p_kind, p_id, v_data, p_author, coalesce(p_deleted, false), pg_catalog.now(), pg_catalog.clock_timestamp())
   on conflict (room, kind, id) do update
-    set data = excluded.data,
+    set data = case when excluded.deleted then d.data else excluded.data end,
         author = excluded.author,
         deleted = excluded.deleted,
         updated_at = pg_catalog.clock_timestamp()
@@ -318,7 +320,8 @@ grant execute on function public.doc_page(text, text, timestamptz, integer, text
 
 -- Alan düzeyinde birleştirme: iki kişi aynı belgeye aynı anda farklı alan yazınca biri kaybolmasın.
 -- p_patch üst düzey anahtarları tek tek yazar; 'ana.alt' iç içe tek alanı yazar; değer null ise alanı siler.
--- Satır kilitlenir (for update): eşzamanlı birleştirmeler sırayla uygulanır. Belge yoksa {} üstüne kurulur.
+-- Satır kilitlenir (for update): eşzamanlı birleştirmeler sırayla uygulanır. Belge yoksa ya da silinmişse
+-- {} üstüne kurulur (silinmiş belgenin korunan verisi yamaya karışmaz).
 create or replace function public.doc_patch(
   p_room text, p_kind text, p_id text, p_patch jsonb, p_author text,
   p_cihaz text default null, p_anahtar text default null)

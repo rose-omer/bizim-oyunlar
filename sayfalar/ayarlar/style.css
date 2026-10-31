@@ -481,3 +481,41 @@ ul.ayar-riza {
 .ayar-ilerleme::-webkit-progress-bar { background: var(--surface-2); border-radius: var(--radius-pill); }
 .ayar-ilerleme::-webkit-progress-value { background: var(--accent); border-radius: var(--radius-pill); transition: width 0.3s var(--ease); }
 .ayar-ilerleme::-moz-progress-bar { background: var(--accent); border-radius: var(--radius-pill); }
+
+/* ---------- Son silinenler ---------- */
+.cop-icerik { display: flex; flex-direction: column; gap: 8px; }
+.cop-liste { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+.cop {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  column-gap: 12px;
+  align-items: center;
+  padding: 10px 0;
+}
+.cop + .cop { border-top: 1px solid var(--line); }
+.cop-simge {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  overflow: hidden;
+  border-radius: 12px;
+  background: var(--surface-2);
+  font-size: 1.25rem;
+  line-height: 1;
+}
+.cop-simge img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.cop-metin { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cop-baslik {
+  display: -webkit-box;
+  overflow: hidden;
+  font-weight: 700;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+.cop-alt { color: var(--muted); font-size: 0.8125rem; line-height: 1.4; }
+.cop .btn.small { min-height: 44px; }

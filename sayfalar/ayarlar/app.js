@@ -1,7 +1,9 @@
 // Ayarlar: profil, biz, bildirimler, kilit, görünüm, mesafe, yedek (indir / geri yükle), cihazlar, oda, hakkında.
 import { bootPage } from '../../js/core/sayfa.js';
 import { openProfil } from '../../js/core/profil.js';
-import { openCollection, listDocs, iceAktar, onbellekTemizle } from '../../js/core/veri.js';
+import { openCollection, listDocs, putDoc, iceAktar, onbellekTemizle } from '../../js/core/veri.js';
+import { sayfaById } from '../../js/core/games.js';
+import { COP_TURLERI, copListesi, copOnizleme, copKimZaman } from './mantik.js';
 import { setName, inviteUrl, lobbyUrl, pageUrl, readStore, writeStore, parseYapistirilanLink } from '../../js/core/identity.js';
 import { yapistirilanLinkiUygula } from '../../js/core/kapi.js';
 import {
@@ -838,6 +840,7 @@ async function geriYukle(dosya) {
     profil.kisiler.refresh({ tam: true });
     profil.ciftKoleksiyon.refresh({ tam: true });
     konum.refresh({ tam: true });
+    copYukle({ zorla: true }); // yedek silinmiş kayıtları geri getirmiş olabilir
     sfx('pop');
     toast(yazilan
       ? `Geri yükleme bitti: ${sayi(yazilan)} kayıt eklendi ya da güncellendi.`
@@ -851,6 +854,103 @@ async function geriYukle(dosya) {
     geriKutu.hidden = true;
   }
 }
+
+// ---------- Son silinenler ----------
+// Silme veriyi korur; içerik türlerinin son 50 silineni listelenir. Geri al = putDoc (deleted=false). İkiniz de geri alırsınız.
+const COP_SAYFA = { mesaj: 'sohbet', ani: 'anilar', mektup: 'mektup', gun: 'gunler', liste: 'listeler', randevu: 'randevu', harcama: 'harcama', kupon: 'kupon', gunfoto: 'gunfoto' };
+const copIcerik = h('div', { class: 'cop-icerik' });
+let copKayitlar = null; // null: yüklenmedi
+let copEksik = false;
+let copHata = '';
+let copYukleniyor = false;
+let copSon = 0;
+
+async function copYukle({ zorla = false } = {}) {
+  if (copYukleniyor || (!zorla && Date.now() - copSon < 30_000)) return;
+  copYukleniyor = true;
+  copHata = '';
+  if (!copKayitlar) copCiz();
+  try {
+    const sonuc = await Promise.allSettled(COP_TURLERI.map((t) => listDocs(roomId, t)));
+    const sonuclar = {};
+    sonuc.forEach((r, i) => { if (r.status === 'fulfilled') sonuclar[COP_TURLERI[i]] = r.value; });
+    if (!Object.keys(sonuclar).length) {
+      copHata = sonuc[0]?.reason?.message || 'Liste alınamadı.';
+    } else {
+      copKayitlar = copListesi(sonuclar);
+      copEksik = Object.keys(sonuclar).length < COP_TURLERI.length;
+      copSon = Date.now();
+    }
+  } finally {
+    copYukleniyor = false;
+    copCiz();
+  }
+}
+
+function copAdlar() {
+  const adlar = {};
+  for (const d of profil.kisiler.all()) if (d.data?.ad) adlar[d.id] = d.data.ad;
+  return adlar;
+}
+
+function copSatiri(k, adlar) {
+  const o = copOnizleme(k.tur, k.data);
+  const simge = h('span', { class: 'cop-simge', 'aria-hidden': 'true' }, sayfaById(COP_SAYFA[k.tur])?.icon || '🗂️');
+  if (o.foto) {
+    const img = h('img', { alt: '', decoding: 'async', loading: 'lazy', hidden: true });
+    simge.append(img);
+    fotoKoy(img, o.foto);
+  }
+  return h('li', { class: 'cop', dataset: { tur: k.tur, id: k.id } },
+    simge,
+    h('div', { class: 'cop-metin' },
+      h('p', { class: 'cop-baslik' }, o.metin),
+      h('p', { class: 'cop-alt' }, `${o.tur} · ${copKimZaman(k.author, k.updated_at, { benId: myId, adlar })}`)),
+    islem('Geri al', 'btn small', `Geri al: ${o.tur}, ${o.metin}`, () => geriAl(k)));
+}
+
+async function geriAl(k) {
+  let doc;
+  try {
+    doc = await putDoc(roomId, k.tur, k.id, k.data, myId);
+  } catch (e) {
+    toast(e?.message || 'Geri alınamadı. Bağlantını kontrol et.');
+    return;
+  }
+  room.sendAll?.({ t: 'veri', kind: k.tur, doc }); // açık sayfalar (ikinizde de) hemen görsün
+  const sira = copKayitlar.indexOf(k);
+  copKayitlar = copKayitlar.filter((x) => x !== k);
+  copCiz();
+  const dugmeler = copIcerik.querySelectorAll('.cop .btn');
+  (dugmeler[Math.min(sira, dugmeler.length - 1)] || copIcerik.querySelector('[tabindex="-1"]'))?.focus();
+  sfx('pop');
+  toast('Geri geldi 💞');
+}
+
+function copCiz() {
+  if (!copKayitlar) {
+    copIcerik.replaceChildren(copHata
+      ? h('div', { class: 'ayar-eylemler' },
+        h('p', { class: 'ayar-satir-aciklama' }, copHata),
+        h('button', { type: 'button', class: 'btn small', onclick: () => copYukle({ zorla: true }) }, 'Tekrar dene'))
+      : h('p', { class: 'ayar-satir-aciklama', role: 'status', 'aria-busy': 'true' }, 'Yükleniyor…'));
+    return;
+  }
+  if (!copKayitlar.length) {
+    copIcerik.replaceChildren(h('p', { class: 'ayar-satir-aciklama', tabindex: '-1' }, 'Silinen bir şey yok.'));
+    return;
+  }
+  const adlar = copAdlar();
+  copIcerik.replaceChildren(...[
+    h('ul', { class: 'cop-liste', 'aria-labelledby': 'ayar-cop-h' }, copKayitlar.map((k) => copSatiri(k, adlar))),
+    copEksik ? h('p', { class: 'ayar-yardim' }, 'Bazı bölümler alınamadı; liste eksik olabilir.') : null,
+  ].filter(Boolean));
+}
+
+const copKart = kart(h('div', { class: 'ayar-alan' },
+  h('div', { class: 'ayar-alan-ust' }, h('h3', { class: 'ayar-etiket', id: 'ayar-cop-h' }, 'Son silinenler')),
+  h('p', { class: 'ayar-yardim' }, 'Silinen şeyler kaybolmaz. İkiniz de buradan geri alabilirsiniz.'),
+  copIcerik));
 
 // ---------- Cihazlar (TALIMAT §5.4) ----------
 // Mod: 'sunucu' | 'yerel-siki' → tam yönetim; 'eski-sunucu' → bilgi + kodsuz link; 'yerel-gevsek' → bilgi + bu cihaz.
@@ -1126,6 +1226,13 @@ const odaKart = kart(
     }, svg('cikis'), 'Bu cihazda odadan çık')));
 
 // ---------- Sayfa ----------
+const veriBolumu = bolum('veri', 'Verilerimiz', kart(
+  h('p', { class: 'ayar-satir-aciklama' }, 'Profiller, mesajlar, anılar, mektuplar, listeler ve özel günler tek bir dosyada. Fotoğrafların kendisi değil, adresleri girer. Geri yüklerken var olan kayıtlar silinmez.'),
+  h('div', { class: 'ayar-eylemler' }, yedekBtn, geriBtn, geriSecici),
+  geriKutu), copKart);
+// Son silinenler yalnız bölüm açılınca yüklenir (her türün tüm belgeleri okunur).
+veriBolumu.addEventListener('toggle', () => { if (veriBolumu.open) copYukle(); });
+
 app.replaceChildren(h('div', { class: 'ayar' },
   canli,
   bolum('profil', 'Profilim', kart(profilBaslik, adAlan, dogumAlan, renkAlan)),
@@ -1134,10 +1241,7 @@ app.replaceChildren(h('div', { class: 'ayar' },
   bolum('kilit', 'Uygulama kilidi', kilitKutu),
   bolum('gorunum', 'Görünüm', kart(temaRenkAlan, modAlan), kart(sesSatiri)),
   bolum('mesafe', 'Mesafe', mesafeKutu),
-  bolum('veri', 'Verilerimiz', kart(
-    h('p', { class: 'ayar-satir-aciklama' }, 'Profiller, mesajlar, anılar, mektuplar, listeler ve özel günler tek bir dosyada. Fotoğrafların kendisi değil, adresleri girer. Geri yüklerken var olan kayıtlar silinmez.'),
-    h('div', { class: 'ayar-eylemler' }, yedekBtn, geriBtn, geriSecici),
-    geriKutu)),
+  veriBolumu,
   bolum('cihaz', 'Cihazlar', cihazKutu),
   bolum('oda', 'Oda', odaKart),
   bolum('hakkinda', 'Hakkında', kart(

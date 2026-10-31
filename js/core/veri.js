@@ -61,10 +61,11 @@ export function mergeDocs(map, docs) {
   return changed;
 }
 
+/** Silinmiş belgenin verisi de korunur (Son silinenler); ekranlar silineni deleted bayrağıyla eler. */
 export function normalizeDoc(d) {
   const out = {
     id: String(d.id),
-    data: d.deleted ? {} : (d.data && typeof d.data === 'object' ? d.data : {}),
+    data: d.data && typeof d.data === 'object' ? d.data : {},
     author: d.author || null,
     deleted: !!d.deleted,
     created_at: d.created_at || d.updated_at || new Date(0).toISOString(),
@@ -134,6 +135,7 @@ export function iceAktarBirlestir(hepsi, belgeler, simdi) {
     if (!b || typeof b.id !== 'string') continue;
     const updated = kirp(b.updated_at) || null;
     const cur = hepsi[b.id];
+    if (cur && b.deleted) continue; // yedekteki silinmiş kopya var olanı silmez
     if (cur && !cur.deleted && !(updated && timeOf(updated) > timeOf(cur.updated_at))) continue;
     hepsi[b.id] = {
       id: b.id, data: b.deleted ? {} : b.data, author: b.author ?? null, deleted: !!b.deleted,
@@ -196,8 +198,9 @@ const localBackend = {
     const all = localRead(roomId, kind);
     const now = localNow();
     const prev = all[id];
+    // Silme var olan verisi korur (sunucudaki doc_put gibi); olmayan belge {} ile silinir.
     const doc = {
-      id, data: deleted ? {} : data, author, deleted: !!deleted,
+      id, data: deleted ? (prev?.data || {}) : data, author, deleted: !!deleted,
       created_at: prev?.created_at || now, updated_at: now,
     };
     all[id] = doc;
@@ -333,7 +336,7 @@ export async function patchDoc(roomId, kind, id, patch, author = null) {
   return normalizeDoc(await backend().patch(roomId, kind, id, patch, author));
 }
 
-/** Belgeyi siler (iz bırakır: deleted=true). */
+/** Belgeyi siler: deleted=true; var olan veri korunur, putDoc ile geri alınır. */
 export async function removeDoc(roomId, kind, id, author = null) {
   checkArgs(roomId, kind, id);
   return normalizeDoc(await backend().put(roomId, kind, id, {}, author, true));
@@ -434,7 +437,8 @@ export async function openCollection(room, kind, { recent = 0 } = {}) {
     if (recent > 0 && !cursor) cursor = liveDocs(map)[0]?.created_at || null;
   }
   function saveCache() {
-    let docs = [...map.values()].filter((d) => !d.pending);
+    // Silinenin verisi önbelleğe girmez (yer kaplamasın); Son silinenler sunucudan okunur.
+    let docs = [...map.values()].filter((d) => !d.pending).map((d) => (d.deleted ? { ...d, data: {} } : d));
     let cur = cursor;
     if (recent > 0) {
       const c = cursor && older ? timeOf(cursor) : -Infinity;

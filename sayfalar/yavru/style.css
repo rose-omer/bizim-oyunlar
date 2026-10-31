@@ -251,6 +251,7 @@
   font-weight: 750;
 }
 .yv-asama { background: var(--accent-soft); color: var(--accent-strong); }
+.yv-kisilik { background: var(--tint-6); color: var(--text); cursor: help; }
 .yv-buyume { margin: 0; color: var(--muted); font-size: 0.875rem; font-weight: 650; line-height: 1.4; }
 
 .yv-adform {
@@ -303,6 +304,40 @@
 .yv-ihtiyac[data-dusuk] .yv-ihtiyac-ikon,
 .yv-ihtiyac[data-dusuk] .yv-ihtiyac-deger { color: var(--yv-sicak); }
 
+/* ---------- Günün görevi ---------- */
+.yv-gorev {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+.yv-gorev[hidden] { display: none; }
+.yv-gorev-bas { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.yv-gorev-emoji {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  font-size: 1.25rem;
+  line-height: 1;
+}
+.yv-gorev-govde { flex: 1 1 auto; min-width: 0; }
+.yv-gorev-baslik { margin: 0; color: var(--muted); font-family: inherit; font-size: 0.8125rem; font-weight: 800; line-height: 1.2; }
+.yv-gorev-metin { margin: 2px 0 0; font-weight: 750; line-height: 1.35; overflow-wrap: anywhere; }
+.yv-gorev-sayi { flex: none; color: var(--muted); font-weight: 850; font-variant-numeric: tabular-nums; }
+.yv-gorev-durum { margin: 0; color: var(--muted); font-size: 0.875rem; font-weight: 700; line-height: 1.4; }
+.yv-gorev-durum strong { color: var(--text); font-weight: 850; font-variant-numeric: tabular-nums; }
+.yv-gorev-kisi[data-tamam='true'] strong,
+.yv-gorev[data-tamam='true'] .yv-gorev-sayi,
+.yv-gorev[data-tamam='true'] .yv-gorev-durum { color: var(--good); }
+.yv-gorev[data-tamam='true'] .yv-cubuk-dolu { background: var(--good); }
+
 /* ---------- Eylemler: başparmak bölgesinde, sekme çubuğunun üstünde yapışık ---------- */
 .yv-panel {
   position: sticky;
@@ -318,6 +353,8 @@
 .yv-eylemler[hidden], .yv-yumurta-panel[hidden] { display: none; }
 .yv-eylem-grup { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
 .yv-eylem-grup.yemek { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.yv-eylem-grup.ilac { grid-template-columns: minmax(0, 1fr); }
+.yv-eylem-grup[hidden] { display: none; }
 .yv-eylem {
   --eylem-bg: var(--surface-2);
   display: flex;
@@ -346,6 +383,10 @@
 .yv-eylem[data-eylem='sev'] { --eylem-bg: var(--tint-1); }
 .yv-eylem[data-eylem='uyut'] { --eylem-bg: var(--tint-2); }
 .yv-eylem[data-eylem='uyandir'] { --eylem-bg: var(--accent); color: var(--accent-ink); }
+.yv-eylem[data-eylem='ilac'] { --eylem-bg: var(--good-soft); flex-direction: row; gap: 8px; min-height: 52px; font-size: 0.9375rem; }
+.yv-eylem { position: relative; }
+.yv-eylem-favori { position: absolute; top: 5px; right: 7px; font-size: 0.75rem; line-height: 1; }
+.yv-eylem-favori[hidden] { display: none; }
 .yv-eylem-emoji { font-size: 1.5rem; line-height: 1; transition: opacity 0.2s ease, filter 0.2s ease; }
 .yv-eylem-ad { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .yv-eylem:active:not([aria-disabled='true']) { transform: scale(0.95); }

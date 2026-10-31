@@ -183,6 +183,7 @@ export const SAYFALAR = [
   { id: 'oyunlar', title: 'Oyunlarımız', icon: '🎲', path: 'sayfalar/oyunlar/', desc: 'Tüm oyunlarınız, gruplu.' },
   { id: 'kupon', title: 'Aşk Kuponları', icon: '🎟️', path: 'sayfalar/kupon/', desc: 'Birbirinize küçük sözler verin, zamanı gelince kullanın.' },
   { id: 'onun', title: 'Onun Hakkında', icon: '💝', path: 'sayfalar/onun/', desc: 'Ölçüler, sevdikleri, alerjiler: hediye için her şey.' },
+  { id: 'cark', title: 'Karar Çarkı', icon: '🎡', path: 'sayfalar/cark/', desc: 'Ne yesek, ne izlesek? Çark karar versin.' },
 ];
 
 // Alt sekme çubuğu sırası.

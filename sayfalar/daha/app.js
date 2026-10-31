@@ -93,7 +93,7 @@ function apkSatiri() {
   return satir({
     ikon: svg(SVG.telefon),
     baslik: 'Android uygulaması (APK)',
-    aciklama: 'İndir ve kur. Telefon “bilinmeyen kaynak” izni isteyebilir.',
+    aciklama: 'Varsa eskisini kaldırma; yeni sürümü üstüne kur. Bilgilerin kalır.',
     href: APK_URL,
     rel: 'noopener',
     sag: svg(SVG.ileri),

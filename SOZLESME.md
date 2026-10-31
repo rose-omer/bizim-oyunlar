@@ -236,6 +236,7 @@ Misafir `hash` farkı görürse (sürüklemiyor ve son 1 sn eylem yok) `need` yo
 - RPC (security definer, `anon`'a execute): `log_game(p_room, p_game, p_result)`, `room_stats(p_room)`, `ping()`.
 - Depolama: herkese açık `photos` kovası; 5 MB sınır; yalnız jpeg/webp/png; `anon` yalnız INSERT (listeleme yok).
 - Ücretsiz proje 7 gün hareketsiz kalırsa durur: `keepalive.yml` 3 günde bir `ping` çağırır.
+- `room_doc` silme veriyi korur: `doc_put` (`p_deleted`) yalnız `deleted`, `author`, `updated_at` yazar; `deleted = false` ile yazmak geri getirir.
 
 ---
 
@@ -316,6 +317,7 @@ Tarih: gün `'YYYY-MM-DD'`, an ISO (`new Date().toISOString()`). `author` = yaza
 | `konum` | clientId | `{ lat, lng (2 ondalık), sehir?, at: ISO }` (isteğe bağlı, varsayılan kapalı) | Ayarlar |
 | `oyunkayit` | oyun id | oyuna özel kayıtlı durum (Dama/Tavla "kaldığın yerden") | Masa oyunları |
 
+Silme veriyi korur (deleted = true, data kalır); Ayarlar › Verilerimiz › Son silinenler'den geri alınır. Ekranlar silineni `deleted` bayrağıyla eler.
 Yeni tür gerekirse raporunda bildir; çakışmayan bir ad seç.
 
 ## 18. js/core/profil.js ve js/core/gunler.js (Koordinatör, hazır)

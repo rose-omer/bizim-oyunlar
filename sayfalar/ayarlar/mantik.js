@@ -1,6 +1,8 @@
 // Ayarlar sayfasının saf mantığı (Node'da test edilir; DOM yok).
 import { countdown } from '../../js/core/gunler.js';
-import { ID_RE, checkData } from '../../js/core/veri.js';
+import { ID_RE, checkData, timeOf } from '../../js/core/veri.js';
+import { formatDay, locative } from '../../js/core/ui.js';
+import { paraMetni } from '../harcama/mantik.js';
 
 export const SURUM = '2.0';
 
@@ -340,4 +342,74 @@ export function yedekOzeti(sayilar) {
   const f = (n) => n.toLocaleString('tr-TR');
   const parcalar = liste.slice(0, 4).map(([t, n]) => `${f(n)} ${TUR_ADLARI[t] || t}`).join(', ');
   return `${f(toplam)} kayıt: ${parcalar}${liste.length > 4 ? ' …' : ''}`;
+}
+
+// ---------- Son silinenler ----------
+// Silme veriyi korur (deleted = true, data kalır). Geri al = putDoc(roomId, tür, id, data).
+export const COP_TURLERI = ['mesaj', 'ani', 'mektup', 'gun', 'liste', 'randevu', 'harcama', 'kupon', 'gunfoto'];
+const COP_EN_COK = 50;
+const ONIZLEME_MAX = 80;
+
+const doluMu = (d) => !!d && typeof d === 'object' && !Array.isArray(d) && Object.keys(d).length > 0;
+const yazi = (v) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim() : '');
+const fotoOf = (v) => (typeof v === 'string' && v ? v : null);
+const buyukBas = (s) => s.charAt(0).toLocaleUpperCase('tr') + s.slice(1);
+function kisalt(s, n = ONIZLEME_MAX) {
+  const k = [...s];
+  return k.length > n ? `${k.slice(0, n - 1).join('').trimEnd()}…` : s;
+}
+
+/**
+ * sonuclar: { [tür]: belgeler[] } (listDocs). -> [{ tur, id, data, author, updated_at }]
+ * Yalnız içerik türlerinin silinmiş ve verisi dolu belgeleri (eski silmeler {} taşır); en yeni silinen önce.
+ */
+export function copListesi(sonuclar, { enCok = COP_EN_COK } = {}) {
+  const out = [];
+  for (const tur of COP_TURLERI) {
+    for (const d of sonuclar?.[tur] || []) {
+      if (!d?.deleted || typeof d.id !== 'string' || !doluMu(d.data)) continue;
+      out.push({ tur, id: d.id, data: d.data, author: d.author || null, updated_at: d.updated_at });
+    }
+  }
+  return out.sort((a, b) => timeOf(b.updated_at) - timeOf(a.updated_at)).slice(0, enCok);
+}
+
+/** Satır önizlemesi. -> { tur: 'Mesaj', metin (tek satır, en çok 80 karakter), foto: url | null } */
+export function copOnizleme(tur, data) {
+  const d = data && typeof data === 'object' ? data : {};
+  const ad = buyukBas(turAdi(tur));
+  let metin = '';
+  let foto = null;
+  if (tur === 'mesaj') {
+    foto = fotoOf(d.foto);
+    metin = yazi(d.metin) || (d.ses ? 'Sesli mesaj' : foto ? 'Fotoğraf' : '');
+  } else if (tur === 'ani') {
+    foto = Array.isArray(d.fotolar) ? fotoOf(d.fotolar[0]) : null;
+    metin = yazi(d.baslik) || yazi(d.not);
+  } else if (tur === 'mektup') {
+    metin = yazi(d.baslik) || yazi(d.metin);
+  } else if (tur === 'gun' || tur === 'kupon') {
+    metin = [yazi(d.emoji), yazi(d.baslik)].filter(Boolean).join(' ');
+  } else if (tur === 'harcama') {
+    metin = [yazi(d.baslik), Number.isFinite(d.tutar) ? paraMetni(d.tutar) : ''].filter(Boolean).join(' · ');
+  } else if (tur === 'gunfoto') {
+    foto = fotoOf(d.foto);
+    metin = yazi(d.not);
+  } else {
+    metin = yazi(d.metin);
+  }
+  return { tur: ad, metin: kisalt(metin || ad), foto };
+}
+
+/**
+ * Kim, ne zaman sildi: "Dün sildin", "Gül dün sildi", "Gül 12 Ekim'de sildi", "12 Ekim 2025 tarihinde sildin".
+ * adlar: { [clientId]: ad } (kisi belgeleri). Adı bilinmeyen: "Sevgilin".
+ */
+export function copKimZaman(author, iso, { benId = null, adlar = {}, simdi = new Date() } = {}) {
+  const gun = formatDay(iso, simdi);
+  const zaman = !gun || /^(bugün|dün|\d+ gün önce)$/.test(gun) ? gun
+    : /\d{4}$/.test(gun) ? `${gun} tarihinde` : locative(gun);
+  if (author && author === benId) return buyukBas([zaman, 'sildin'].filter(Boolean).join(' '));
+  const ad = (author && yazi(adlar?.[author])) || 'Sevgilin';
+  return [ad, zaman, 'sildi'].filter(Boolean).join(' ');
 }

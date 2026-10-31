@@ -705,7 +705,7 @@ export function startAppServices() {
     });
   }).catch((e) => console.warn('[pwa]', e));
   import('./mobil.js').then((m) => m.mobilBaslat({
-    yeniApk: (url) => toast('Uygulamanın yeni sürümü var.', {
+    yeniApk: (url) => toast('Yeni sürüm var. Uygulamayı kaldırmadan üstüne kur; bilgilerin kalır.', {
       action: { label: 'İndir', onClick: () => m.disariAc(url) }, ms: 20000,
     }),
   })).catch((e) => console.warn('[mobil]', e));

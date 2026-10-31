@@ -1,6 +1,7 @@
 // Ana sayfa "Biz". İlk açılış: ad → oda kur ya da davetle gel → davet → "Ne zamandan beri birlikteyiz?".
-// Biz ekranı: çift başlığı, gün sayacı, bugün, yaklaşanlar, buluşma, günün sorusu, dokunuş, ruh hâli, oyunlar.
-// Sözleşme §11 ve v2 §14–§18. Saf yardımcılar dışa aktarılır (tests/hub-biz.test.mjs); DOM yalnız tarayıcıda kurulur.
+// Biz ekranı: sayaç → Bugün (ruh hâli, dokunuş, Sıradaki) → 3 önerilen oyun → yaklaşanlar, oynadıklarımız.
+// Başlangıç tarihi ve buluşma Özel Günler'de düzenlenir; burada yalnız gösterilir (ilk açılış sorusu hariç).
+// Sözleşme §11 ve v2 §14–§18. Saf yardımcılar dışa aktarılır (tests/hub-*.test.mjs); DOM yalnız tarayıcıda kurulur.
 import { GAMES, gameById } from './core/games.js';
 import {
   me, setName, currentRoom, setRoom, newRoomId, inviteUrl, gameUrl, pageUrl, isLocalMode, parseInviteHash,
@@ -20,6 +21,7 @@ import {
   listenTouches, TOUCHES, touchByTur, davetLinki,
 } from './core/ui.js';
 import { sfx } from './core/sound.js';
+import { onerilenler, grupRengi, kartAlt, acilisPlani } from '../sayfalar/oyunlar/mantik.js';
 
 const NAME_MAX = 24;
 const GO_DELAY_MS = 1500; // partner oyun açınca otomatik geçiş süresi
@@ -28,7 +30,7 @@ const PRESENCE_WAIT_MS = 2500; // partnerin yeri belli olana dek kartlar kapalı
 const TOUCH_GAP_MS = 2000; // dokunuş: en çok 2 sn'de bir
 const MOOD_NOTE_MAX = 80;
 const PROFIL_WAIT_MS = 4000; // ilk açılışta tarih sorusundan önce profili en fazla bu kadar bekle
-const PAGES = { gunler: 'sayfalar/gunler/', gunsorusu: 'sayfalar/gunun-sorusu/', ayarlar: 'sayfalar/ayarlar/' };
+const PAGES = { gunler: 'sayfalar/gunler/', gunsorusu: 'sayfalar/gunun-sorusu/', ayarlar: 'sayfalar/ayarlar/', oyunlar: 'sayfalar/oyunlar/' };
 const ISTEK_ARALIK_MS = 15000; // bekleyen cihaz isteğine en sık bu aralıkla bakılır (açılış ve öne gelince)
 
 // ====================================================================================
@@ -100,11 +102,12 @@ export function dayLabel(day, today = new Date()) {
   return new Intl.DateTimeFormat('tr-TR', opts).format(new Date(p.y, p.m - 1, p.d, 12));
 }
 
-/** ISO an → "12 Kasım Perşembe 18:00". */
-export function momentLabel(iso, now = new Date()) {
+/** ISO an → "12 Kasım Perşembe 18:00" (gunAdi: false → "12 Kasım 18:00", tek satırlık özet için). */
+export function momentLabel(iso, now = new Date(), { gunAdi = true } = {}) {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
-  const opts = { day: 'numeric', month: 'long', weekday: 'long', hour: '2-digit', minute: '2-digit' };
+  const opts = { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' };
+  if (gunAdi) opts.weekday = 'long';
   if (d.getFullYear() !== new Date(now).getFullYear()) opts.year = 'numeric';
   return new Intl.DateTimeFormat('tr-TR', opts).format(d);
 }
@@ -220,6 +223,40 @@ export function distanceText(km) {
   return `Aramızda ${Math.round(km).toLocaleString('tr-TR')} km`;
 }
 
+/**
+ * "Sıradaki" kartı: önce cevaplanmamış Günün Sorusu, sonra bugün/yarın özel gün, sonra yaklaşan buluşma.
+ * Cevaplanmış soru ve "buluşma ekle" en sona düşer. -> { ana, ozet } (ana = kartın büyük kısmı, ozet = tek satırlar)
+ *   gs = { tur:'gs', durum:'yok'|'partner'|'ben'|'ikisi' } | null
+ *   gun = { tur:'gun', ne:'bugun'|'yarin', items } | null
+ *   bulusma = { tur:'bulusma', mode:'future'|'now'|'yok' } | null
+ */
+export function siradakiSec({ gs = null, gun = null, bulusma = null } = {}) {
+  const gsAcik = !!gs && (gs.durum === 'yok' || gs.durum === 'partner');
+  const bulusmaVar = !!bulusma && bulusma.mode !== 'yok';
+  const sira = [gsAcik && gs, gun, bulusmaVar && bulusma, !gsAcik && gs, !bulusmaVar && bulusma].filter(Boolean);
+  return { ana: sira[0] || null, ozet: sira.slice(1) };
+}
+
+/**
+ * Bugün kutlananlar (bugunkuler) ve yaklaşanlar (yaklasanlar) → Sıradaki'ye giden gün + "Yaklaşanlar" listesi.
+ * Liste, Sıradaki'de görünen günü tekrar etmez. -> { siradaki: { ne, items } | null, liste }
+ */
+export function yakinGunler(bugun = [], yaklasan = [], limit = 3) {
+  if (bugun.length) return { siradaki: { ne: 'bugun', items: bugun }, liste: yaklasan.filter((i) => i.daysLeft > 0).slice(0, limit) };
+  const yarin = yaklasan.filter((i) => i.daysLeft === 1);
+  if (yarin.length) return { siradaki: { ne: 'yarin', items: yarin }, liste: yaklasan.filter((i) => i.daysLeft > 1).slice(0, limit) };
+  return { siradaki: null, liste: yaklasan.filter((i) => i.daysLeft > 0).slice(0, limit) };
+}
+
+/** countdown() → "3 gün" | "5 saat" | "12 dk" | "şimdi" ('' yoksa). */
+export function kalanKisa(cd) {
+  if (!cd) return '';
+  if (cd.past) return 'şimdi';
+  if (cd.days > 0) return `${cd.days} gün`;
+  if (cd.hours > 0) return `${cd.hours} saat`;
+  return `${Math.max(1, cd.minutes || 0)} dk`;
+}
+
 // ====================================================================================
 // Tarayıcı
 // ====================================================================================
@@ -227,7 +264,7 @@ export function distanceText(km) {
 let shell = null;
 let app = null;
 
-const emptyData = () => ({ profil: null, gun: null, dokunus: null, ruh: null, konum: null, oyunkayit: null });
+const emptyData = () => ({ profil: null, gun: null, dokunus: null, ruh: null, konum: null, oyunkayit: null, gs: null });
 
 const state = {
   room: null, // ana sayfa Room nesnesi (ns 'lobby')
@@ -247,7 +284,8 @@ const state = {
   view: null, // Biz ekranının boyanacak parçaları
   dateView: null, // ilk açılış tarih ekranı
   settingsLink: null,
-  data: emptyData(), // profil + koleksiyonlar (gun, dokunus, ruh, konum, oyunkayit)
+  data: emptyData(), // profil + koleksiyonlar (gun, dokunus, ruh, konum, oyunkayit, gs)
+  gsMod: null, // Günün Sorusu mantığı + soru bankası (tembel yüklenir): { m, sorular, roomId, sec }
   dataSubs: [],
   lastTouch: 0,
   lastWrite: 0,
@@ -270,8 +308,9 @@ const skipKey = (roomId) => `bizim.baslangicGec.${roomId}`;
 const seenKey = (roomId) => `bizim.dokunusGordu.${roomId}.${myId()}`;
 const partyKey = (roomId) => `bizim.kutlama.${roomId}.${myId()}`;
 
+/** Oyun kutucuğu rengi = grubunun rengi (Oyunlarımız sayfasıyla aynı). */
 function tintOf(g) {
-  return String((GAMES.indexOf(g) % 6) + 1);
+  return grupRengi(g.id);
 }
 
 /** Değişmediyse boyama: aynı anahtar → false. */
@@ -373,7 +412,6 @@ async function ensureRoom(roomId) {
     listenTouches(room),
   ];
   openData(room);
-  mountGs(state.view);
   paintAll();
   istekKontrol(true);
 }
@@ -462,6 +500,34 @@ function openData(room) {
   open('ruh', openCollection(room, 'ruh'));
   open('konum', openCollection(room, 'konum'));
   open('oyunkayit', openCollection(room, 'oyunkayit'));
+  open('gs', openCollection(room, 'gs'));
+  gsYukle();
+}
+
+// Günün Sorusu: Sıradaki kartı bugünün sorusunu ve kimin cevapladığını gösterir (sayfanın kendi mantığıyla).
+function gsYukle() {
+  if (state.gsMod) return;
+  Promise.all([import('../sayfalar/gunun-sorusu/mantik.js'), import('../sayfalar/gunun-sorusu/sorular.js')])
+    .then(([m, b]) => {
+      state.gsMod = { m, sorular: b.SORULAR, roomId: null, sec: null };
+      paintAll();
+    })
+    .catch((e) => console.warn('[biz] Günün Sorusu yüklenemedi:', e));
+}
+
+/** -> { tur:'gs', durum, soru } | null (veri ya da modül yoksa). */
+function gsBilgisi() {
+  const g = state.gsMod;
+  const col = state.data.gs;
+  if (!g || !col || !state.roomId) return null;
+  if (g.roomId !== state.roomId) {
+    g.roomId = state.roomId;
+    g.sec = g.m.soruSecici(g.sorular, state.roomId);
+  }
+  const bugun = g.m.gunNo();
+  const d = g.m.gunDurumu(g.m.gunlereGore(col.all()), bugun, myId());
+  const durum = d.ikisi ? 'ikisi' : d.ben ? 'ben' : d.partner ? 'partner' : 'yok';
+  return { tur: 'gs', durum, soru: g.sec(bugun)?.s || '' };
 }
 
 function closeData() {
@@ -513,15 +579,15 @@ function openGame(g) {
   state.leaving = true;
   clearGo();
   sfx('tap');
-  const p = state.partner;
-  if (p && p.page === g.id) {
-    // Sevgilin zaten o oyunda: o oyunun ev sahibine katıl (sevgilin misafirse ev sahibi başkası, belki sensin).
-    location.href = gameUrl(g.id, { roomId, host: p.host || p.clientId });
+  // Sevgilin zaten o oyundaysa onun ev sahibine katıl; değilse ev sahibi ol ve haber ver (Oyunlarımız da aynı kural).
+  const plan = acilisPlani(g.id, { roomId, partner: state.partner, benId: me().clientId });
+  const url = gameUrl(g.id, { roomId, host: plan.host });
+  if (!plan.gonder) {
+    location.href = url;
     return;
   }
-  const host = me().clientId;
-  try { state.room?.sendAll({ t: 'go', game: g.id, host }); } catch { /* bağlantı yoksa da oyun açılır */ }
-  setTimeout(() => { location.href = gameUrl(g.id, { roomId, host }); }, SEND_GRACE_MS);
+  try { state.room?.sendAll({ t: 'go', game: g.id, host: plan.host }); } catch { /* bağlantı yoksa da oyun açılır */ }
+  setTimeout(() => { location.href = url; }, SEND_GRACE_MS);
 }
 
 function joinPartner(p) {
@@ -781,7 +847,7 @@ function paintDate() {
   dv.body.replaceChildren(
     pairEl({ meName: cleanName(me().name), partnerName: partnerInfo().name, link: 'wait', lg: true }),
     heading,
-    h('p', { class: 'subtitle' }, 'Gün sayacımız bu tarihten başlar. Sonra Ayarlar\'dan değiştirebilirsin.'),
+    h('p', { class: 'subtitle' }, 'Gün sayacımız bu tarihten başlar. Sonra Özel Günler\'den değiştirebilirsin.'),
     h('div', { class: 'card biz-start' },
       startForm({
         submitLabel: 'Kaydet',
@@ -803,67 +869,75 @@ function paintDate() {
 }
 
 // ---------- Biz ekranı ----------
-// Sıra: sayaç kartı → şu an (partner durumu + ruh hâlim) → dokunuş → yaklaşanlar → buluşma → günün sorusu → oyunlar.
+// Sıra: sayaç → Bugün (ruh hâli, [Yavrumuz], dokunuş, Sıradaki) → 3 önerilen oyun → yaklaşanlar → oynadıklarımız.
 function bizScreen(roomId) {
-  const view = { roomId, keys: {}, seenAt: Number(lsGet(seenKey(roomId))) || 0, cd: null, gsMounted: false, gsCleanup: null, lastPlayed: null };
+  const view = { roomId, keys: {}, seenAt: Number(lsGet(seenKey(roomId))) || 0, cd: null, lastPlayed: null, picks: [] };
   view.heading = h('h1', { class: 'sr-only', id: 'biz-h', tabindex: '-1' }, 'Biz');
   view.istekBox = h('div', { hidden: true });
   view.thread = h('div', { class: 'biz-thread' });
   view.counterBox = h('div', { class: 'biz-counter' });
   view.noteBox = h('div', { class: 'couple-note stack' });
-  view.todayBox = h('div', { hidden: true });
   view.upBox = h('div');
-  view.meetTitle = h('h2', { id: 'meet-h' }, 'Buluşma');
-  view.meetBox = h('div');
-  view.gsBox = h('div', { class: 'biz-gs' });
-
-  view.cards = GAMES.map((g) => gameCard(g, openGame));
-  view.grid = h('div', { class: 'game-grid' }, view.cards.map((c) => c.card));
-  view.waitChip = h('span', { class: 'chip', hidden: true }, 'Bağlanıyor…');
   view.gamesHint = h('p', { class: 'biz-sec-hint', hidden: true });
-  view.resumeBox = h('div', { hidden: true });
+  view.picksBox = h('div', { class: 'card card-list biz-picks' });
+  view.upSec = section('up-h', 'Yaklaşanlar', {
+    action: h('a', { class: 'biz-link', href: pageUrl(PAGES.gunler), 'aria-label': 'Tüm özel günler' }, 'Tümü', icon('chevron')),
+  }, view.upBox);
   const statsSec = h('section', { class: 'biz-sec', 'aria-labelledby': 'stats-h', hidden: true });
 
   const el = h('div', { class: 'hub-wrap biz' },
     h('section', { class: 'biz-hero', 'aria-labelledby': 'biz-h' }, view.heading, view.thread, view.counterBox),
     view.istekBox,
     view.noteBox,
-    view.todayBox,
-    nowSection(view),
-    touchSection(view),
-    section('up-h', 'Yaklaşanlar', {
-      action: h('a', { class: 'biz-link', href: pageUrl(PAGES.gunler), 'aria-label': 'Tüm özel günler' }, 'Tümü', icon('chevron')),
-    }, view.upBox),
-    h('section', { class: 'biz-sec', 'aria-labelledby': 'meet-h' }, h('div', { class: 'biz-sec-head' }, view.meetTitle), view.meetBox),
-    h('section', { class: 'biz-sec', 'aria-label': 'Günün Sorusu' }, view.gsBox),
-    Object.assign(section('games-h', 'Ne oynayalım?', { action: view.waitChip }, view.gamesHint, view.resumeBox, view.grid), { id: 'oyunlar' }), // Daha → #oyunlar
+    todaySection(view),
+    Object.assign(section('games-h', 'Ne oynayalım?', {}, view.gamesHint, view.picksBox), { id: 'oyunlar' }), // Daha / Skor → #oyunlar
+    view.upSec,
     statsSec);
 
   loadStats(roomId, statsSec, view);
   return { el, view };
 }
 
-/** Şu an: partnerin durumu ve ruh hâli + benim ruh hâlim (6 emoji) ve kısa notum. */
-function nowSection(view) {
+/** Bugün bölümünün alt başlıklı parçası. */
+function block(id, title, { action = null } = {}, ...body) {
+  return h('section', { class: 'biz-block', 'aria-labelledby': id },
+    h('div', { class: 'biz-block-head' }, h('h3', { id }, title), action),
+    ...body);
+}
+
+/** Bugün: ruh hâli → (Yavrumuz kartı, yavru dalı) → dokunuş → Sıradaki. */
+function todaySection(view) {
+  view.todayDate = h('span', { class: 'biz-sec-date' });
+  view.nextBox = h('div', { class: 'card biz-next' });
+  return section('bugun-h', 'Bugün', { action: view.todayDate },
+    moodBlock(view),
+    // Yavrumuz kartı (yavru dalı) ruh hâlinin hemen altına, buraya girer.
+    touchBlock(view),
+    block('next-h', 'Sıradaki', {}, view.nextBox));
+}
+
+/** Ruh hâli: partnerin durumu ve ruh hâli + benim ruh hâlim (6 seçenek, adları görünür) ve kısa notum. */
+function moodBlock(view) {
   view.nowPartner = h('div', { class: 'biz-now-partner' });
   view.nowQuote = h('p', { class: 'biz-now-quote' });
-  view.moodLabel = h('span', { class: 'biz-mood-current' });
   view.moodBtns = MOODS.map((m) => h('button', {
     type: 'button',
     class: 'biz-mood-btn',
     'aria-pressed': 'false',
-    'aria-label': m.ad,
-    title: m.ad,
     dataset: { emoji: m.emoji },
     onclick: () => setMood(m, view),
-  }, h('span', { 'aria-hidden': 'true' }, m.emoji)));
+  },
+    h('span', { class: 'biz-mood-emoji', 'aria-hidden': 'true' }, m.emoji),
+    h('span', { class: 'biz-mood-ad' }, m.ad)));
   view.moodNote = h('input', {
     class: 'input', id: 'biz-mood-note', type: 'text', maxlength: MOOD_NOTE_MAX, autocomplete: 'off',
     enterkeyhint: 'done', placeholder: 'Kısa bir not (isteğe bağlı)',
   });
-  const form = h('form', {
+  // Not yalnız bir ruh hâli seçiliyken (nota bağlanacak bir seçim yokken alan gereksiz).
+  view.moodForm = h('form', {
     class: 'biz-mood-form',
     novalidate: true,
+    hidden: true,
     onsubmit: (e) => {
       e.preventDefault();
       saveMoodNote(view);
@@ -876,15 +950,15 @@ function nowSection(view) {
     view.nowPartner,
     view.nowQuote,
     h('div', { class: 'biz-now-me stack' },
-      h('p', { class: 'biz-mood-me', id: 'mood-me' }, 'Senin ruh hâlin', view.moodLabel),
+      h('p', { class: 'biz-mood-me', id: 'mood-me' }, 'Senin ruh hâlin'),
       h('div', { class: 'biz-mood-row', role: 'group', 'aria-labelledby': 'mood-me' }, view.moodBtns),
-      form));
-  return section('now-h', 'Bugün nasılız?', {
+      view.moodForm));
+  return block('now-h', 'Ruh hâlimiz', {
     action: h('a', { class: 'biz-link', href: pageUrl('sayfalar/ruh/'), 'aria-label': 'Ruh hâli geçmişi' }, 'Geçmiş', icon('chevron')),
   }, card);
 }
 
-function touchSection(view) {
+function touchBlock(view) {
   view.touchInbox = h('div', { class: 'biz-inbox', role: 'status', hidden: true });
   view.touchStatus = h('p', { class: 'biz-touch-status', role: 'status' });
   view.touchBtns = TOUCHES.map((t) => h('button', {
@@ -897,7 +971,7 @@ function touchSection(view) {
     h('span', { class: 'biz-touch-emoji', 'aria-hidden': 'true' }, t.emoji),
     h('span', { class: 'biz-touch-label', 'aria-hidden': 'true' }, t.label)));
   view.touchRow = h('div', { class: 'biz-touch-row', role: 'group', 'aria-labelledby': 'touch-h' }, view.touchBtns);
-  return section('touch-h', 'Seni düşünüyorum', {}, view.touchInbox, view.touchRow, view.touchStatus);
+  return block('touch-h', 'Seni düşünüyorum', {}, view.touchInbox, view.touchRow, view.touchStatus);
 }
 
 // ---------- Eylemler ----------
@@ -997,41 +1071,6 @@ function celebrateToday(items) {
   });
 }
 
-// ---------- Günün Sorusu kartı (Günün Sorusu ajanının modülü; yoksa basit kart) ----------
-function gsFallback() {
-  return h('a', { class: 'card biz-gs-card', href: pageUrl(PAGES.gunsorusu) },
-    h('span', { class: 'card-row-tile', 'aria-hidden': 'true' }, '❓'),
-    h('span', { class: 'stack', style: { '--stack-gap': '2px' } },
-      h('h2', {}, 'Günün Sorusu'),
-      h('p', {}, 'Bugünün sorusu sizi bekliyor. İkiniz de cevaplayınca açılır.')),
-    icon('chevron'));
-}
-
-async function mountGs(view) {
-  if (!view || view.gsMounted || !state.room || state.view !== view) return;
-  view.gsMounted = true;
-  const room = state.room;
-  const box = view.gsBox;
-  box.replaceChildren(gsFallback());
-  let mod;
-  try {
-    mod = await import('../sayfalar/gunun-sorusu/kart.js');
-  } catch {
-    return; // modül henüz yok: basit kart kalır
-  }
-  if (state.view !== view || state.room !== room || typeof mod?.mountGununSorusuKart !== 'function') return;
-  try {
-    box.replaceChildren();
-    const res = await mod.mountGununSorusuKart(box, { room });
-    const off = typeof res === 'function' ? res : typeof res?.close === 'function' ? () => res.close() : null;
-    if (state.view !== view) off?.();
-    else view.gsCleanup = off;
-  } catch (e) {
-    console.warn('[biz] Günün Sorusu kartı açılamadı', e);
-    box.replaceChildren(gsFallback());
-  }
-}
-
 // ---------- Yeni cihaz isteği (TALIMAT §5.4) ----------
 const ISTEK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="5" y="3" width="10.5" height="18" rx="2.6"/><path d="M8.8 17.6h2.9"/><path d="M19 8v6M16 11h6"/></svg>';
 
@@ -1063,14 +1102,13 @@ async function istekKontrol(zorla = false) {
 function paintAll() {
   const v = state.view;
   if (v && v.roomId === state.roomId) {
-    paintCouple(v);
     paintCounter(v);
-    paintToday(v);
     paintNow(v);
     paintTouches(v);
+    paintNext(v);
     paintUpcoming(v);
-    paintMeet(v);
-    paintResume(v);
+    paintPicks(v);
+    paintCouple(v);
   }
   paintDate();
 }
@@ -1113,24 +1151,27 @@ function paintCouple(view) {
     view.noteBox.hidden = !kids.length;
   }
 
-  const hint = !state.room || broken || (p && g) ? ''
+  const hint = state.waiting ? 'Bağlanıyor…'
+    : !state.room || broken || (p && g) ? ''
     : p ? `Bir oyun seç; ${pname} de seninle gelir.`
     : pname ? `Bir oyun açarsan ${pname} gelince seni orada görür.` : '';
   view.gamesHint.textContent = hint;
   view.gamesHint.hidden = !hint;
+  syncPicks(view);
+}
 
-  // Partnerin yeri belli olana dek kartlar kapalı: hızlı dokunuş ikinci ev sahibi yaratmasın.
+/** Önerilen oyunlar: partnerin yeri belli olana dek kapalı (hızlı dokunuş ikinci ev sahibi yaratmasın); "burada" rozeti. */
+function syncPicks(view) {
+  const p = state.partner;
   const wait = state.waiting;
-  view.waitChip.hidden = !wait;
-  view.grid.setAttribute('aria-busy', String(wait));
-  if (view.resumeBtn) view.resumeBtn.disabled = wait;
-  for (const { card, badge } of view.cards) {
-    card.disabled = wait;
-    card.style.opacity = wait ? '0.6' : '';
-    const here = !!p && p.page === card.dataset.game;
-    card.dataset.partner = String(here);
+  const pname = partnerInfo().name || 'Sevgilin';
+  view.picksBox.setAttribute('aria-busy', String(wait));
+  for (const { btn, badge, id } of view.picks) {
+    btn.disabled = wait;
+    const here = !!p && p.page === id;
+    btn.dataset.partner = String(here);
     badge.hidden = !here;
-    badge.textContent = here ? `${pname || 'Sevgilin'} burada` : '';
+    badge.textContent = here ? `${pname} burada` : '';
   }
 }
 
@@ -1165,7 +1206,7 @@ function paintCounter(view) {
     view.counterBox.replaceChildren(h('div', { class: 'biz-start stack' },
       h('h2', {}, 'Başlangıç tarihinizi ekleyin'),
       h('p', { class: 'biz-count-since' }, 'Kaç gündür birlikte olduğunuzu burada sayalım.'),
-      startForm({ onSaved: () => toast('Sayacımız başladı 💞') })));
+      h('a', { class: 'btn biz-hero-btn', href: pageUrl(PAGES.gunler) }, 'Özel Günler\'de ekle')));
     return;
   }
   const n = daysTogether(b, today);
@@ -1192,26 +1233,147 @@ function dataInputs(today) {
   };
 }
 
-function paintToday(view) {
+/** Bugün/yarın özel günü (Sıradaki) ve "Yaklaşanlar" listesi; ikisi aynı günü göstermez. */
+function yakinHesapla(today) {
+  const veri = dataInputs(today);
+  return yakinGunler(bugunkuler(veri), yaklasanlar({ ...veri, limit: 6 }));
+}
+
+/** Buluşma: future (geri sayım) | now (12 saate dek "kavuşma zamanı") | yok. */
+function bulusmaBilgisi(cift) {
+  const { bulusma = '', bulusmaNotu = '' } = cift || {};
+  const cd = bulusma ? countdown(bulusma, Date.now()) : null;
+  const mode = !cd ? 'yok' : !cd.past ? 'future' : cd.total > -12 * 3600e3 ? 'now' : 'yok';
+  return { tur: 'bulusma', mode, iso: bulusma, not: bulusmaNotu, cd };
+}
+
+const GS_UZUN = {
+  yok: () => 'Bugün henüz kimse cevaplamadı. İlk sen yaz!',
+  partner: (p) => `${p} cevapladı, senin cevabını bekliyor 🤫`,
+  ben: (p) => `Cevabın gitti. ${p} yazınca ikisi birlikte açılır.`,
+  ikisi: () => 'İkiniz de cevapladınız 💞',
+};
+const GS_KISA = {
+  yok: () => 'cevap bekliyor',
+  partner: (p) => `${p} cevapladı`,
+  ben: (p) => `${p} bekleniyor`,
+  ikisi: () => 'cevaplar açıldı',
+};
+
+/** Sıradaki kartı: tek ana öğe + diğerleri tek satır (siradakiSec). */
+function paintNext(view) {
   const prof = state.data.profil;
-  const gun = state.data.gun;
-  if (!prof && !gun) return;
   const today = toDay(new Date());
-  const items = bugunkuler(dataInputs(today));
-  if (changed(view, 'today', JSON.stringify(items) + today)) {
-    view.todayBox.hidden = !items.length;
-    view.todayBox.replaceChildren(...(items.length ? [h('div', { class: 'biz-today', role: 'status' },
-      h('span', { class: 'biz-today-emoji', 'aria-hidden': 'true' }, items[0].emoji),
-      h('div', {},
-        h('p', { class: 'biz-today-title' }, `Bugün: ${items[0].baslik}`),
-        items.length > 1 ? h('p', { class: 'biz-today-more' }, items.slice(1).map((i) => i.baslik).join(' · ')) : null),
-      h('button', { type: 'button', class: 'btn small', onclick: () => celebrateToday(items) }, 'Kutla'))] : []));
+  if (changed(view, 'date', today)) view.todayDate.textContent = dayLabel(today, today);
+  const yakin = prof || state.data.gun ? yakinHesapla(today) : { siradaki: null, liste: [] };
+  kutlamaKontrol(view, yakin.siradaki, today);
+  const { ana, ozet } = siradakiSec({
+    gs: gsBilgisi(),
+    gun: yakin.siradaki ? { tur: 'gun', ...yakin.siradaki } : null,
+    bulusma: prof ? bulusmaBilgisi(prof.cift()) : null,
+  });
+  const pname = partnerInfo().name || 'Sevgilin';
+  const anahtar = (i) => [i.tur, i.durum, i.soru, i.ne, i.items?.map((x) => x.baslik), i.mode, i.iso, i.not, kalanKisa(i.cd)];
+  if (!changed(view, 'next', JSON.stringify([ana && anahtar(ana), ozet.map(anahtar), pname, today]))) return;
+  view.cd = null;
+  if (!ana) {
+    view.nextBox.replaceChildren(h('p', { class: 'biz-next-wait', role: 'status' }, 'Bir saniye…'));
+    return;
   }
-  // Günde bir kez kendiliğinden kutla (veriler gelince).
-  if (items.length && prof && gun && lsGet(partyKey(view.roomId)) !== today) {
-    lsSet(partyKey(view.roomId), today);
-    setTimeout(() => { if (state.view === view) celebrateToday(items); }, 700);
+  view.nextBox.replaceChildren(...[
+    nextMain(ana, view, pname, today),
+    ozet.length ? h('ul', { class: 'biz-next-lines' }, ozet.map((i) => h('li', {}, nextLine(i, pname)))) : null,
+  ].filter(Boolean));
+  if (view.cd) tickMeet(view);
+}
+
+/** Ana öğenin üst satırı: kutucuk + başlık + alt satır (+ çip). href verilirse satır bağlantıdır. */
+function nextHead({ emoji, baslik, alt = '', chip = '', href = null }) {
+  const kids = [
+    h('span', { class: 'card-row-tile', 'aria-hidden': 'true' }, emoji),
+    h('span', { class: 'biz-next-text' },
+      h('span', { class: 'biz-next-title' }, baslik),
+      alt ? h('span', { class: 'biz-next-sub' }, alt) : null),
+    chip ? h('span', { class: 'chip strong' }, chip) : null,
+    href ? icon('chevron') : null,
+  ];
+  return href ? h('a', { class: 'biz-next-head', href }, kids) : h('div', { class: 'biz-next-head' }, kids);
+}
+
+function nextMain(i, view, pname, today) {
+  const gunler = pageUrl(PAGES.gunler);
+  const main = (...kids) => h('div', { class: 'biz-next-main', dataset: { tur: i.tur } }, ...kids);
+  if (i.tur === 'gs') {
+    const acik = i.durum === 'yok' || i.durum === 'partner';
+    return main(
+      nextHead({ emoji: '❓', baslik: 'Günün sorusu', alt: GS_UZUN[i.durum](pname) }),
+      i.soru ? h('p', { class: 'biz-next-q' }, i.soru) : null,
+      h('div', { class: 'biz-next-actions' },
+        h('a', { class: acik ? 'btn small primary' : 'btn small', href: pageUrl(PAGES.gunsorusu) },
+          i.durum === 'ikisi' ? 'Cevapları gör' : acik ? 'Cevapla' : 'Gör')));
   }
+  if (i.tur === 'gun') {
+    const [ilk, ...diger] = i.items;
+    const bugun = i.ne === 'bugun';
+    const alt = diger.length ? diger.map((x) => x.baslik).join(' · ') : bugun ? 'İyi ki birliktesiniz 💞' : dayLabel(ilk.date, today);
+    return main(
+      nextHead({ emoji: ilk.emoji, baslik: ilk.baslik, alt, chip: bugun ? 'Bugün' : 'Yarın', href: gunler }),
+      bugun ? h('div', { class: 'biz-next-actions' },
+        h('button', { type: 'button', class: 'btn small primary', onclick: () => celebrateToday(i.items) }, 'Kutla')) : null);
+  }
+  const note = i.not ? h('p', { class: 'biz-next-note' }, i.not) : null;
+  if (i.mode === 'future') {
+    const cell = (label) => {
+      const n = h('span', { class: 'stat-big' }, '0');
+      return { n, el: h('div', { class: 'biz-cd-cell' }, n, h('span', { class: 'biz-cd-l' }, label)) };
+    };
+    const cells = { days: cell('gün'), hours: cell('saat'), minutes: cell('dakika'), seconds: cell('saniye') };
+    view.cd = { iso: i.iso, cells };
+    return main(
+      nextHead({ emoji: '💞', baslik: 'Buluşmamıza', alt: momentLabel(i.iso), href: gunler }),
+      h('div', { class: 'biz-cd', role: 'timer' }, Object.values(cells).map((c) => c.el)),
+      note);
+  }
+  if (i.mode === 'now') {
+    return main(nextHead({ emoji: '💞', baslik: 'Kavuşma zamanı!', alt: momentLabel(i.iso), href: gunler }), note);
+  }
+  return main(
+    nextHead({ emoji: '📅', baslik: 'Sonraki buluşmanız ne zaman?', alt: 'Tarihi ekleyin; geri sayım burada başlasın.' }),
+    h('div', { class: 'biz-next-actions' }, h('a', { class: 'btn small primary', href: gunler }, 'Buluşma tarihi ekle')));
+}
+
+/** Sıradaki kartındaki tek satırlık özet (bağlantı). */
+function nextLine(i, pname) {
+  let emoji = '💞';
+  let metin;
+  let href = pageUrl(PAGES.gunler);
+  if (i.tur === 'gs') {
+    emoji = '❓';
+    metin = `Günün sorusu · ${GS_KISA[i.durum](pname)}`;
+    href = pageUrl(PAGES.gunsorusu);
+  } else if (i.tur === 'gun') {
+    emoji = i.items[0].emoji;
+    metin = `${i.ne === 'bugun' ? 'Bugün' : 'Yarın'}: ${i.items[0].baslik}${i.items.length > 1 ? ` +${i.items.length - 1}` : ''}`;
+  } else if (i.mode === 'future') {
+    metin = `Buluşmaya ${kalanKisa(i.cd)} · ${momentLabel(i.iso, new Date(), { gunAdi: false })}`;
+  } else if (i.mode === 'now') {
+    metin = 'Kavuşma zamanı!';
+  } else {
+    emoji = '📅';
+    metin = 'Sonraki buluşmanızı ekleyin';
+  }
+  return h('a', { class: 'biz-next-line', href },
+    h('span', { class: 'biz-next-line-emoji', 'aria-hidden': 'true' }, emoji),
+    h('span', { class: 'biz-next-line-text' }, metin),
+    icon('chevron'));
+}
+
+/** Bugün kutlanan bir gün varsa günde bir kez kendiliğinden kutla (veriler gelince). */
+function kutlamaKontrol(view, sir, today) {
+  if (sir?.ne !== 'bugun' || !state.data.profil || !state.data.gun || lsGet(partyKey(view.roomId)) === today) return;
+  lsSet(partyKey(view.roomId), today);
+  const items = sir.items;
+  setTimeout(() => { if (state.view === view) celebrateToday(items); }, 700);
 }
 
 function paintUpcoming(view) {
@@ -1219,9 +1381,11 @@ function paintUpcoming(view) {
   const gun = state.data.gun;
   if (!prof && !gun) return;
   const today = toDay(new Date());
-  const items = yaklasanlar({ ...dataInputs(today), limit: 3 });
-  if (!changed(view, 'up', JSON.stringify(items) + today)) return;
+  const yakin = yakinHesapla(today);
+  const items = yakin.liste;
+  if (!changed(view, 'up', JSON.stringify([items, !!yakin.siradaki]) + today)) return;
   const href = pageUrl(PAGES.gunler);
+  view.upSec.hidden = !items.length && !!yakin.siradaki; // yakındaki gün zaten Sıradaki'de
   if (!items.length) {
     view.upBox.replaceChildren(h('div', { class: 'card biz-empty' },
       h('p', {}, 'Henüz özel gün yok. Yıl dönümünüzü ekleyelim mi?'),
@@ -1241,56 +1405,12 @@ function paintUpcoming(view) {
 
 const pad2 = (n) => String(n).padStart(2, '0');
 
-function paintMeet(view) {
-  const prof = state.data.profil;
-  if (!prof) return;
-  const { bulusma = '', bulusmaNotu = '' } = prof.cift();
-  const cd = bulusma ? countdown(bulusma, Date.now()) : null;
-  const mode = !cd ? 'none' : !cd.past ? 'future' : cd.total > -12 * 3600e3 ? 'now' : 'none';
-  if (!changed(view, 'meet', `${mode}|${bulusma}|${bulusmaNotu}`)) return;
-  view.cd = null;
-  const href = pageUrl(PAGES.gunler);
-  const note = bulusmaNotu ? h('p', { class: 'biz-meet-note' }, bulusmaNotu) : null;
-  if (mode === 'future') {
-    view.meetTitle.textContent = 'Buluşmamıza';
-    const cell = (label) => {
-      const n = h('span', { class: 'stat-big' }, '0');
-      return { n, el: h('div', { class: 'biz-cd-cell' }, n, h('span', { class: 'biz-cd-l' }, label)) };
-    };
-    const cells = { days: cell('gün'), hours: cell('saat'), minutes: cell('dakika'), seconds: cell('saniye') };
-    view.cd = { iso: bulusma, cells };
-    view.meetBox.replaceChildren(h('div', { class: 'biz-meet' },
-      h('div', { class: 'biz-cd', role: 'timer' }, Object.values(cells).map((c) => c.el)),
-      h('div', { class: 'biz-meet-head' },
-        h('p', { class: 'biz-meet-when' }, momentLabel(bulusma)),
-        note)));
-    tickMeet(view);
-    return;
-  }
-  if (mode === 'now') {
-    view.meetTitle.textContent = 'Buluşma';
-    view.meetBox.replaceChildren(h('div', { class: 'biz-meet' },
-      h('div', { class: 'biz-meet-head' },
-        h('p', { class: 'biz-today-title' }, 'Kavuşma zamanı! 💞'),
-        h('p', { class: 'biz-meet-when' }, momentLabel(bulusma)),
-        note),
-      h('div', { class: 'biz-meet-actions' }, h('a', { class: 'btn ghost small', href }, 'Sonrakini ekle'))));
-    return;
-  }
-  view.meetTitle.textContent = 'Buluşma';
-  view.meetBox.replaceChildren(h('div', { class: 'biz-meet' },
-    h('div', { class: 'biz-meet-head' },
-      h('p', { class: 'biz-meet-when' }, 'Bir sonraki buluşmanız ne zaman?'),
-      h('p', { class: 'biz-meet-note' }, 'Tarihi ekleyin; geri sayım burada başlasın.')),
-    h('div', { class: 'biz-meet-actions' }, h('a', { class: 'btn primary small', href }, 'Buluşma tarihi ekle'))));
-}
-
 function tickMeet(view) {
   if (!view?.cd) return;
   const cd = countdown(view.cd.iso, Date.now());
   if (!cd || cd.past) {
-    view.keys.meet = null;
-    paintMeet(view);
+    view.keys.next = null;
+    paintNext(view);
     return;
   }
   const { cells } = view.cd;
@@ -1323,8 +1443,7 @@ function paintNow(view) {
   const col = state.data.ruh;
   const mine = col?.get(myId())?.data || null;
   for (const b of view.moodBtns) b.setAttribute('aria-pressed', String(!!mine && mine.emoji === b.dataset.emoji));
-  const myMood = mine?.emoji ? moodByEmoji(mine.emoji) : null;
-  view.moodLabel.textContent = mine?.emoji ? `: ${myMood ? myMood.ad : mine.emoji}` : '';
+  view.moodForm.hidden = !mine?.emoji;
   const myNote = mine?.not || '';
   if (document.activeElement !== view.moodNote && view.keys.moodNote !== myNote) {
     view.moodNote.value = myNote;
@@ -1374,34 +1493,31 @@ function paintNow(view) {
   }
 }
 
-/** "Kaldığınız yerden" kartı: kayıtlı oyun (oyunkayit) ya da son oynanan oyun. */
-function paintResume(view) {
+/** Önerilen 3 oyun: son oynanan (kayıtlı oyun, yoksa istatistikteki son) + günlük dönen; sonda "Tüm oyunlar". */
+function paintPicks(view) {
   const saved = (state.data.oyunkayit?.all() || [])
     .filter((d) => gameById(d.id))
     .sort((a, b) => (Date.parse(b.updated_at) || 0) - (Date.parse(a.updated_at) || 0))[0];
-  let item = null;
-  if (saved) {
-    item = { g: gameById(saved.id), sub: `Kaldığınız yerden devam · ${formatDay(saved.updated_at)}`, cta: 'Devam et' };
-  } else if (view.lastPlayed && gameById(view.lastPlayed.game)) {
-    const when = formatDay(view.lastPlayed.last_at);
-    item = { g: gameById(view.lastPlayed.game), sub: when ? `Son oyununuz · ${when}` : 'Son oyununuz', cta: 'Yine oyna' };
-  }
-  if (!changed(view, 'resume', item ? `${item.g.id}|${item.sub}` : '')) return;
-  view.resumeBox.hidden = !item;
-  view.resumeBtn = null;
-  if (!item) {
-    view.resumeBox.replaceChildren();
-    return;
-  }
-  view.resumeBtn = h('button', {
-    type: 'button', class: 'card biz-resume', disabled: state.waiting, onclick: () => openGame(item.g),
-  },
-    h('span', { class: 'game-tile', dataset: { tint: tintOf(item.g) }, 'aria-hidden': 'true' }, item.g.emoji),
-    h('span', { class: 'biz-resume-body' },
-      h('span', { class: 'biz-resume-title' }, item.g.title),
-      h('span', { class: 'biz-resume-sub' }, item.sub)),
-    h('span', { class: 'biz-resume-go', 'aria-hidden': 'true' }, item.cta));
-  view.resumeBox.replaceChildren(view.resumeBtn);
+  const last = view.lastPlayed && gameById(view.lastPlayed.game) ? view.lastPlayed : null;
+  const when = (iso) => formatDay(iso);
+  const son = saved ? { id: saved.id, sub: `Kaldığınız yerden · ${when(saved.updated_at)}` }
+    : last ? { id: last.game, sub: when(last.last_at) ? `Son oyununuz · ${when(last.last_at)}` : 'Son oyununuz' }
+    : null;
+  const games = onerilenler(GAMES, { bugun: toDay(new Date()), son: son?.id });
+  if (!changed(view, 'picks', JSON.stringify([games.map((g) => g.id), son?.sub]))) return;
+  view.picks = games.map((g) => {
+    const badge = h('span', { class: 'chip accent', hidden: true });
+    const btn = h('button', { type: 'button', class: 'card-row biz-pick', dataset: { game: g.id }, onclick: () => openGame(g) },
+      h('span', { class: 'game-tile', dataset: { tint: tintOf(g) }, 'aria-hidden': 'true' }, g.emoji),
+      h('span', {},
+        h('span', { class: 'card-row-title' }, g.title),
+        h('span', { class: 'card-row-sub' }, son?.id === g.id ? son.sub : kartAlt(g))),
+      h('span', { class: 'biz-pick-end' }, badge, icon('chevron')));
+    return { btn, badge, id: g.id };
+  });
+  view.picksBox.replaceChildren(...view.picks.map((x) => x.btn),
+    h('a', { class: 'biz-pick-all', href: pageUrl(PAGES.oyunlar) }, `Tüm oyunlar (${GAMES.length})`, icon('chevron')));
+  syncPicks(view);
 }
 
 async function loadStats(roomId, section, view = null) {
@@ -1417,7 +1533,7 @@ async function loadStats(roomId, section, view = null) {
     .sort((a, b) => (Date.parse(b.last_at) || 0) - (Date.parse(a.last_at) || 0));
   if (view) {
     view.lastPlayed = rows[0] || null;
-    if (state.view === view) paintResume(view);
+    if (state.view === view) paintPicks(view);
   }
   if (!rows.length) {
     section.hidden = true;
@@ -1461,7 +1577,6 @@ function buildHeader() {
 function cleanupView() {
   const v = state.view;
   if (!v) return;
-  try { v.gsCleanup?.(); } catch { /* yok say */ }
   clearTimeout(v.coolTimer);
 }
 
@@ -1497,7 +1612,6 @@ function render({ focus = false } = {}) {
   app.replaceChildren(screen.el);
   if (tabs) mountTabBar('biz');
   else removeTabBar();
-  mountGs(state.view);
   paintAll();
   if (state.view) istekKontrol(true);
 

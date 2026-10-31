@@ -187,7 +187,9 @@ function cizBilgi() {
     }
   }
   metaEl.replaceChildren(
-    h('span', {}, y ? M.yasMetni(y, simdi) : 'Yeni yumurta'),
+    M.dogumGunuMu(y, simdi)
+      ? h('span', { style: { color: 'var(--accent-strong)' } }, M.DOGUM_GUNU_METNI)
+      : h('span', {}, y ? M.yasMetni(y, simdi) : 'Yeni yumurta'),
     h('span', { class: 'chip yv-asama' }, ASAMA_ADI[y?.asama || 'yumurta']));
 
   let buyume = '';
@@ -545,10 +547,11 @@ function partnerBildir(eylem, { deger = '' } = {}) {
     .catch((e) => console.warn('[yavru] bildirim gönderilemedi', e));
 }
 
-/** Android uygulamasında yerel hatırlatıcı (acıkma, uyanma). Her ziyarette ve değişimde yeniden planlanır. */
+/** Android uygulamasında yerel hatırlatıcı (acıkma, uyanma, doğum günü). Her ziyarette ve değişimde yeniden planlanır. */
 function hatirlaticiPlanla() {
   if (!y) return;
-  const olaylar = M.hatirlaticiOlaylari(y, simdi);
+  const dogumGunu = M.dogumGunuOlayi(y, simdi);
+  const olaylar = [...M.hatirlaticiOlaylari(y, simdi), ...(dogumGunu ? [dogumGunu] : [])];
   const key = JSON.stringify(olaylar);
   if (key === hatKey) return;
   hatKey = key;

@@ -42,7 +42,8 @@ function sayiRozeti({ id, grup, simge, baslik, aciklama, deger, hedef, bekliyor 
 
 /**
  * v = { baslangic, enUzunSeri, oyunSayisi, aniSayisi, mektupSayisi, dokunusSayisi,
- *       mesaj: { sayi, foto, ses, tamam } | null (null: tarama sürüyor) }
+ *       mesaj: { sayi, foto, ses, tamam } | null (null: tarama sürüyor),
+ *       yavruDogum: 'YYYY-MM-DD' | null (yavrunun çatlama günü; yavru/mantik.js dogumGunu) }
  * -> [{ id, grup, simge, baslik, aciklama, hedef, deger, acik, oran, durum, tarih?, bekliyor? }]
  */
 export function rozetHesapla(v, { bugun = new Date() } = {}) {
@@ -100,6 +101,20 @@ export function rozetHesapla(v, { bugun = new Date() } = {}) {
     aciklama: 'Sohbette ilk fotoğrafı gönderin.', deger: m?.foto ? 1 : 0, hedef: 1, bekliyor }));
   out.push(sayiRozeti({ id: 'ses-1', grup: 'ilk', simge: 'mikrofon', baslik: 'İlk sesli mesaj',
     aciklama: 'Sohbette ilk sesli mesajı gönderin.', deger: m?.ses ? 1 : 0, hedef: 1, bekliyor }));
+
+  // Yavrumuz: çatlama günü = doğum günü; ilk yıl dönümünde 1 yaşında.
+  const dg = parseDay(v.yavruDogum) && v.yavruDogum <= t ? v.yavruDogum : null;
+  const catladi = sayiRozeti({ id: 'yavru-catladi', grup: 'ilk', simge: 'yumurta', baslik: 'Yavrumuz çatladı 🐣',
+    aciklama: 'Yumurtanızı birlikte ısıtıp çatlatın.', deger: dg ? 1 : 0, hedef: 1 });
+  if (dg) { catladi.tarih = dg; catladi.durum = gunYazi(dg); }
+  out.push(catladi);
+  const ilkYas = dg ? yilDonumu(dg, 1) : null;
+  const yas = sayiRozeti({ id: 'yavru-yas-1', grup: 'ilk', simge: 'pasta', baslik: 'Yavrumuz 1\u00a0yaşında 🎂',
+    aciklama: 'Yavrunuzun ilk doğum gününü kutlayın.', deger: ilkYas && ilkYas <= t ? 1 : 0, hedef: 1 });
+  if (yas.acik) { yas.tarih = ilkYas; yas.durum = gunYazi(ilkYas); }
+  else if (dg) { yas.oran = oranOf(daysBetween(dg, t), daysBetween(dg, ilkYas)); yas.durum = `${sayiYaz(daysBetween(t, ilkYas))} gün kaldı`; }
+  out.push(yas);
+
   out.push(sayiRozeti({ id: 'mesaj-1000', grup: 'sohbet', simge: 'balon', baslik: `${sayiYaz(MESAJ_HEDEF)} mesaj`,
     aciklama: `Birbirinize ${sayiYaz(MESAJ_HEDEF)} mesaj yazın.`, deger: Math.min(m?.sayi || 0, MESAJ_HEDEF), hedef: MESAJ_HEDEF, bekliyor }));
   out.push(sayiRozeti({ id: 'dokunus-100', grup: 'sohbet', simge: 'kalp', baslik: '100 dokunuş',

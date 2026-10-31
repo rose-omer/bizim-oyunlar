@@ -7,7 +7,7 @@
 // Değer saklanmaz, hesaplanır: şimdiki = v − düşüş × geçen saat (uyku aralığı ayrı), 0–100 kırpılır.
 // Yazım yalnız alan düzeyinde yama (veri.js patch; anahtar en çok iki düzey: 'ihtiyac.tokluk', 'son.<clientId>').
 // Bakım günlüğü: tür 'yavrubakim', id uuid, { eylem, kim, at, deger? }.
-import { toDay } from '../../js/core/gunler.js';
+import { toDay, addDays, parseDay, nextOccurrence } from '../../js/core/gunler.js';
 import { hashStr } from '../gunun-sorusu/mantik.js';
 
 export const TUR = 'yavru';
@@ -444,4 +444,40 @@ export function dogumBirlestir(mevcut, benim) {
   if (!Number.isFinite(b)) return null;
   const m = zaman(mevcut);
   return !Number.isFinite(m) || b < m ? benim : null;
+}
+
+// ---------- Doğum günü ----------
+// Doğum günü = çatlama günü (catlama alanının yerel takvim günü). Çatladığı gün sayılmaz; ilk doğum günü 1 yaş.
+// 29 Şubat'ta çatlayan artık olmayan yılda 28 Şubat'ta kutlar (gunler.js nextOccurrence).
+
+export const DOGUM_GUNU_METNI = 'Bugün doğum günü! 🎂';
+const DOGUM_GUNU_SAAT = 10; // hatırlatıcı o gün yerel 10:00
+
+/** Çatlama günü 'YYYY-MM-DD' (yerel) | null (yumurta ya da çatlama zamanı yok). */
+export function dogumGunu(y) {
+  if (!y || y.asama === 'yumurta') return null;
+  const t = zaman(y.catlama);
+  return Number.isFinite(t) ? toDay(new Date(t)) : null;
+}
+
+/** Bugün (yerel) yavrunun doğum günü mü? */
+export function dogumGunuMu(y, simdi) {
+  const g = dogumGunu(y);
+  const bugun = toDay(new Date(simdi));
+  return !!g && bugun > g && nextOccurrence(g, 'yil', bugun) === bugun;
+}
+
+/** Sıradaki doğum günü hatırlatıcısı (o gün 10:00; bugünün 10:00'u geçtiyse gelecek yıl). -> olay | null */
+export function dogumGunuOlayi(y, simdi) {
+  const g = dogumGunu(y);
+  if (!g) return null;
+  const bugun = toDay(new Date(simdi));
+  const saat = (gun) => {
+    const p = parseDay(gun);
+    return new Date(p.y, p.m - 1, p.d, DOGUM_GUNU_SAAT).getTime();
+  };
+  let gun = nextOccurrence(g, 'yil', bugun > g ? bugun : addDays(g, 1));
+  if (saat(gun) <= simdi) gun = nextOccurrence(g, 'yil', addDays(gun, 1));
+  const n = parseDay(gun).y - parseDay(g).y;
+  return { id: 'dogumgunu', baslik: 'Yavrumuz', metin: `Yavrumuz bugün ${n} yaşında 🎂`, zaman: iso(saat(gun)) };
 }

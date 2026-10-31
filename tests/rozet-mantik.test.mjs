@@ -108,3 +108,37 @@ test('mesajRozetVerisi ve mesajYeter', () => {
   assert.equal(mesajYeter([...cok, ...docs]), true);
   assert.equal(mesajYeter(cok), false);
 });
+
+test('yavru rozetleri (İlkler): çatlama yoksa ikisi de kilitli', () => {
+  const r = rozetHesapla(TAM, { bugun: '2026-10-31' });
+  const c = bul(r, 'yavru-catladi');
+  const y = bul(r, 'yavru-yas-1');
+  assert.equal(c.grup, 'ilk');
+  assert.equal(y.grup, 'ilk');
+  assert.equal(c.baslik, 'Yavrumuz çatladı 🐣');
+  assert.equal(y.baslik, 'Yavrumuz 1\u00a0yaşında 🎂', '1 ile yaşında ayrı satıra düşmesin');
+  assert.deepEqual([c.acik, c.oran, c.durum], [false, 0, 'Henüz yok']);
+  assert.deepEqual([y.acik, y.oran, y.durum], [false, 0, 'Henüz yok']);
+  // Gelecekteki gün (saat farkı ya da bozuk veri) çatlamış sayılmaz.
+  assert.equal(bul(rozetHesapla({ ...TAM, yavruDogum: '2026-11-02' }, { bugun: '2026-10-31' }), 'yavru-catladi').acik, false);
+  assert.equal(bul(rozetHesapla({ ...TAM, yavruDogum: 'bozuk' }, { bugun: '2026-10-31' }), 'yavru-catladi').acik, false);
+});
+
+test('yavru rozetleri: çatlayınca tarih; 1 yaşa kalan gün ve ilerleme', () => {
+  const r = rozetHesapla({ ...TAM, yavruDogum: '2026-01-10' }, { bugun: '2026-10-31' });
+  const c = bul(r, 'yavru-catladi');
+  assert.deepEqual([c.acik, c.tarih, c.durum], [true, '2026-01-10', '10 Ocak 2026']);
+  const y = bul(r, 'yavru-yas-1');
+  assert.equal(y.acik, false);
+  assert.equal(y.durum, '71 gün kaldı');
+  assert.equal(y.oran, 294 / 365);
+});
+
+test('yavru rozetleri: ilk yıl dönümünde "1 yaşında" açılır (29 Şubat → 28 Şubat)', () => {
+  const r = rozetHesapla({ ...TAM, yavruDogum: '2025-10-31' }, { bugun: '2026-10-31' });
+  const y = bul(r, 'yavru-yas-1');
+  assert.deepEqual([y.acik, y.oran, y.tarih, y.durum], [true, 1, '2026-10-31', '31 Ekim 2026']);
+  assert.equal(bul(rozetHesapla({ ...TAM, yavruDogum: '2025-10-31' }, { bugun: '2026-10-30' }), 'yavru-yas-1').durum, '1 gün kaldı');
+  const s = bul(rozetHesapla({ ...TAM, yavruDogum: '2028-02-29' }, { bugun: '2029-02-28' }), 'yavru-yas-1');
+  assert.deepEqual([s.acik, s.tarih], [true, '2029-02-28']);
+});

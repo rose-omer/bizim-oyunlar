@@ -9,6 +9,7 @@ import { gunlereGore, ortakGunler, seri, gunNo } from '../gunun-sorusu/mantik.js
 import { geriYukle } from '../yilimiz/yukle.js';
 import { simgeSvg } from '../yilimiz/simgeler.js';
 import { GRUPLAR, ROZET_MESAJ_SINIRI, rozetHesapla, rozetOzeti, mesajRozetVerisi, mesajYeter } from './mantik.js';
+import * as Y from '../yavru/mantik.js';
 
 const { room, roomId } = await bootPage({ ns: 'rozetler', title: 'Rozetlerimiz', tab: 'daha' });
 const app = document.getElementById('app');
@@ -18,17 +19,18 @@ app.replaceChildren(kok);
 const sayiFmt = new Intl.NumberFormat('tr-TR');
 const n = (x) => sayiFmt.format(x || 0);
 
-const [profil, gsCol, aniCol, mektupCol, dokunusCol, mesajCol, istatistik] = await Promise.all([
+const [profil, gsCol, aniCol, mektupCol, dokunusCol, mesajCol, yavruCol, istatistik] = await Promise.all([
   openProfil(room).catch((e) => { console.warn('[rozet] profil', e); return null; }),
   openCollection(room, 'gs'),
   openCollection(room, 'ani'),
   openCollection(room, 'mektup'),
   openCollection(room, 'dokunus', { recent: 200 }),
   openCollection(room, 'mesaj', { recent: 200 }),
+  openCollection(room, Y.TUR),
   roomStats(roomId),
 ]);
 let sonHata = 0;
-for (const c of [gsCol, aniCol, mektupCol, dokunusCol, mesajCol]) {
+for (const c of [gsCol, aniCol, mektupCol, dokunusCol, mesajCol, yavruCol]) {
   c.on('error', (e) => { if (Date.now() - sonHata > 15000) { sonHata = Date.now(); toast(e.message); } });
 }
 
@@ -44,6 +46,7 @@ function veri() {
     mektupSayisi: mektupCol.all().length,
     dokunusSayisi,
     mesaj,
+    yavruDogum: Y.dogumGunu(Y.oku(yavruCol.get(Y.BELGE_ID)?.data)),
   };
 }
 
@@ -92,7 +95,7 @@ function ciz() {
 }
 
 ciz();
-for (const c of [gsCol, aniCol, mektupCol]) c.on('change', ciz);
+for (const c of [gsCol, aniCol, mektupCol, yavruCol]) c.on('change', ciz);
 profil?.on('change', ciz);
 
 // Uzun türler: yalnız gerektiği kadar geriye bakılır (yeter koşulu taramayı erken bitirir).

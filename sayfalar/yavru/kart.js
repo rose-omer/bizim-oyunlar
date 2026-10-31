@@ -6,7 +6,9 @@
 import { openCollection } from '../../js/core/veri.js';
 import { pageUrl } from '../../js/core/identity.js';
 import { h, icon } from '../../js/core/ui.js';
-import { TUR, BELGE_ID, oku, ruhHali, ozledi, durumMetni, renkSec, catlamaHazir, DK } from './mantik.js';
+import {
+  TUR, BELGE_ID, oku, ruhHali, ozledi, durumMetni, renkSec, catlamaHazir, DK, dogumGunuMu, DOGUM_GUNU_METNI,
+} from './mantik.js';
 import { yavruSvg, CIZIM_CSS } from './cizim.js';
 
 const CSS = `
@@ -25,6 +27,7 @@ const CSS = `
   font-variation-settings: 'SOFT' 100; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
 .yvk-durum { margin: 0; color: var(--muted); font-size: .9375rem; font-weight: 700; line-height: 1.35; }
 .yvk[data-ihtiyac='true'] .yvk-durum { color: var(--yv-sicak); }
+.yvk[data-dogumgunu='true'] .yvk-durum { color: var(--accent-strong); }
 .yvk-git { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; color: var(--muted); }
 .yvk-git svg { width: 20px; height: 20px; }
 `;
@@ -61,7 +64,9 @@ export async function mountYavruKart(el, { room } = {}) {
     const renk = y?.renk || renkSec(room.roomId);
     const ruh = ruhHali(y, simdi);
     const hazir = asama === 'yumurta' && !!y && catlamaHazir(y, simdi);
-    const metin = durumMetni(y, simdi);
+    // Doğum gününde durum satırı kutlar (o gün ihtiyaç rengi yok; ihtiyaçlar sayfada görünür).
+    const dogumGunu = dogumGunuMu(y, simdi);
+    const metin = dogumGunu ? DOGUM_GUNU_METNI : durumMetni(y, simdi);
     const baslik = asama === 'yumurta' ? 'Yavrumuz' : y.ad || 'Yavrumuz';
     const k = [asama, renk, ruh, hazir, metin, baslik].join('|');
     if (k === anahtar) return;
@@ -70,7 +75,8 @@ export async function mountYavruKart(el, { room } = {}) {
     gorsel.innerHTML = yavruSvg({ asama, ruh, renk, hazir });
     ad.textContent = baslik;
     durum.textContent = metin;
-    kart.dataset.ihtiyac = String(asama !== 'yumurta' && (ozledi(y, simdi) || ['ac', 'kirli', 'uykulu', 'uzgun'].includes(ruh)));
+    kart.dataset.dogumgunu = String(dogumGunu);
+    kart.dataset.ihtiyac = String(!dogumGunu && asama !== 'yumurta' && (ozledi(y, simdi) || ['ac', 'kirli', 'uykulu', 'uzgun'].includes(ruh)));
     kart.setAttribute('aria-label', `${baslik}: ${metin}`);
   };
   const off = col.on('change', ciz);

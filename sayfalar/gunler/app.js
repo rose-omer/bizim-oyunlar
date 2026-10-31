@@ -116,7 +116,7 @@ const calEl = h('section', { class: 'gn-sec', 'aria-labelledby': 'gn-cal-h' },
 const tasEl = h('section', { class: 'gn-sec', 'aria-labelledby': 'gn-tas-h' });
 
 app.replaceChildren(h('div', { class: 'gn-wrap' }, heroEl, meetEl, upEl, calEl, tasEl));
-app.firstElementChild.prepend(takvimeAktarCubugu(() => ({ ...veri(), cift: profil.cift() }))); // ics: sayfa üstünde "Tümünü takvime aktar"
+app.firstElementChild.append(takvimeAktarCubugu(() => ({ ...veri(), cift: profil.cift() }))); // ics: sayfa sonunda, ikincil "Tümünü takvime aktar"
 
 // ---------- 1. Kaçıncı gün ----------
 let heroKey = null;
@@ -135,7 +135,7 @@ function renderHero(force = false) {
       h('h2', { class: 'gn-count', id: 'gn-sayac' },
         h('span', { class: 'gn-count-lead' }, 'İlk günümüze'), ' ',
         h('span', { class: 'gn-count-big' },
-          h('span', { class: 'gn-count-num' }, String(daysBetween(bugun, bas))), ' ',
+          h('span', { class: 'gn-count-num' }, daysBetween(bugun, bas).toLocaleString('tr-TR')), ' ',
           h('span', { class: 'gn-count-tail' }, 'gün var'))),
       baslangicDugmesi(bas));
     return;
@@ -145,7 +145,7 @@ function renderHero(force = false) {
     h('h2', { class: 'gn-count', id: 'gn-sayac' },
       h('span', { class: 'gn-count-lead' }, 'Birlikteliğimizin'), ' ',
       h('span', { class: 'gn-count-big' },
-        h('span', { class: 'gn-count-num' }, `${n}.`), ' ',
+        h('span', { class: 'gn-count-num' }, `${n.toLocaleString('tr-TR')}.`), ' ',
         h('span', { class: 'gn-count-tail' }, 'günü'))),
     h('p', { class: 'gn-hero-sub' }, n === 1 ? 'Her şey bugün başladı' : sure),
     baslangicDugmesi(bas));

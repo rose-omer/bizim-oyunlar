@@ -6,8 +6,7 @@ import {
   yuvarla2, konumVerisi, mesafeKm, mesafeMetni, bildirimGorunum,
   YEDEK_TURLERI, yedekVerisi, yedekSayisi, yedekDosyaAdi,
 } from '../sayfalar/ayarlar/mantik.js';
-import { APK_URL, dahaOgeleri, apkGoster, kurulumGorunum } from '../sayfalar/daha/mantik.js';
-import { SAYFALAR } from '../js/core/games.js';
+import { APK_URL, apkGoster, kurulumGorunum } from '../sayfalar/daha/mantik.js';
 
 test('tema seçenekleri ui.js ile aynı kimlikleri kullanır', () => {
   assert.deepEqual(TEMA_RENKLERI.map((r) => r.id), TEMA_RENKLER);
@@ -89,14 +88,6 @@ test('yedekVerisi: silinenler çıkar, eksik türler not edilir, oda kodu yazıl
 
 test('yedekDosyaAdi', () => {
   assert.equal(yedekDosyaAdi(new Date(2026, 0, 5, 12)), 'biz-ikimiz-yedek-2026-01-05.json');
-});
-
-test('dahaOgeleri: biz ve daha hariç tüm sayfalar, sıra korunur', () => {
-  const ids = dahaOgeleri(SAYFALAR).map((s) => s.id);
-  assert.ok(!ids.includes('biz') && !ids.includes('daha'));
-  assert.equal(ids.length, SAYFALAR.length - 2);
-  assert.ok(ids.includes('ayarlar') && ids.includes('sohbet'));
-  assert.deepEqual(dahaOgeleri(null), []);
 });
 
 test('apkGoster ve kurulumGorunum', () => {

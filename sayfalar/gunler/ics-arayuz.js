@@ -1,4 +1,4 @@
-// Takvime ekle (özel gün penceresi) ve Tümünü takvime aktar (sayfa üstü): arayüz ve dosya paylaşımı.
+// Takvime ekle (özel gün penceresi) ve Tümünü takvime aktar (sayfa sonu, ikincil): arayüz ve dosya paylaşımı.
 // .ics metni ./ics.js'ten (saf) gelir. app.js'e yalnız `// ics:` kancalarıyla bağlanır.
 import { h, toast } from '../../js/core/ui.js';
 import { sfx } from '../../js/core/sound.js';
@@ -112,7 +112,7 @@ export function takvimeEkleAlani(belge) {
   return h('div', { class: 'gn-field gn-ics-ekle' }, btn);
 }
 
-// ---------- Sayfa üstü: "Tümünü takvime aktar" ----------
+// ---------- Sayfa sonu: "Tümünü takvime aktar" ----------
 
 let pencereNo = 0;
 
@@ -156,9 +156,10 @@ function aktarPenceresi(veri) {
   dlg.showModal();
 }
 
-/** Sayfanın en üstüne konur. veri(): { gunler, kisiler, baslangic, cift } (açılışta ve aktarırken okunur). */
+/** Sayfanın sonuna, ikincil eylem olarak konur. veri(): { gunler, kisiler, baslangic, cift } (açılışta ve aktarırken okunur). */
 export function takvimeAktarCubugu(veri) {
   return h('div', { class: 'gn-ics-bar' },
-    h('button', { type: 'button', class: 'btn small', onclick: () => { sfx('tap'); aktarPenceresi(veri); } },
-      takvimSimgesi(), 'Tümünü takvime aktar'));
+    h('button', { type: 'button', class: 'btn ghost', onclick: () => { sfx('tap'); aktarPenceresi(veri); } },
+      takvimSimgesi(), 'Tümünü takvime aktar'),
+    h('p', { class: 'gn-hint' }, 'Özel günleriniz telefonunun takviminde de görünsün.'));
 }

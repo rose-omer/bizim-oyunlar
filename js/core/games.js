@@ -172,6 +172,7 @@ export const SAYFALAR = [
   { id: 'haftalik', title: 'Haftalık Kontrol', icon: '🌡️', path: 'sayfalar/haftalik/', desc: 'Haftada bir dakika: iletişim, yakınlık, eğlence, destek.' },
   { id: 'harcama', title: 'Ortak Harcamalar', icon: '💸', path: 'sayfalar/harcama/', desc: 'Kim ödedi, nasıl bölündü, kim kime borçlu?' },
   { id: 'yavru', title: 'Yavrumuz', icon: '🐣', path: 'sayfalar/yavru/', desc: 'Birlikte baktığınız minik dostunuz: besleyin, sevin, büyütün.' },
+  { id: 'oyunlar', title: 'Oyunlarımız', icon: '🎲', path: 'sayfalar/oyunlar/', desc: 'Tüm oyunlarınız, gruplu.' },
 ];
 
 // Alt sekme çubuğu sırası.

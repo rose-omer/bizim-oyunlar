@@ -1,0 +1,32 @@
+/* Oyunlarımız — yalnız base.css değişkenleri. Kart görünümü base.css .game-card / .game-tile / .game-title. */
+
+.oy {
+  width: 100%;
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 16px var(--gutter) 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+.oy-ipucu { margin-bottom: -14px; color: var(--muted); font-size: 0.9375rem; font-weight: 650; line-height: 1.4; }
+.oy-ipucu:empty { display: none; }
+
+.oy-grup { display: flex; flex-direction: column; gap: 12px; }
+.oy-grup-bas { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.oy-grup-bas h2 { font-size: 1.375rem; }
+.oy-sayi { color: var(--muted); font-size: 0.875rem; font-weight: 700; white-space: nowrap; }
+
+.oy-izgara { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+@media (min-width: 640px) {
+  .oy-izgara { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+}
+
+.oy-kart { gap: 10px; }
+.oy-kart:disabled { opacity: 0.6; }
+.oy-kart .game-tile { width: 44px; height: 44px; border-radius: 14px; font-size: 23px; }
+/* Aynı sıradaki iki kartta kişi/süre satırı aynı hizada dursun. */
+.oy-govde { display: flex; flex: 1 1 auto; flex-direction: column; gap: 4px; width: 100%; min-width: 0; }
+.oy-kart .game-title { text-wrap: balance; }
+.oy-alt { margin-top: auto; color: var(--muted); font-size: 0.8125rem; font-weight: 650; line-height: 1.35; }
+.oy-rozet { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }

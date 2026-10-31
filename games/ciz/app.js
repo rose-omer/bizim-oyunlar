@@ -1,7 +1,11 @@
 // Çiz Bakalım sayfası.
 // Oyun akışı (mod, tur, tahmin, puan) ev sahibi otoriteli sync ile; çizgiler doğrudan mesajla (cizgi.js).
 import { joinRoom } from '../../js/core/room.js';
-import { readGameParams, lobbyUrl } from '../../js/core/identity.js';
+import { readGameParams, lobbyUrl, uuid } from '../../js/core/identity.js';
+import { putDoc } from '../../js/core/veri.js';
+import { uploadPhoto } from '../../js/core/storage.js';
+import { fotoKucult } from '../../js/core/foto.js';
+import { toDay } from '../../js/core/gunler.js';
 import { mountShell, waitForPartner, celebrate, toast, confirmDialog } from '../../js/core/ui.js';
 import { sfx } from '../../js/core/sound.js';
 import { logGame } from '../../js/core/db.js';
@@ -10,7 +14,7 @@ import { newSeed } from '../hafiza/rng.js';
 import { fitToViewport, esc } from '../hafiza/ekran.js';
 import {
   ROUND_OPTIONS, DEFAULT_ROUNDS, MAX_GUESS_LEN, initialState, reduce, toAction, schedule, viewFor, drawerId,
-  canDraw, totalRounds, resultOf,
+  canDraw, totalRounds, resultOf, cizimAnisi,
 } from './oyun.js';
 import {
   PALETTE, ERASER, BRUSHES, MAX_STROKE_PTS, toNorm, farEnough, StrokeStore, makeParts, Outbox, flushOne, PartsIn,
@@ -29,6 +33,7 @@ const ICON = {
   undo: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 010 12h-3"/></svg>',
   clear: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 13h10l1-13"/><path d="M9 7V4h6v3"/></svg>',
   save: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>',
+  arsiv: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M12 16s-3.5-2.1-3.5-4.4A1.9 1.9 0 0112 10.4a1.9 1.9 0 013.5 1.2C15.5 13.9 12 16 12 16z"/></svg>',
 };
 
 const { roomId, hostId, isHost } = readGameParams();
@@ -59,7 +64,8 @@ app.innerHTML = `
             <button type="button" class="cz-tool" data-act="eraser" aria-pressed="false" aria-label="Silgi">${ICON.eraser}</button>
             <button type="button" class="cz-tool" data-act="undo" aria-label="Son çizgimi geri al">${ICON.undo}</button>
             <button type="button" class="cz-tool" data-act="clear" aria-label="Tuvali temizle">${ICON.clear}</button>
-            <button type="button" class="cz-tool" data-act="save" aria-label="Resmi kaydet (PNG)">${ICON.save}</button>
+            ${roomId ? `<button type="button" class="cz-tool" data-act="arsiv" aria-label="Anılara kaydet">${ICON.arsiv}</button>` : ''}
+            <button type="button" class="cz-tool" data-act="save" aria-label="Resmi telefona indir (PNG)">${ICON.save}</button>
           </div>
         </div>
         <div class="cz-chat hidden" id="cz-chat">
@@ -389,6 +395,9 @@ toolsEl.addEventListener('click', async (e) => {
   } else if (b.dataset.act === 'save') {
     savePng();
     return;
+  } else if (b.dataset.act === 'arsiv') {
+    arsiveKaydet(b);
+    return;
   }
   sfx('tap');
   paintTools();
@@ -398,6 +407,25 @@ function paintTools() {
   toolsEl.querySelectorAll('[data-c]').forEach((x) => x.setAttribute('aria-pressed', String(!tool.eraser && Number(x.dataset.c) === tool.c)));
   toolsEl.querySelectorAll('[data-b]').forEach((x) => x.setAttribute('aria-pressed', String(Number(x.dataset.b) === tool.b)));
   toolsEl.querySelector('[data-act="eraser"]').setAttribute('aria-pressed', String(tool.eraser));
+}
+
+// Çizim Anılar'a fotoğraflı anı olarak girer: ikiniz de görür, gece yedeğine de girer.
+async function arsiveKaydet(btn) {
+  if (!store.list.length) { toast('Önce bir şey çiz 🎨'); return; }
+  if (btn.disabled) return;
+  btn.disabled = true;
+  try {
+    const { blob } = await fotoKucult(await exportPng(store.list));
+    const url = await uploadPhoto(blob, roomId);
+    await putDoc(roomId, 'ani', uuid(), cizimAnisi({ url, gun: toDay(new Date()), birlikte: !solo }), me);
+    sfx('pop');
+    toast('Anılarınıza kaydedildi 💞');
+  } catch (e) {
+    console.warn('[ciz] anılara kaydedilemedi', e);
+    toast('Kaydedilemedi. İnternetini kontrol edip tekrar dener misin?');
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 async function savePng() {

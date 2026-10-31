@@ -173,3 +173,12 @@ export function resultOf(s) {
   const ok = (s.history || []).filter((h) => h.ok).length;
   return { mode: 'tahmin', rounds: s.rounds, total: totalRounds(s), ok, score: s.score };
 }
+
+/**
+ * Tuvaldeki çizim → Anılar'a yazılacak 'ani' verisi. Tahmin turundaki kelime başlığa girmez (sevgili görmesin).
+ * url: yüklenen fotoğraf; gun: 'YYYY-MM-DD'; birlikte: iki kişi aynı tuvaldeydi.
+ */
+export function cizimAnisi({ url, gun, birlikte = false } = {}) {
+  if (!url || !/^\d{4}-\d{2}-\d{2}$/.test(gun || '')) return null;
+  return { baslik: birlikte ? 'Birlikte çizdik 🎨' : 'Çizimim 🎨', tarih: gun, fotolar: [url], etiketler: ['çizim'] };
+}

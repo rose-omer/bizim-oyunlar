@@ -221,3 +221,13 @@ test('toAction: misafir guess/pass/again; setup ve menu yalnız ev sahibi', () =
   assert.equal(toAction({ type: 'setup', mode: 'tahmin', rounds: 5 }, A, s, ctx).rounds, 5);
   assert.deepEqual(toAction({ type: 'menu' }, A, s, ctx), { type: 'menu' });
 });
+
+test('cizimAnisi: çizim fotoğraflı anı olur; kelime asla başlığa girmez', async () => {
+  const { cizimAnisi } = await import('../games/ciz/oyun.js');
+  const url = 'https://x.supabase.co/storage/v1/object/public/photos/abcdefghij/1.webp';
+  assert.deepEqual(cizimAnisi({ url, gun: '2026-10-31', birlikte: true }),
+    { baslik: 'Birlikte çizdik 🎨', tarih: '2026-10-31', fotolar: [url], etiketler: ['çizim'] });
+  assert.equal(cizimAnisi({ url, gun: '2026-10-31', birlikte: false }).baslik, 'Çizimim 🎨');
+  assert.equal(cizimAnisi({ url: '', gun: '2026-10-31' }), null);
+  assert.equal(cizimAnisi({ url, gun: '31.10.2026' }), null);
+});

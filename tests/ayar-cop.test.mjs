@@ -8,7 +8,7 @@ const belge = (id, updated_at, extra = {}) => ({
 });
 
 test('COP_TURLERI: içerik türleri', () => {
-  assert.deepEqual(COP_TURLERI, ['mesaj', 'ani', 'mektup', 'gun', 'liste', 'randevu', 'harcama', 'kupon', 'gunfoto', 'kumbara']);
+  assert.deepEqual(COP_TURLERI, ['mesaj', 'ani', 'mektup', 'gun', 'liste', 'randevu', 'harcama', 'kupon', 'gunfoto', 'kumbara', 'not']);
 });
 
 test('copListesi: yalnız silinmiş ve verisi dolu olanlar; en yeni önce; en çok 50; türü taşır', () => {

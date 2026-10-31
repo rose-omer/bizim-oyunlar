@@ -233,6 +233,7 @@ export const YEDEK_TURLERI = [
   'yavru', 'yavrubakim',
   'kupon', 'bilgi',
   'kumbara', 'katki',
+  'not',
 ];
 
 /**
@@ -272,6 +273,7 @@ const TUR_ADLARI = {
   ruhgecmis: 'ruh hâli geçmişi', skor: 'skor', gunfoto: 'günün fotoğrafı', haftalik: 'haftalık kontrol',
   harcama: 'harcama', yavru: 'yavru', yavrubakim: 'yavru bakımı', kupon: 'kupon', bilgi: 'kişi bilgisi',
   kumbara: 'kumbara', katki: 'kumbara hareketi',
+  not: 'not',
 };
 const turAdi = (tur) => TUR_ADLARI[tur] || tur;
 const YEDEK_DEGIL = 'Bu dosya bir Biz İkimiz yedeği değil.';
@@ -348,7 +350,7 @@ export function yedekOzeti(sayilar) {
 
 // ---------- Son silinenler ----------
 // Silme veriyi korur (deleted = true, data kalır). Geri al = putDoc(roomId, tür, id, data).
-export const COP_TURLERI = ['mesaj', 'ani', 'mektup', 'gun', 'liste', 'randevu', 'harcama', 'kupon', 'gunfoto', 'kumbara'];
+export const COP_TURLERI = ['mesaj', 'ani', 'mektup', 'gun', 'liste', 'randevu', 'harcama', 'kupon', 'gunfoto', 'kumbara', 'not'];
 const COP_EN_COK = 50;
 const ONIZLEME_MAX = 80;
 

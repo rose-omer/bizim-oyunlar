@@ -414,6 +414,7 @@ async function ensureRoom(roomId) {
   ];
   openData(room);
   mountYavru(state.view);
+  mountNot(state.view);
   paintAll();
   istekKontrol(true);
 }
@@ -905,7 +906,7 @@ function paintDate() {
 function bizScreen(roomId) {
   const view = {
     roomId, keys: {}, seenAt: Number(lsGet(seenKey(roomId))) || 0, cd: null, lastPlayed: null, picks: [],
-    yavruMounted: false, yavruCleanup: null,
+    yavruMounted: false, yavruCleanup: null, notMounted: false, notCleanup: null,
   };
   view.heading = h('h1', { class: 'sr-only', id: 'biz-h', tabindex: '-1' }, 'Biz');
   view.istekBox = h('div', { hidden: true });
@@ -914,6 +915,7 @@ function bizScreen(roomId) {
   view.noteBox = h('div', { class: 'couple-note stack' });
   view.upBox = h('div');
   view.yavruSec = h('section', { class: 'biz-sec', 'aria-label': 'Yavrumuz', hidden: true });
+  view.notSec = h('section', { class: 'biz-sec', 'aria-label': 'Sevgilinin notu', hidden: true });
   view.gamesHint = h('p', { class: 'biz-sec-hint', hidden: true });
   view.picksBox = h('div', { class: 'card card-list biz-picks' });
   view.upSec = section('up-h', 'Yaklaşanlar', {
@@ -948,6 +950,7 @@ function todaySection(view) {
   return section('bugun-h', 'Bugün', { action: view.todayDate },
     moodBlock(view),
     view.yavruSec,
+    view.notSec,
     touchBlock(view),
     block('next-h', 'Sıradaki', {}, view.nextBox));
 }
@@ -1123,6 +1126,22 @@ async function mountYavru(view) {
     }
   } catch (e) {
     console.warn('[biz] Yavrumuz kartı açılamadı', e);
+  }
+}
+
+// ---------- Not kartı (sayfalar/not/kart.js; sevgilinin son notu yoksa bölüm gizli) ----------
+async function mountNot(view) {
+  if (!view || view.notMounted || !state.room || state.view !== view) return;
+  view.notMounted = true;
+  const room = state.room;
+  try {
+    const mod = await import('../sayfalar/not/kart.js');
+    if (state.view !== view || state.room !== room) return;
+    const off = await mod.mountNotKart(view.notSec, { room });
+    if (state.view !== view) off?.();
+    else view.notCleanup = off;
+  } catch (e) {
+    console.warn('[biz] Not kartı açılamadı', e);
   }
 }
 
@@ -1634,6 +1653,7 @@ function cleanupView() {
   const v = state.view;
   if (!v) return;
   try { v.yavruCleanup?.(); } catch { /* yok say */ }
+  try { v.notCleanup?.(); } catch { /* yok say */ }
   clearTimeout(v.coolTimer);
 }
 
@@ -1670,6 +1690,7 @@ function render({ focus = false } = {}) {
   if (tabs) mountTabBar('biz');
   else removeTabBar();
   mountYavru(state.view);
+  mountNot(state.view);
   paintAll();
   if (state.view) istekKontrol(true);
 

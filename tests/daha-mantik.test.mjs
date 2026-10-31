@@ -9,7 +9,7 @@ const idler = (gruplar) => gruplar.map((g) => [g.id, g.sayfalar.map((x) => x.id)
 
 test('DAHA_GRUPLARI: dört grup, talimattaki sıra', () => {
   assert.deepEqual(DAHA_GRUPLARI.map((g) => [g.baslik, g.uyeler]), [
-    ['Konuşalım', ['mektup', 'gunsorusu', 'haftalik', 'gunfoto']],
+    ['Konuşalım', ['mektup', 'gunsorusu', 'haftalik', 'gunfoto', 'not']],
     ['Planlayalım', ['listeler', 'randevu', 'harcama', 'onun', 'cark']],
     ['Biz', ['ruh', 'sevgidili', 'yilimiz', 'rozetler', 'skor']],
     ['Birlikte', ['yavru', 'kupon', 'izle', 'oyunlar']],
@@ -20,7 +20,7 @@ test('dahaGruplari: sekmeler ve ayarlar çıkar, haritadaki sıra korunur', () =
   const g = dahaGruplari(SAYFALAR, SEKMELER);
   const hepsi = g.flatMap((x) => x.sayfalar.map((y) => y.id));
   for (const yok of ['biz', 'daha', 'ayarlar', 'sohbet', 'anilar', 'gunler']) assert.ok(!hepsi.includes(yok), yok);
-  assert.deepEqual(g[0].sayfalar.map((x) => x.id), ['mektup', 'gunsorusu', 'haftalik', 'gunfoto']);
+  assert.deepEqual(g[0].sayfalar.map((x) => x.id), ['mektup', 'gunsorusu', 'haftalik', 'gunfoto', 'not']);
   assert.deepEqual(g[2].sayfalar.map((x) => x.id), ['ruh', 'sevgidili', 'yilimiz', 'rozetler', 'skor']);
   // Bu daldaki kayıtta her sayfa bir gruba düşer: "Diğer" yok.
   assert.ok(!g.some((x) => x.id === 'diger'));

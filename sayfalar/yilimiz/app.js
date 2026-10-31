@@ -14,6 +14,8 @@ import {
 import { geriYukle, ilerlemeOrani } from './yukle.js';
 import { gorselCiz, paylasVeyaIndir, dosyaPaylasilir } from './gorsel.js';
 import { simgeSvg } from './simgeler.js';
+import { kitapKur } from './kitap.js';
+import { kitapParametreleri } from './kitap-mantik.js';
 
 const { room, roomId, me } = await bootPage({ ns: 'yilimiz', title: 'Yılımız', tab: 'daha' });
 const app = document.getElementById('app');
@@ -36,11 +38,17 @@ const yonlendir = (yol, baslik, alt, simge) => h('a', { class: 'card-row', href:
   h('span', { class: 'card-row-tile yl-yon-ikon', html: simgeSvg(simge, 1.5) }),
   h('span', {}, h('span', { class: 'card-row-title' }, baslik), h('span', { class: 'card-row-sub' }, alt)),
   h('span', { class: 'yl-yon-ok' }, icon('chevron')));
+const kitapBtn = h('button', { type: 'button', class: 'card-row yl-kitap-ac', disabled: true, onclick: () => kitabiAc() },
+  h('span', { class: 'card-row-tile yl-yon-ikon', html: simgeSvg('kitap', 1.5) }),
+  h('span', {}, h('span', { class: 'card-row-title' }, 'Kitap olarak aç'), h('span', { class: 'card-row-sub' }, 'Yılınız sayfa sayfa. Yazdırın ya da PDF yapın.')),
+  h('span', { class: 'yl-yon-ok' }, icon('chevron')));
 const baglantilar = h('nav', { class: 'card card-list yl-baglantilar', 'aria-label': 'Daha fazlası' },
+  kitapBtn,
   yonlendir('sayfalar/rozetler/', 'Rozetlerimiz', 'Birlikte açtıklarınız ve sıradakiler.', 'madalya'),
   yonlendir('sayfalar/skor/', 'Skor Tablosu', 'Oyun oyun kim kaç kez kazandı.', 'kupa'));
 
-app.replaceChildren(h('div', { class: 'yl' }, yilSec, durumEl, hikaye, baglantilar));
+const ana = h('div', { class: 'yl' }, yilSec, durumEl, hikaye, baglantilar);
+app.replaceChildren(ana);
 
 // ---------- Veri ----------
 const bugun = toDay(new Date());
@@ -76,7 +84,12 @@ function kisiler(ozet) {
 
 // ---------- Yıl seçimi ----------
 const secenekler = yilSecenekleri({ baslangic: baslangic(), bugun, ekYillar: aniYillari(aniCol.all()) });
-let secili = varsayilanYil(secenekler, bugun);
+const ilkParam = kitapParametreleri(location.search);
+let secili = secenekler.includes(ilkParam.yil) ? ilkParam.yil : varsayilanYil(secenekler, bugun);
+let sonVeri = null; // son yüklenen yıl: { yil, ozet, kisiler, mesajlar } (Anı Kitabı bunu kullanır)
+let kitap = null; // açık kitap: { el, temizle, gecmiste }
+let bekleyenKitap = ilkParam.kitap; // ?kitap=1 ile gelindi: yıl yüklenince aç
+let gunCol = null;
 function yillariCiz() {
   yilSec.replaceChildren(...secenekler.map((y) => h('button', {
     type: 'button', 'aria-pressed': String(y === secili),
@@ -98,6 +111,7 @@ function durumGoster(metin, oran = null) {
   }
 }
 function hazirla(yil) {
+  kitapBtn.disabled = true;
   hikaye.setAttribute('aria-busy', 'true');
   clearTimeout(durumZaman);
   durumZaman = setTimeout(() => { durumEl.hidden = false; }, 250); // hızlı yüklemede yanıp sönmesin
@@ -133,6 +147,9 @@ async function yukle(yil) {
   clearTimeout(durumZaman);
   durumEl.hidden = true;
   ciz(ozet, k);
+  sonVeri = { yil, ozet, kisiler: k, mesajlar: m.docs };
+  kitapBtn.disabled = false;
+  if (bekleyenKitap) { bekleyenKitap = false; kitabiAc({ push: false }); }
 }
 
 // ---------- Kartlar ----------
@@ -262,4 +279,46 @@ profil?.on('change', () => {
   if (gorsel?.url) URL.revokeObjectURL(gorsel.url);
   gorsel = null;
   hazirla(secili);
+});
+
+// ---------- Anı Kitabı (aynı sayfada; adres ?kitap=1&yil=YYYY, geri tuşu kitabı kapatır) ----------
+const kitapAdresi = (acik) => pageUrl('sayfalar/yilimiz/', acik ? { kitap: 1, yil: secili } : {});
+
+/** push: adres geçmişine kitap girişi ekle. gecmiste: kitabın altında sayfanın kendi girişi var (geri tuşu kapatır). */
+async function kitabiAc({ push = true, gecmiste = push } = {}) {
+  if (kitap || !sonVeri || sonVeri.yil !== secili) return;
+  kitapBtn.disabled = true;
+  try {
+    gunCol ||= openCollection(room, 'gun');
+    const gunler = (await gunCol).all();
+    const kisiDocs = [profil?.ben(), profil?.partner()].filter((k) => k?.clientId).map((k) => ({ id: k.clientId, data: k }));
+    const k = kitapKur({ ...sonVeri, anilar: aniCol.all(), gunler, kisiDocs, baslangic: baslangic() }, { kapat: kitabiKapat });
+    kitap = { ...k, gecmiste };
+    if (push) history.pushState({ kitap: secili }, '', kitapAdresi(true));
+    ana.hidden = true;
+    app.append(k.el);
+    scrollTo({ top: 0 });
+    k.el.querySelector('.kt-geri')?.focus({ preventScroll: true });
+  } catch (e) {
+    console.error(e);
+    gunCol = null;
+    toast('Kitap hazırlanamadı. Biraz sonra yeniden dene.');
+  } finally {
+    kitapBtn.disabled = false;
+  }
+}
+function kitabiKapat({ gecmisten = false } = {}) {
+  if (!kitap) return;
+  if (kitap.gecmiste && !gecmisten) { history.back(); return; } // popstate kapatır
+  if (!kitap.gecmiste && !gecmisten) history.replaceState(null, '', kitapAdresi(false));
+  kitap.temizle();
+  kitap.el.remove();
+  kitap = null;
+  ana.hidden = false;
+  kitapBtn.focus({ preventScroll: true });
+}
+addEventListener('popstate', () => {
+  const p = kitapParametreleri(location.search);
+  if (!p.kitap && kitap) kitabiKapat({ gecmisten: true });
+  else if (p.kitap && !kitap && p.yil === secili) kitabiAc({ push: false, gecmiste: true });
 });

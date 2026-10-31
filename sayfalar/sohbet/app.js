@@ -1,9 +1,9 @@
 // Sohbet sayfası: ikinizin mesajlaşma yeri.
 // Veri: 'mesaj' (son 100, yukarı kaydırınca eskiler) ve 'okundu' (id = clientId, { son, at }).
-// Mesaj ekleri: foto (WebP/JPEG), ses ({ url, sure, tur }), yildiz ({ [clientId]: true }).
+// Mesaj ekleri: foto (WebP/JPEG), ses ({ url, sure, tur }), yildiz ({ [clientId]: true }), sabit ({ at, kim }).
 // Canlı sinyal: room.send({ t:'yaziyor' }) en çok 2 sn'de bir.
 import { bootPage } from '../../js/core/sayfa.js';
-import { openCollection } from '../../js/core/veri.js';
+import { openCollection, listDocs, patchDoc, maxUpdated, overlapSince } from '../../js/core/veri.js';
 import { openProfil } from '../../js/core/profil.js';
 import { uploadPhoto, uploadAudio, isAllowedPhotoUrl, SES_MAX_BAYT } from '../../js/core/storage.js';
 import { fotoKucult } from '../../js/core/foto.js';
@@ -17,6 +17,8 @@ import * as M from './mantik.js';
 import { ikon, gunSatiri, mesajSatiri, yuklemeSatiri, sesBoya } from './ekran.js';
 import { jestleriBagla, CIFT_MS } from './jest.js';
 import { aramaPaneli } from './panel.js';
+import { sohbetBul } from './bul.js';
+import { eslesmeler } from './arama.js';
 import {
   kayitDestegi, kayitBaslat, tekOynatici, sesVerisi, sesSuresi, sureYazisi, kaydirIptalMi, IPTAL_ESIK, SES_EN_AZ_MS,
 } from './ses.js';
@@ -28,6 +30,9 @@ const ESKI_ESIK = 500; // tepeye bu kadar yaklaşınca eski mesajlar yüklenir
 const TUTMA_MS = 350; // mikrofona bu kadar basılı tutunca kayıt başlar (bırakınca gönderilir)
 const PENCERE = 30; // açılışta DOM'a basılan son mesaj sayısı; yukarı kaydırdıkça PENCERE kadar artar
 const BALON_FOTO = Object.freeze({ uzun: 960 }); // balon en çok ~312 CSS px × 3
+const GUN_UST = 8; // yapışkan gün ayırıcısının üst boşluğu (style.css .sh-gun top ile aynı)
+// Sabit taraması bu andan sonra değişen mesajlara bakar (öncesinde sabitleme yoktu).
+const SABIT_BASLANGIC = '2026-10-31T00:00:00.000Z';
 const kok = document.documentElement;
 const kaba = typeof matchMedia === 'function' ? matchMedia('(pointer: coarse)') : { matches: false };
 const azHareket = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : { matches: false };
@@ -102,7 +107,9 @@ const sayac = h('div', { class: 'sh-sayac', hidden: true });
 const alt = h('div', { class: 'sh-alt' }, h('div', { class: 'sh-sutun' }, ek, emojiPanel, form, sayac));
 const duyuru = h('div', { class: 'sr-only', 'aria-live': 'polite' });
 
-const listeKutu = h('div', { class: 'sh-liste-kutu' }, kaydirma, asagi);
+const sabitBtn = h('button', { type: 'button', class: 'sh-sabit-btn' });
+const sabitSerit = h('div', { class: 'sh-sabit', hidden: true }, h('div', { class: 'sh-sutun' }, sabitBtn));
+const listeKutu = h('div', { class: 'sh-liste-kutu' }, sabitSerit, kaydirma, asagi);
 app.replaceChildren(listeKutu, alt, duyuru);
 ust.replaceChildren(h('span', { class: 'sh-donen', 'aria-hidden': 'true' }), h('span', {}, 'Mesajlar yükleniyor…'));
 
@@ -179,6 +186,8 @@ let pencereN = PENCERE; // pencerede tutulan mesaj sayısı
 let pencereAnahtar = null; // pencerenin ilk satırı (yeni mesaj gelince üst kaymasın)
 let gizliVar = false; // bellekte olup DOM'a basılmamış eski satır var mı
 let genisletiliyor = false;
+let gidisBitis = 0; // mesajaGit kaydırması bu ana dek sürer
+let bul = null; // sohbet içi arama (aşağıda kurulur)
 
 const ctxTaban = { benId, ad, bul: (id) => col.get(id), foto: fotoKaynak };
 
@@ -210,6 +219,8 @@ function ciz() {
   const durum = M.gorulduBilgisi(docs, okCol.all(), benId);
   const pAd = partnerAd();
   const odakId = document.activeElement?.closest?.('.sh-satir')?.dataset?.id || null;
+  const bulSorgu = bul?.vurguSorgu() || '';
+  const bulSimdiki = bul?.simdiki() || null;
   const istenen = [];
   const anahtarlar = new Set();
   const yeniOnun = [];
@@ -224,9 +235,10 @@ function ciz() {
       const d = r.doc.data || {};
       const hedef = d.yanit ? col.get(d.yanit) : null;
       const dr = durum && durum.id === r.doc.id ? durum : null;
+      const vurgu = bulSorgu && typeof d.metin === 'string' ? eslesmeler(d.metin, bulSorgu) : null;
       imza = [r.doc.updated_at, r.doc.pending ? 1 : 0, r.ilk ? 1 : 0, r.son ? 1 : 0, dr ? `${dr.durum}${dr.at}` : '',
-        d.yanit ? (hedef ? hedef.updated_at : 'yok') : '', r.benim ? '' : pAd].join('|');
-      kur = () => mesajSatiri(r, { ...ctxTaban, durum: dr });
+        d.yanit ? (hedef ? hedef.updated_at : 'yok') : '', r.benim ? '' : pAd, vurgu?.length ? bulSorgu : ''].join('|');
+      kur = () => mesajSatiri(r, { ...ctxTaban, durum: dr, vurgu });
     }
     anahtarlar.add(r.anahtar);
     let e = elemanlar.get(r.anahtar);
@@ -235,6 +247,7 @@ function ciz() {
       elemanlar.set(r.anahtar, e);
       if (r.tur === 'mesaj') {
         if (secili === r.anahtar) e.el.classList.add('secili');
+        if (bulSimdiki === r.anahtar) e.el.classList.add('bul-simdiki');
         if (!gorulen.has(r.anahtar)) {
           gorulen.add(r.anahtar);
           if (!ilkCizim && !eskiYukleniyor && !genisletiliyor) {
@@ -283,6 +296,39 @@ function ciz() {
   zorlaAlta = false;
   ilkCizim = false;
   okunduPlanla();
+  gunPlanla();
+}
+
+// ---------- Yapışkan gün ayırıcıları ----------
+// Hepsi aynı listede yapışkan: üste yığılanlardan yalnız sonuncusu görünür (öncekiler altta kalıp taşmasın).
+// Tepedeki ayırıcı kaydırma durunca solar (balonun üstünü kapatmasın); kaydırınca yeniden görünür.
+let gunKare = 0;
+let gunDur = 0;
+let gunKaydi = false;
+function gunleriBoya() {
+  gunKare = 0;
+  const kaydi = gunKaydi;
+  gunKaydi = false;
+  const sinir = kaydirma.getBoundingClientRect().top + GUN_UST + 1;
+  const gunler = liste.querySelectorAll(':scope > .sh-gun');
+  let son = -1;
+  for (let i = 0; i < gunler.length; i++) {
+    if (gunler[i].getBoundingClientRect().top <= sinir) son = i;
+    else break;
+  }
+  gunler.forEach((g, i) => {
+    g.classList.toggle('ortu', i < son);
+    g.classList.toggle('ust', i === son);
+    if (kaydi || i !== son) g.classList.remove('dur');
+  });
+  const tepe = gunler[son];
+  if (tepe && !tepe.classList.contains('dur')) {
+    clearTimeout(gunDur);
+    gunDur = setTimeout(() => tepe.classList.add('dur'), 1500);
+  }
+}
+function gunPlanla() {
+  if (!gunKare) gunKare = requestAnimationFrame(gunleriBoya);
 }
 
 let ustDurum = 'ilk';
@@ -369,7 +415,10 @@ async function doldur() {
 kaydirma.addEventListener('scroll', () => {
   altaYapisik = M.altaYakinMi(kaydirma);
   asagiGuncelle();
-  if (kaydirma.scrollTop < ESKI_ESIK) eskileriYukle();
+  gunKaydi = true;
+  gunPlanla();
+  // Mesaja giderken (yumuşak kaydırma) eski yükleme kaydırmayı kesmesin; kullanıcı kaydırınca yüklenir.
+  if (kaydirma.scrollTop < ESKI_ESIK && Date.now() > gidisBitis) eskileriYukle();
 }, { passive: true });
 
 // İçerik ya da alan boyu değişince (yazı tipi, klavye, yazıyor balonu) en altta kal.
@@ -914,6 +963,174 @@ async function yildizla(id) {
   else toast('Yıldız kaldırıldı');
 }
 
+// ---------- Sabitlenen mesajlar ----------
+// Yalnız son 100 mesaj yüklü: sabitler yerel önbellekte de tutulur (eski sabit kaybolmasın).
+// Kaynaklar: görünen mesajlar, karşı tarafın canlı yazmaları, açılışta ve öne gelişte artımlı tarama.
+const sabitAnahtar = `bizim.sohbet.sabit.${roomId}`;
+const sabitKayit = (() => {
+  try {
+    const k = JSON.parse(readStore('local', sabitAnahtar) || 'null');
+    if (k && Array.isArray(k.liste)) return { since: k.since || SABIT_BASLANGIC, liste: M.sabitBirlestir([], k.liste).liste };
+  } catch { /* bozuk önbellek */ }
+  return { since: SABIT_BASLANGIC, liste: [] };
+})();
+let sabitListeCiz = null; // liste penceresi açıkken onu tazeler
+
+function sabitKaydet() {
+  try { writeStore('local', sabitAnahtar, JSON.stringify(sabitKayit)); } catch { /* kota */ }
+}
+
+function sabitGuncelle(docs) {
+  const r = M.sabitBirlestir(sabitKayit.liste, docs);
+  if (!r.degisti) return;
+  sabitKayit.liste = r.liste;
+  sabitKaydet();
+  sabitCiz();
+  sabitListeCiz?.();
+}
+
+let sabitTaraniyor = false;
+let sonSabitTarama = 0;
+/** Son taramadan beri değişen mesajlar (silinenler dahil): başka cihazda sabitlenen eski mesajlar da gelir. */
+async function sabitTara() {
+  if (sabitTaraniyor || Date.now() - sonSabitTarama < 60000) return;
+  sabitTaraniyor = true;
+  sonSabitTarama = Date.now();
+  try {
+    const docs = await listDocs(roomId, 'mesaj', { since: overlapSince(sabitKayit.since) });
+    sabitKayit.since = maxUpdated(docs, sabitKayit.since);
+    sabitKaydet();
+    sabitGuncelle(docs);
+  } catch { /* çevrimdışı ya da yetki yok: önbellek yeter */ } finally {
+    sabitTaraniyor = false;
+  }
+}
+
+function sabitCiz() {
+  const l = sabitKayit.liste;
+  sabitSerit.hidden = !l.length;
+  if (!l.length) return;
+  const d = l[0];
+  const kim = ad(M.gonderen(d));
+  const metin = M.ozet(d.data, 120) || 'Mesaj';
+  const cok = l.length > 1;
+  sabitBtn.setAttribute('aria-label', cok
+    ? `${l.length} sabitlenen mesaj. En son: ${kim}, ${metin}. Listeyi aç.`
+    : `Sabitlenen mesaj. ${kim}, ${metin}. Mesaja git.`);
+  if (cok) sabitBtn.setAttribute('aria-haspopup', 'dialog');
+  else sabitBtn.removeAttribute('aria-haspopup');
+  sabitBtn.replaceChildren(
+    h('span', { class: 'sh-sabit-ik', 'aria-hidden': 'true' }, ikon('sabit')),
+    h('span', { class: 'sh-sabit-metin', 'aria-hidden': 'true' }, h('b', {}, kim), ` ${metin}`));
+  if (cok) sabitBtn.append(h('span', { class: 'sh-sabit-sayi', 'aria-hidden': 'true' }, String(l.length), ikon('liste')));
+}
+sabitBtn.addEventListener('click', () => {
+  const l = sabitKayit.liste;
+  if (l.length > 1) sabitListesiAc();
+  else if (l.length) sabiteGit(l[0]);
+});
+
+async function sabitle(id) {
+  const d = col.get(id);
+  if (!d) return;
+  const ekle = !M.sabitMi(d);
+  if (ekle && sabitKayit.liste.filter((x) => x.id !== id).length >= M.SABIT_EN_COK) {
+    toast(`En çok ${M.SABIT_EN_COK} mesaj sabitlenebilir. Önce birini kaldır.`, { action: { label: 'Sabitlenenler', onClick: sabitListesiAc } });
+    return;
+  }
+  try {
+    await col.patch(id, M.sabitYamasi(d, benId));
+  } catch (e) {
+    toast(e.message);
+    return;
+  }
+  sabitGuncelle([col.get(id)]);
+  toast(ekle ? 'Sabitlendi' : 'Sabitleme kaldırıldı');
+}
+
+/** Listeden kaldırma. Mesaj bu cihazda hiç yüklenmediyse (eski) doğrudan yazılır ve karşıya yayılır. */
+async function sabitKaldir(id) {
+  const d = col.get(id);
+  const onbellek = sabitKayit.liste.find((x) => x.id === id);
+  try {
+    if (d) {
+      if (M.sabitMi(d)) await col.patch(id, M.sabitYamasi(d, benId));
+      sabitGuncelle([col.get(id)]);
+    } else if (onbellek) {
+      const doc = await patchDoc(roomId, 'mesaj', id, M.sabitYamasi(onbellek, benId), benId);
+      room.sendAll({ t: 'veri', kind: 'mesaj', doc });
+      sabitGuncelle([doc]);
+    }
+  } catch (e) {
+    toast(e?.message || 'Kaldırılamadı. Bağlantını kontrol et.');
+    return;
+  }
+  toast('Sabitleme kaldırıldı');
+}
+
+const gorunurMu = (id) => col.all().some((x) => x.id === id);
+let sabiteGidiliyor = false;
+/** Sabit mesaja gider; yüklü değilse geçmiş yükleme yoluyla ona dek eski mesajları getirir. */
+async function sabiteGit(d) {
+  if (sabiteGidiliyor) return;
+  if (!gorunurMu(d.id)) {
+    if (!col.hasOlder()) { toast('Bu mesaj artık yok.'); return; }
+    sabiteGidiliyor = true;
+    toast('Eski mesajlara gidiliyor…', { ms: 2000 });
+    const hedefAn = Date.parse(d.created_at);
+    try {
+      for (let i = 0; i < 40 && col.hasOlder() && !gorunurMu(d.id); i++) {
+        const ilk = col.all()[0];
+        if (ilk && Date.parse(ilk.created_at) <= hedefAn) break; // o ana dek yüklendi: mesaj silinmiş
+        await eskileriGetir({ pencere: false });
+      }
+    } finally {
+      sabiteGidiliyor = false;
+    }
+    if (!gorunurMu(d.id)) { toast('Bu mesaja ulaşılamadı.'); return; }
+  }
+  mesajaGit(d.id, { odak: true });
+}
+
+function sabitListesiAc() {
+  if (document.querySelector('dialog.sh-menu[open]')) return;
+  let bekleyen = null;
+  const baslik = h('h2', { class: 'sh-sabitler-baslik', id: 'sh-sabitler-baslik' });
+  const kapatBtn = h('button', { type: 'button', class: 'sh-ara-kapat' }, 'Kapat');
+  const ol = h('ol', { class: 'sh-sabitler-liste' });
+  const dlg = h('dialog', { class: 'sh-menu sh-sabitler', 'aria-labelledby': 'sh-sabitler-baslik' },
+    h('div', { class: 'sh-sabitler-kart' }, h('div', { class: 'sh-sabitler-bas' }, baslik, kapatBtn), ol));
+  kapatBtn.addEventListener('click', () => dlg.close());
+  sabitListeCiz = () => {
+    const l = sabitKayit.liste;
+    if (!l.length) { dlg.close(); return; }
+    const odakVardi = ol.contains(document.activeElement);
+    baslik.textContent = `Sabitlenenler · ${l.length}`;
+    ol.replaceChildren(...l.map((d) => h('li', {},
+      h('button', { type: 'button', class: 'sh-sabit-oge', onclick: () => { bekleyen = () => sabiteGit(d); dlg.close(); } },
+        h('span', { class: 'sh-sonuc-ust' },
+          h('span', { class: 'sh-sonuc-kim' }, ad(M.gonderen(d))),
+          h('span', { class: 'sh-sonuc-zaman' }, [M.gunEtiketi(d.created_at), M.saatEtiketi(d.created_at)].filter(Boolean).join(' · '))),
+        h('span', { class: 'sh-sabit-oge-metin' }, M.ozet(d.data, 160) || 'Mesaj')),
+      h('button', {
+        type: 'button', class: 'sh-ikon-btn', 'aria-label': `Sabitlemeyi kaldır: ${M.ozet(d.data, 40) || 'Mesaj'}`,
+        title: 'Sabitlemeyi kaldır', onclick: () => sabitKaldir(d.id),
+      }, ikon('sabitKaldir')))));
+    if (odakVardi) (ol.querySelector('.sh-sabit-oge') || kapatBtn).focus({ preventScroll: true });
+  };
+  sabitListeCiz();
+  dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg.close(); });
+  dlg.addEventListener('close', () => {
+    sabitListeCiz = null;
+    dlg.remove();
+    if (bekleyen) bekleyen();
+    else if (!sabitSerit.hidden) sabitBtn.focus({ preventScroll: true });
+  });
+  document.body.append(dlg);
+  dlg.showModal();
+  ol.querySelector('.sh-sabit-oge')?.focus({ preventScroll: true });
+}
+
 /**
  * Mesaja kaydırır ve kısa süre vurgular. Mesaj bellekte ama çizim penceresinin dışındaysa (eski mesaj, arama
  * sonucu, yıldızlı) pencere o mesaja dek açılır.
@@ -928,6 +1145,7 @@ function mesajaGit(id, { odak = false } = {}) {
   const hedef = liste.querySelector(sec);
   if (!hedef) { toast('Bu mesaj artık yok.'); return; }
   altaYapisik = false; // yeniden çizim / boyut değişimi alta atmasın
+  gidisBitis = Date.now() + 900;
   // Pencere yeni açıldıysa doğrudan atla: yumuşak kaydırma sürerken boy gözcüsü en alta geri çekmesin.
   const anlik = acildi || azHareket.matches;
   // Uzaksa hedefin yakınına atla, kalanı yumuşak kaydır.
@@ -950,7 +1168,9 @@ async function silSor(id) {
     await col.remove(id);
   } catch (e) {
     toast(e.message);
+    return;
   }
+  sabitGuncelle([{ id, deleted: true, updated_at: new Date().toISOString() }]);
 }
 
 /** basili: menü parmak hâlâ ekrandayken (uzun basma) açıldı. */
@@ -962,6 +1182,7 @@ function menuAc(satir, { basili = false } = {}) {
   const metin = typeof d.data.metin === 'string' ? d.data.metin : '';
   const benimTepki = d.data.tepki?.[benId] || null;
   const benimYildiz = d.data.yildiz?.[benId] === true;
+  const sabitli = M.sabitMi(d);
   titret(10);
   secili = id;
   satir.classList.add('secili');
@@ -983,6 +1204,7 @@ function menuAc(satir, { basili = false } = {}) {
     h('div', { class: 'sh-menu-eylemler' },
       eylem('yanitla', 'Yanıtla', () => yanitBasla(id)),
       eylem(benimYildiz ? 'yildizDolu' : 'yildiz', benimYildiz ? 'Yıldızı kaldır' : 'Yıldızla', () => yildizla(id)),
+      eylem(sabitli ? 'sabitKaldir' : 'sabit', sabitli ? 'Sabitlemeyi kaldır' : 'Sabitle', () => sabitle(id)),
       metin ? eylem('kopyala', 'Kopyala', () => kopyala(metin)) : null,
       benim && metin ? eylem('duzenle', 'Düzenle', () => duzenlemeBasla(id)) : null,
       benim ? eylem('sil', 'Sil', () => silSor(id), 'tehlike') : null)));
@@ -1068,40 +1290,84 @@ jestleriBagla(liste, {
 });
 
 // ---------- Arama ve yıldızlılar ----------
+// Ara düğmesi sohbet içi arama çubuğunu açar (bul.js); sonuç listesi ve yıldızlılar paneli (panel.js) oradan açılır.
 const araBtn = h('button', {
-  type: 'button', class: 'icon-btn sh-ara-btn', 'aria-label': 'Sohbette ara', title: 'Ara ve yıldızlılar',
-  'aria-controls': 'sh-ara', 'aria-expanded': 'false',
+  type: 'button', class: 'icon-btn sh-ara-btn', 'aria-label': 'Sohbette ara', title: 'Sohbette ara',
+  'aria-controls': 'sh-bul', 'aria-expanded': 'false',
 }, ikon('ara'));
 const panel = aramaPaneli({
   col, benId, ad, partnerAd,
-  mesajaGit: (id) => mesajaGit(id, { odak: true }),
+  mesajaGit: (id, sorgu) => { if (!(bul.acikMi() && sorgu && bul.sec(id, sorgu))) mesajaGit(id, { odak: true }); },
   eskiYukle: () => eskileriGetir({ pencere: false }),
   arkaPlan: [listeKutu, alt],
   donus: araBtn,
 });
 app.append(panel.el);
+
+/** Arama sonucuna gider ve işaretler (null: işareti kaldırır). */
+function bulGit(id, secenek = {}) {
+  liste.querySelector('.sh-satir.bul-simdiki')?.classList.remove('bul-simdiki');
+  if (!id) return;
+  mesajaGit(id, secenek);
+  liste.querySelector(`.sh-satir[data-id="${CSS.escape(id)}"]`)?.classList.add('bul-simdiki');
+}
+bul = sohbetBul({
+  col,
+  git: bulGit,
+  cizdir: () => ciz(),
+  eskiYukle: () => eskileriGetir({ pencere: false }),
+  listeAc: (sorgu, dugme) => panel.ac('ara', { sorgu, donus: dugme }),
+  yildizAc: (dugme) => panel.ac('yildiz', { sorgu: '', donus: dugme }),
+  acildi: () => {
+    app.classList.add('sh-bul-acik');
+    araBtn.setAttribute('aria-expanded', 'true');
+    emojiPanel.hidden = true;
+    emojiBtn.setAttribute('aria-expanded', 'false');
+  },
+  kapandi: ({ odakGeriVer }) => {
+    app.classList.remove('sh-bul-acik');
+    araBtn.setAttribute('aria-expanded', 'false');
+    if (odakGeriVer) araBtn.focus();
+  },
+});
+listeKutu.prepend(bul.ust);
+form.after(bul.gez);
 const araclar = document.querySelector('#shell .shell-tools');
 if (araclar) araclar.insertBefore(araBtn, araclar.lastElementChild);
-araBtn.addEventListener('click', () => (panel.acikMi() ? panel.kapat() : panel.ac('ara')));
+araBtn.addEventListener('click', () => {
+  if (bul.acikMi()) { bul.kapat(); return; }
+  if (kayit) { toast('Önce sesli mesajı gönder ya da sil.'); return; }
+  if (panel.acikMi()) panel.kapat({ odakGeriVer: false });
+  bul.ac();
+});
 // Telefonda arama klavyesi açıkken alt sekme çubuğu yer kaplamasın (mesaj alanındaki gibi).
-panel.el.addEventListener('focusin', (e) => {
-  if (kaba.matches && e.target.matches?.('.sh-ara-girdi')) document.body.classList.add('sh-klavye');
-});
-panel.el.addEventListener('focusout', (e) => {
-  if (e.target.matches?.('.sh-ara-girdi')) document.body.classList.remove('sh-klavye');
-});
+for (const kutu of [panel.el, bul.ust]) {
+  kutu.addEventListener('focusin', (e) => {
+    if (kaba.matches && e.target.matches?.('.sh-ara-girdi')) document.body.classList.add('sh-klavye');
+  });
+  kutu.addEventListener('focusout', (e) => {
+    if (e.target.matches?.('.sh-ara-girdi')) document.body.classList.remove('sh-klavye');
+  });
+}
 let panelKare = 0;
 const panelTazele = () => {
-  if (!panel.acikMi() || panelKare) return;
-  panelKare = requestAnimationFrame(() => { panelKare = 0; panel.guncelle(); });
+  if ((!panel.acikMi() && !bul.acikMi()) || panelKare) return;
+  panelKare = requestAnimationFrame(() => { panelKare = 0; panel.guncelle(); bul.tazele(); });
 };
 
 // ---------- Başlat ----------
 col.on('change', ciz);
 col.on('change', panelTazele);
+col.on('change', (docs) => sabitGuncelle(docs));
 okCol.on('change', ciz);
 profil?.on('change', ciz);
 profil?.on('change', panelTazele);
+profil?.on('change', sabitCiz);
+// Karşı tarafın yazması (eski, yüklü olmayan mesajı sabitlemesi dahil).
+room.on('message', (msg) => {
+  if (msg?.t === 'veri' && msg.kind === 'mesaj' && msg.doc) sabitGuncelle([msg.doc]);
+});
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') sabitTara(); });
 
 ta.value = readStore('local', taslakAnahtar) || '';
 girisDegisti();
@@ -1109,4 +1375,7 @@ girisDegisti();
 // Arka sekmede kare gelmez: beklemeden çiz.
 await new Promise((r) => (document.hidden ? setTimeout(r, 0) : requestAnimationFrame(() => setTimeout(r, 0))));
 ciz();
+sabitGuncelle(col.all());
+sabitCiz();
 doldur();
+sabitTara();

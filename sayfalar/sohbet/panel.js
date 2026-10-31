@@ -1,14 +1,15 @@
-// Sohbet: arama ve yıldızlılar paneli. Mesaj listesinin üstünü kaplar; sonuca dokununca panel kapanır,
-// mesaja kaydırılır ve vurgulanır (mesajaGit). Kullanıcı metni yalnız metin düğümü olarak basılır.
+// Sohbet: arama sonuçları listesi ve yıldızlılar paneli. Mesaj listesinin üstünü kaplar; sonuca dokununca panel
+// kapanır, mesaja kaydırılır ve vurgulanır (mesajaGit). Kullanıcı metni yalnız metin düğümü olarak basılır.
 import { h } from '../../js/core/ui.js';
 import { gonderen, ozet, gunEtiketi, saatEtiketi } from './mantik.js';
 import { mesajAra, yildizlilar, yildizlayanlar, vurguParcalari, eskiSayfalardaAra, ARA_EN_COK_SONUC } from './arama.js';
 import { ikon } from './ekran.js';
 
 /**
- * o: { col, benId, ad(clientId) -> 'Sen' | partner adı, partnerAd(), mesajaGit(id), eskiYukle() -> Promise<sayı>,
- *      arkaPlan: [öğe] (açıkken inert), donus: odak dönecek düğme }
- * -> { el, ac(mod), kapat(), acikMi(), guncelle() }
+ * o: { col, benId, ad(clientId) -> 'Sen' | partner adı, partnerAd(),
+ *      mesajaGit(id, sorgu | null) (sorgu: 'Mesajlar' görünümünde aranan metin), eskiYukle() -> Promise<sayı>,
+ *      arkaPlan: [öğe] (açıkken inert), donus: odak dönecek varsayılan öğe }
+ * -> { el, ac(mod, { sorgu, donus }), kapat(), acikMi(), guncelle() }
  */
 export function aramaPaneli(o) {
   const { col, benId } = o;
@@ -18,6 +19,7 @@ export function aramaPaneli(o) {
   let tarama = null; // { durdur: bool, taranan }
   let sonBilgi = '';
   let sonucSayisi = 0;
+  let acan = null; // paneli açan düğme (aria-expanded, odak dönüşü)
 
   const girdi = h('input', {
     type: 'search', class: 'sh-ara-girdi', placeholder: 'Mesajlarda ara', 'aria-label': 'Mesajlarda ara',
@@ -227,7 +229,12 @@ export function aramaPaneli(o) {
   });
   el.addEventListener('click', (e) => {
     const s = e.target.closest('.sh-sonuc');
-    if (s) { kapat({ odakGeriVer: false }); o.mesajaGit(s.dataset.id); return; }
+    if (s) {
+      const q = mod === 'ara' ? sorgu : null;
+      kapat({ odakGeriVer: false });
+      o.mesajaGit(s.dataset.id, q);
+      return;
+    }
     if (e.target.closest('.sh-ara-eski')) { eskidenAra(); return; }
     if (e.target.closest('.sh-ara-durdur') && tarama) tarama.durdur = true;
   });
@@ -236,16 +243,23 @@ export function aramaPaneli(o) {
   });
 
   // ---------- Aç / kapat ----------
-  function ac(yeniMod = 'ara') {
+  function ac(yeniMod = 'ara', { sorgu: ilkSorgu = null, donus = null } = {}) {
     mod = yeniMod;
+    if (ilkSorgu != null) {
+      clearTimeout(bekle);
+      girdi.value = ilkSorgu;
+      sorgu = ilkSorgu;
+    }
     girdi.placeholder = mod === 'ara' ? 'Mesajlarda ara' : 'Yıldızlılarda ara';
     el.hidden = false;
     for (const a of o.arkaPlan) a.inert = true;
-    o.donus?.setAttribute('aria-expanded', 'true');
+    acan = donus;
+    acan?.setAttribute('aria-expanded', 'true');
     sonBilgi = null;
     guncelle();
-    if (mod === 'ara') girdi.focus();
-    else seg.querySelector('[aria-pressed="true"]')?.focus();
+    // Sorguyla açıldıysa klavye açılmasın: sonuçlar görünsün.
+    if (mod === 'ara' && !sorgu.trim()) girdi.focus();
+    else (mod === 'ara' && sonuclar.querySelector('.sh-sonuc') || seg.querySelector('[aria-pressed="true"]'))?.focus();
   }
 
   function kapat({ odakGeriVer = true } = {}) {
@@ -254,8 +268,9 @@ export function aramaPaneli(o) {
     tarama = null;
     el.hidden = true;
     for (const a of o.arkaPlan) a.inert = false;
-    o.donus?.setAttribute('aria-expanded', 'false');
-    if (odakGeriVer) o.donus?.focus();
+    acan?.setAttribute('aria-expanded', 'false');
+    if (odakGeriVer) (acan?.isConnected ? acan : o.donus)?.focus();
+    acan = null;
   }
 
   return { el, ac, kapat, acikMi: () => !el.hidden, guncelle };

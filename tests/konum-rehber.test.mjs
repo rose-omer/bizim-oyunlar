@@ -1,7 +1,7 @@
-// Ayarlar → Mesafe: konum izni reddedilince yol gösterme (saf mantık).
+// Konum: izin reddedilince yol gösterme (saf mantık). Eskiden tests/ayar-konum.test.mjs (Ayarlar › Mesafe).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { konumHataTuru, konumPlatformu, konumRehberi, KONUM_SECENEK, GUVENLI_ADRES } from '../sayfalar/ayarlar/mantik.js';
+import { konumHataTuru, konumPlatformu, konumRehberi, KONUM_SECENEK, GUVENLI_ADRES } from '../sayfalar/konum/mantik.js';
 
 const UA = {
   android: 'Mozilla/5.0 (Linux; Android 14; SM-A546B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Mobile Safari/537.36',

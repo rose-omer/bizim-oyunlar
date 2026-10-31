@@ -1,5 +1,5 @@
 // Ana sayfa "Biz". İlk açılış: ad → oda kur ya da davetle gel → davet → "Ne zamandan beri birlikteyiz?".
-// Biz ekranı: sayaç → Bugün (ruh hâli, dokunuş, Sıradaki) → 3 önerilen oyun → yaklaşanlar, oynadıklarımız.
+// Biz ekranı: sayaç → Bugün (ruh hâli, konum, dokunuş, Sıradaki) → 3 önerilen oyun → yaklaşanlar, oynadıklarımız.
 // Başlangıç tarihi ve buluşma Özel Günler'de düzenlenir; burada yalnız gösterilir (ilk açılış sorusu hariç).
 // Sözleşme §11 ve v2 §14–§18. Saf yardımcılar dışa aktarılır (tests/hub-*.test.mjs); DOM yalnız tarayıcıda kurulur.
 import { GAMES, gameById } from './core/games.js';
@@ -19,7 +19,7 @@ import {
 import {
   h, icon, ICONS, avatarEl, toast, celebrate, shareInvite, copyInvite, muteButton, pairEl, knownPartner, rememberPartner,
   partnerWhere, locative, genitive, trackShellHeight, formatDay, startAppServices, mountTabBar, removeTabBar,
-  listenTouches, TOUCHES, touchByTur, davetLinki,
+  listenTouches, TOUCHES, touchByTur, davetLinki, initial,
 } from './core/ui.js';
 import { sfx } from './core/sound.js';
 import { onerilenler, grupRengi, kartAlt, acilisPlani } from '../sayfalar/oyunlar/mantik.js';
@@ -31,8 +31,10 @@ const PRESENCE_WAIT_MS = 2500; // partnerin yeri belli olana dek kartlar kapalı
 const TOUCH_GAP_MS = 2000; // dokunuş: en çok 2 sn'de bir
 const MOOD_NOTE_MAX = 80;
 const PROFIL_WAIT_MS = 4000; // ilk açılışta tarih sorusundan önce profili en fazla bu kadar bekle
-const PAGES = { gunler: 'sayfalar/gunler/', gunsorusu: 'sayfalar/gunun-sorusu/', ayarlar: 'sayfalar/ayarlar/', oyunlar: 'sayfalar/oyunlar/' };
+const PAGES = { gunler: 'sayfalar/gunler/', gunsorusu: 'sayfalar/gunun-sorusu/', ayarlar: 'sayfalar/ayarlar/', oyunlar: 'sayfalar/oyunlar/', konum: 'sayfalar/konum/' };
 const ISTEK_ARALIK_MS = 15000; // bekleyen cihaz isteğine en sık bu aralıkla bakılır (açılış ve öne gelince)
+const KARO_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'; // anı haritasıyla aynı OSM karoları
+const KONUM_ACILIS_MS = 1500; // açılışta konum tazeleme: ana sayfa çizildikten sonra
 
 // ====================================================================================
 // Saf yardımcılar (Node'da test edilir)
@@ -287,6 +289,8 @@ const state = {
   settingsLink: null,
   data: emptyData(), // profil + koleksiyonlar (gun, dokunus, ruh, konum, oyunkayit, gs)
   gsMod: null, // Günün Sorusu mantığı + soru bankası (tembel yüklenir): { m, sorular, roomId, sec }
+  konumMod: null, // sayfalar/konum/mantik.js (tembel yüklenir)
+  konumAcilis: null, // açılış tazelemesine bakılan oda (bir kez)
   dataSubs: [],
   lastTouch: 0,
   lastWrite: 0,
@@ -505,6 +509,35 @@ function openData(room) {
   open('oyunkayit', openCollection(room, 'oyunkayit'));
   open('gs', openCollection(room, 'gs'));
   gsYukle();
+  konumYukle();
+}
+
+// Konum kartı ve açılış tazelemesi sayfanın kendi mantığıyla (sayfalar/konum/mantik.js).
+function konumYukle() {
+  if (state.konumMod) return;
+  import('../sayfalar/konum/mantik.js')
+    .then((m) => {
+      state.konumMod = m;
+      paintAll();
+      konumAcilis();
+    })
+    .catch((e) => console.warn('[biz] konum mantığı yüklenemedi:', e));
+}
+
+/** Uygulama açılınca: paylaşım açık ve son kayıt 10 dk'dan eskiyse bir kez tazele (sayfalar/konum/paylasim.js). */
+function konumAcilis() {
+  const M = state.konumMod;
+  const col = state.data.konum;
+  const room = state.room;
+  if (!M || !col || !room || state.konumAcilis === state.roomId) return;
+  state.konumAcilis = state.roomId;
+  if (!M.acilistaGuncellensinMi(M.konumOku(col.get(myId())?.data), Date.now())) return;
+  setTimeout(() => {
+    if (state.room !== room) return;
+    import('../sayfalar/konum/paylasim.js')
+      .then((p) => p.acilistaGuncelle(col, room, myId()))
+      .catch((e) => console.warn('[biz] konum tazelenemedi:', e));
+  }, KONUM_ACILIS_MS);
 }
 
 // Günün Sorusu: Sıradaki kartı bugünün sorusunu ve kimin cevapladığını gösterir (sayfanın kendi mantığıyla).
@@ -547,6 +580,7 @@ function closeData() {
 function onData(key) {
   if (key === 'profil') widgetBesle();
   paintAll();
+  if (key === 'konum') konumAcilis();
 }
 
 // Android ana ekran widget'ı: çift verisi gelince ve değişince (mobil.js; web'de iş yapmaz, aynı veriyi yazmaz).
@@ -902,7 +936,7 @@ function paintDate() {
 }
 
 // ---------- Biz ekranı ----------
-// Sıra: sayaç → Bugün (ruh hâli, [Yavrumuz], dokunuş, Sıradaki) → 3 önerilen oyun → yaklaşanlar → oynadıklarımız.
+// Sıra: sayaç → Bugün (ruh hâli, konum, [Yavrumuz], dokunuş, Sıradaki) → 3 önerilen oyun → yaklaşanlar → oynadıklarımız.
 function bizScreen(roomId) {
   const view = {
     roomId, keys: {}, seenAt: Number(lsGet(seenKey(roomId))) || 0, cd: null, lastPlayed: null, picks: [],
@@ -943,12 +977,13 @@ function block(id, title, { action = null } = {}, ...body) {
     ...body);
 }
 
-/** Bugün: ruh hâli → (Yavrumuz kartı, yavru dalı) → dokunuş → Sıradaki. */
+/** Bugün: ruh hâli → konum → (Yavrumuz kartı, yavru dalı) → dokunuş → Sıradaki. */
 function todaySection(view) {
   view.todayDate = h('span', { class: 'biz-sec-date' });
   view.nextBox = h('div', { class: 'card biz-next' });
   return section('bugun-h', 'Bugün', { action: view.todayDate },
     moodBlock(view),
+    konumBlock(view),
     view.yavruSec,
     view.notSec,
     touchBlock(view),
@@ -995,6 +1030,32 @@ function moodBlock(view) {
   return block('now-h', 'Ruh hâlimiz', {
     action: h('a', { class: 'biz-link', href: pageUrl('sayfalar/ruh/'), 'aria-label': 'Ruh hâli geçmişi' }, 'Geçmiş', icon('chevron')),
   }, card);
+}
+
+/**
+ * Konum kartı: biri paylaşıyorsa küçük harita + mesafe + sevgilinin yeri; kimse paylaşmıyorsa tek satır.
+ * Karta dokununca Konum sayfası. Harita kapsayıcısı kalıcı (Leaflet örneği yeniden boyamada korunur).
+ */
+function konumBlock(view) {
+  const harita = h('div', { class: 'biz-konum-harita' });
+  const canli = h('span', { class: 'biz-konum-canli', hidden: true }, 'Canlı');
+  const haritaKap = h('span', { class: 'biz-konum-harita-kap', 'aria-hidden': 'true', hidden: true },
+    harita, canli, h('span', { class: 'biz-konum-atif' }, '© OpenStreetMap'));
+  const buyuk = h('span', { class: 'biz-konum-buyuk' });
+  const alt = h('span', { class: 'biz-konum-alt' });
+  const canliSr = h('span', { class: 'sr-only', hidden: true }, 'Canlı paylaşım açık.');
+  const tek = h('span', { class: 'biz-konum-tek' }, 'Konumunu paylaş, aranızdaki mesafeyi gör 📍');
+  const kart = h('a', { class: 'biz-konum-kart', href: pageUrl(PAGES.konum) },
+    haritaKap,
+    h('span', { class: 'biz-konum-govde' },
+      h('span', { class: 'biz-konum-metin' }, buyuk, alt, canliSr, tek),
+      h('span', { class: 'biz-konum-git', 'aria-hidden': 'true' }, icon('chevron'))));
+  const sec = h('section', { class: 'biz-block biz-konum', 'aria-label': 'Konum', hidden: true }, kart);
+  view.konum = {
+    sec, kart, haritaKap, harita, canli, canliSr, buyuk, alt, tek,
+    noktalar: [], noktaKey: '', map: null, L: null, katman: null, gozlem: null, yukleniyor: false, hata: false,
+  };
+  return sec;
 }
 
 function touchBlock(view) {
@@ -1177,6 +1238,7 @@ function paintAll() {
   const v = state.view;
   if (v && v.roomId === state.roomId) {
     paintCounter(v);
+    paintKonum(v); // önce: kart görünürse "şimdi" satırı mesafe çipini göstermez
     paintNow(v);
     paintTouches(v);
     paintNext(v);
@@ -1534,11 +1596,12 @@ function paintNow(view) {
   const m = mood ? moodByEmoji(mood.emoji) : null;
   const ago = mood ? agoText(mood.at) : '';
 
-  // Mesafe (iki konum belgesi varsa; Ayarlar'dan açılır).
+  // Mesafe (iki konum belgesi varsa). Konum kartı görünürken gösterilmez: mesafe kartta.
   const kol = state.data.konum;
   const here = kol?.get(myId())?.data;
   const there = docOf(kol, pi.id)?.data;
-  const dist = validCoord(here) && validCoord(there) ? distanceText(haversineKm(here, there)) : '';
+  const kartVar = !!view.konum && !view.konum.sec.hidden;
+  const dist = !kartVar && validCoord(here) && validCoord(there) ? distanceText(haversineKm(here, there)) : '';
   const cities = here?.sehir && there?.sehir ? `${here.sehir} – ${there.sehir}` : '';
 
   const key = JSON.stringify([name, !!pi.id, !!p, pi.foto, st?.kind, st?.text, mood?.emoji, mood?.not, ago, dist, cities]);
@@ -1565,6 +1628,133 @@ function paintNow(view) {
     view.nowQuote.replaceChildren(h('span', { class: 'biz-now-ago' }, pi.id
       ? `${name} henüz ruh hâlini paylaşmadı.`
       : 'Sevgilin gelince ruh hâlini burada görürsün.'));
+  }
+}
+
+// ---------- Konum kartı ----------
+function paintKonum(view) {
+  const kv = view.konum;
+  const M = state.konumMod;
+  const col = state.data.konum;
+  if (!kv) return;
+  if (!M || !col) {
+    kv.sec.hidden = true;
+    return;
+  }
+  const pi = partnerInfo();
+  const ad = pi.name || 'Sevgilin';
+  const simdi = Date.now();
+  const oku = (doc) => (M.paylasiyorMu(doc) ? M.konumOku(doc.data) : null);
+  const ben = oku(col.get(myId()));
+  const o = oku(docOf(col, pi.id));
+
+  let buyuk = null; // { on, deger } | metin
+  let alt = '';
+  if (ben && o) {
+    const y = M.mesafeYazi(M.mesafeKm(ben, o), { tam: ben.hassas === 'tam' && o.hassas === 'tam' });
+    buyuk = !y || y.yakin ? (y?.metin || '') : { on: 'Aranızda', deger: `${y.sayi} ${y.birim}` };
+    alt = [ad, M.yerKisa(o), M.tazelikMetni(o.at, simdi)].filter(Boolean).join(' · ');
+  } else if (o) {
+    const yer = M.yerKisa(o);
+    buyuk = yer || `${ad} konumunu paylaşıyor`;
+    alt = [yer ? ad : '', M.tazelikMetni(o.at, simdi)].filter(Boolean).join(' · ');
+  } else if (ben) {
+    buyuk = 'Konumunu paylaşıyorsun';
+    alt = `${ad} henüz paylaşmadı`;
+  }
+  const canli = o ? M.canliMi(o, simdi) : !!ben && M.canliMi(ben, simdi);
+  const noktalar = [
+    ben && { kim: 'ben', lat: ben.lat, lng: ben.lng, tam: ben.hassas === 'tam', harf: initial(cleanName(me().name)) },
+    o && { kim: 'o', lat: o.lat, lng: o.lng, tam: o.hassas === 'tam', harf: initial(ad) },
+  ].filter(Boolean);
+
+  const key = JSON.stringify([buyuk, alt, canli, noktalar]);
+  kv.sec.hidden = false;
+  if (!changed(view, 'konum', key)) return;
+  const paylasan = noktalar.length > 0;
+  kv.kart.dataset.mod = paylasan ? 'harita' : 'bos';
+  kv.haritaKap.hidden = !paylasan;
+  kv.tek.hidden = paylasan;
+  kv.buyuk.hidden = !paylasan;
+  kv.alt.hidden = !paylasan || !alt;
+  kv.canli.hidden = !canli;
+  kv.canliSr.hidden = !canli;
+  kv.buyuk.replaceChildren(...(buyuk && typeof buyuk === 'object'
+    ? [h('span', { class: 'biz-konum-on' }, `${buyuk.on} `), buyuk.deger]
+    : [buyuk || '']));
+  kv.alt.textContent = alt;
+  if (!paylasan) {
+    kv.noktaKey = ''; // yeniden görünürse harita boyutu ve iğneler baştan
+    return;
+  }
+  if (JSON.stringify(noktalar) === kv.noktaKey) return; // yalnız metin değişti: harita yerinde kalır
+  kv.noktalar = noktalar;
+  if (kv.map) haritaCiz(view);
+  else haritaIste(view);
+}
+
+/** Leaflet'i kart ekrana gelince yükler (anı haritasının yükleyicisi); IntersectionObserver yoksa hemen. */
+function haritaIste(view) {
+  const kv = view.konum;
+  if (kv.map || kv.gozlem || kv.yukleniyor || kv.hata) return;
+  const yukle = () => {
+    kv.gozlem?.disconnect();
+    kv.gozlem = null;
+    if (kv.map || kv.yukleniyor) return;
+    kv.yukleniyor = true;
+    import('../sayfalar/anilar/harita.js')
+      .then((m) => m.leafletYukle())
+      .then((L) => {
+        kv.yukleniyor = false;
+        if (state.view === view) haritaKur(view, L);
+      })
+      .catch((e) => {
+        kv.yukleniyor = false;
+        kv.hata = true; // bu ekranda yeniden deneme; kart haritasız da çalışır
+        console.warn('[biz] konum haritası yüklenemedi:', e);
+      });
+  };
+  if (typeof IntersectionObserver !== 'function') {
+    setTimeout(yukle, 0);
+    return;
+  }
+  kv.gozlem = new IntersectionObserver((es) => { if (es.some((e) => e.isIntersecting)) yukle(); }, { rootMargin: '120px 0px' });
+  kv.gozlem.observe(kv.haritaKap);
+}
+
+function haritaKur(view, L) {
+  const kv = view.konum;
+  if (kv.map || !kv.harita.isConnected) return;
+  kv.L = L;
+  kv.map = L.map(kv.harita, {
+    zoomControl: false, attributionControl: false, dragging: false, touchZoom: false, doubleClickZoom: false,
+    scrollWheelZoom: false, boxZoom: false, keyboard: false, zoomAnimation: false, markerZoomAnimation: false,
+  });
+  L.tileLayer(KARO_URL, { maxZoom: 19 }).addTo(kv.map);
+  kv.katman = L.layerGroup().addTo(kv.map);
+  haritaCiz(view);
+}
+
+/** İğneler ve görünüm: ikisi de paylaşıyorsa ikisini sığdır, tek kişiyse onu ortala. */
+function haritaCiz(view) {
+  const kv = view.konum;
+  const { map, L, katman, noktalar } = kv;
+  if (!map || !noktalar.length) return;
+  kv.noktaKey = JSON.stringify(noktalar);
+  map.invalidateSize({ animate: false }); // gizliyken boyutu sıfırdı
+  katman.clearLayers();
+  for (const n of noktalar) {
+    const el = h('span', { class: 'biz-konum-pin', dataset: { kim: n.kim } }, n.harf);
+    L.marker([n.lat, n.lng], {
+      icon: L.divIcon({ html: el, className: 'biz-konum-pin-kap', iconSize: [34, 34], iconAnchor: [17, 17] }),
+      interactive: false, keyboard: false,
+    }).addTo(katman);
+  }
+  if (noktalar.length > 1) {
+    map.fitBounds(L.latLngBounds(noktalar.map((n) => [n.lat, n.lng])), { paddingTopLeft: [34, 48], paddingBottomRight: [34, 30], maxZoom: 14, animate: false });
+  } else {
+    const n = noktalar[0];
+    map.setView([n.lat, n.lng], n.tam ? 15 : 12, { animate: false });
   }
 }
 
@@ -1654,6 +1844,8 @@ function cleanupView() {
   if (!v) return;
   try { v.yavruCleanup?.(); } catch { /* yok say */ }
   try { v.notCleanup?.(); } catch { /* yok say */ }
+  v.konum?.gozlem?.disconnect();
+  try { v.konum?.map?.remove(); } catch { /* yok say */ }
   clearTimeout(v.coolTimer);
 }
 

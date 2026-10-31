@@ -2031,6 +2031,139 @@ html.kapi-acik { overflow: hidden; }
 .biz-istek .btn { flex: none; }
 @media (prefers-reduced-motion: reduce) { .biz-istek { animation: none; } }
 
+/* ---------- Ana sayfa: konum kartı (Bugün, ruh hâlinin altında; dokununca Konum sayfası) ---------- */
+.biz-konum-kart {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  color: var(--text);
+  text-decoration: none;
+  transition: box-shadow 0.18s ease, transform 0.12s var(--ease);
+}
+.biz-konum-kart:active { transform: scale(0.985); }
+@media (hover: hover) { .biz-konum-kart:hover { box-shadow: var(--shadow-lg); } }
+.biz-konum-kart:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+/* Harita: dokunmayı karta bırakır; Leaflet katmanları (z 400+) kendi istifinde kalır, şeritlerin üstüne çıkmaz. */
+.biz-konum-harita-kap {
+  position: relative;
+  display: block;
+  height: 140px;
+  isolation: isolate;
+  overflow: hidden;
+  border-bottom: 1px solid var(--line);
+  background-color: var(--surface-2);
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--line) 70%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--line) 70%, transparent) 1px, transparent 1px);
+  background-size: 28px 28px;
+  pointer-events: none;
+}
+.biz-konum-harita { position: absolute; inset: 0; }
+.biz-konum-harita.leaflet-container { background: transparent; font-family: var(--font-body); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-mod='acik']) .biz-konum-harita .leaflet-tile-pane { filter: brightness(0.78) contrast(1.06) saturate(0.85); }
+}
+:root[data-mod='koyu'] .biz-konum-harita .leaflet-tile-pane { filter: brightness(0.78) contrast(1.06) saturate(0.85); }
+.biz-konum-pin-kap { background: none; border: 0; }
+.biz-konum-pin {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-ink);
+  box-shadow: 0 0 0 3px var(--surface), var(--shadow);
+  font-family: var(--font-display);
+  font-variation-settings: 'SOFT' 100;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1;
+}
+.biz-konum-pin[data-kim='ben'] { background: var(--plum); color: var(--plum-ink); }
+.biz-konum-canli {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 1000;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 26px;
+  padding: 2px 10px 2px 9px;
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  color: var(--accent-strong);
+  font-size: 0.8125rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+.biz-konum-canli::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: biz-konum-nabiz 1.6s ease-out infinite;
+}
+@keyframes biz-konum-nabiz {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent); }
+  100% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--accent) 0%, transparent); }
+}
+.biz-konum-atif {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  z-index: 1000;
+  padding: 1px 8px;
+  border-top-left-radius: 8px;
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  color: var(--muted);
+  font-size: 0.6875rem;
+  font-weight: 650;
+  line-height: 1.5;
+}
+.biz-konum-govde {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 56px;
+  padding: 12px 10px 14px 16px;
+}
+.biz-konum-metin { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.biz-konum-buyuk {
+  font-family: var(--font-display);
+  font-variation-settings: 'SOFT' 100;
+  font-size: 1.375rem;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+}
+.biz-konum-on {
+  color: var(--muted);
+  font-family: var(--font-body);
+  font-size: 0.9375rem;
+  font-weight: 750;
+  letter-spacing: 0;
+}
+.biz-konum-alt { color: var(--muted); font-size: 0.875rem; font-weight: 650; line-height: 1.4; overflow-wrap: anywhere; }
+.biz-konum-tek { font-weight: 750; line-height: 1.35; text-wrap: balance; }
+.biz-konum-git { display: grid; place-items: center; width: 32px; height: 32px; color: var(--muted); }
+.biz-konum-git svg { width: 20px; height: 20px; }
+.biz-konum-kart[data-mod='bos'] .biz-konum-govde { padding-block: 10px; }
+@media (prefers-reduced-motion: reduce) {
+  .biz-konum-kart { transition: none; }
+  .biz-konum-kart:active { transform: none; }
+  .biz-konum-canli::before { animation: none; }
+}
+
 /* ---------- Telefon performansı ---------- */
 /* Çift dokunma yakınlaştırması beklemesi olmasın. */
 button, a, label, [role="button"] { touch-action: manipulation; }

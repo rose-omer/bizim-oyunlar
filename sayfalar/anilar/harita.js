@@ -44,7 +44,8 @@ export function leafletYukle() {
   return yukleme;
 }
 
-function haritaKur(L, el, secenek = {}) {
+/** OSM karolu harita (atıf sol altta). Konum sayfası da kullanır. */
+export function haritaKur(L, el, secenek = {}) {
   const map = L.map(el, { worldCopyJump: true, attributionControl: false, maxZoom: MAX_ZOOM, ...secenek });
   L.control.attribution({ position: 'bottomleft' }).addTo(map);
   L.tileLayer(KARO_URL, { maxZoom: MAX_ZOOM, attribution: ATIF }).addTo(map);

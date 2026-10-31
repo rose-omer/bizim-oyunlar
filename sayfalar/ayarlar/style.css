@@ -327,66 +327,25 @@ ol.ayar-adimlar {
 /* ---------- Cihazlar ve oda kilidi ---------- */
 /* Bekleyen: Onayla / Reddet metnin altında, tam satır (dar ekranda sıkışmasın). */
 
-/* ---------- Mesafe ---------- */
-.ayar-mesafe { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 14px; align-items: center; }
-.ayar-mesafe-ikon {
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  border-radius: 14px;
-  background: var(--accent-soft);
-  color: var(--accent-strong);
-}
-.ayar-mesafe-ikon svg { width: 22px; height: 22px; }
-.ayar-mesafe-buyuk {
-  font-family: var(--font-display);
-  font-variation-settings: 'SOFT' 100;
-  font-size: 1.25rem;
-  font-weight: 600;
-  line-height: 1.25;
-  letter-spacing: -0.01em;
-}
-.ayar-riza-baslik { font-size: 1.125rem; }
-ul.ayar-riza {
-  list-style: disc;
+/* ---------- Bağlantı satırı (Konum paylaşımı → Konum sayfası): bölüm başlığıyla aynı ölçü ---------- */
+.ayar-git {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin: -8px 0 0;
-  padding-left: 1.2em;
-  font-size: 0.9375rem;
-  line-height: 1.45;
-}
-.ayar-riza li::marker { color: var(--accent); }
-
-/* Konum alınamadı: yol gösteren kutu */
-.ayar-konum-sorun {
-  display: grid;
-  grid-template-columns: 36px minmax(0, 1fr);
-  gap: 12px;
-  align-items: start;
-  padding: 14px 14px 16px;
+  align-items: center;
+  gap: 10px;
+  min-height: 60px;
+  padding: 6px 6px 6px 4px;
   border-radius: var(--radius);
-  background: var(--surface-2);
-  line-height: 1.5;
+  color: var(--text);
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
 }
-.ayar-konum-sorun-ikon {
-  display: grid;
-  place-items: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 12px;
-  background: var(--bad-soft);
-  color: var(--bad);
-}
-.ayar-konum-sorun[data-tur='zaman'] .ayar-konum-sorun-ikon,
-.ayar-konum-sorun[data-tur='guvensiz'] .ayar-konum-sorun-ikon { background: var(--accent-soft); color: var(--accent-strong); }
-.ayar-konum-sorun-ikon svg { width: 20px; height: 20px; }
-.ayar-konum-sorun-metin { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding-top: 6px; }
-.ayar-konum-sorun-baslik { font-size: 1.0625rem; line-height: 1.3; }
-.ayar-konum-sorun-metin > p:not(.ayar-yardim) { font-size: 0.9375rem; }
-.ayar-konum-sorun .ayar-adimlar { margin: 0; padding-left: 22px; }
+.ayar-git .ayar-baslik { flex: 1 1 auto; min-width: 0; }
+.ayar-git .chip { flex: none; }
+.ayar-git-ok { display: grid; place-items: center; flex: none; color: var(--muted); }
+.ayar-git-ok svg { width: 22px; height: 22px; }
+.ayar-git:focus-visible { outline-offset: -2px; }
+.ayar-git:active .ayar-baslik { color: var(--accent-strong); }
+@media (hover: hover) { .ayar-git:hover .ayar-baslik, .ayar-git:hover .ayar-git-ok { color: var(--accent-strong); } }
 
 /* ---------- Oda, hakkında ---------- */
 .ayar-tehlike { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }

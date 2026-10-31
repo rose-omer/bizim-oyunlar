@@ -1,7 +1,7 @@
 // Ortak arayüz: üst şerit, alt sekmeler, tema, dokunuş, bildirim, kutlama, partner bekleme, onay, davet.
 // Sözleşme §9, §19–§20. Ek dışa aktarımlar (h, icon, pairEl, muteButton, copyInvite, …) ana sayfa içindir;
 // oyunlar da kullanabilir ama sözleşmenin parçası değildir.
-import { me, currentRoom, inviteUrl, lobbyUrl, gameUrl, readGameParams, pageUrl, SITE_ROOT } from './identity.js';
+import { me, currentRoom, inviteUrl, lobbyUrl, gameUrl, readGameParams, pageUrl, SITE_ROOT, readStore } from './identity.js';
 import { gameById, SAYFALAR, SEKMELER, sayfaById } from './games.js';
 import { sfx, isMuted, setMuted } from './sound.js';
 import { paylas } from './mobil.js';
@@ -579,6 +579,7 @@ export function mountShell({ title = '', room = null } = {}) {
   paint();
   syncShellBack();
   const untrack = trackShellHeight(header);
+  if (live) canliKonum(room); // startAppServices'ten önce: izleyici sayfanın odasıyla (canlı yayınla) açılsın
   startAppServices();
   // Üyelik kapısı (oyun sayfaları bootPage'den geçmez): onaysız cihazda tam ekran kapı; çalışırken yetki giderse de.
   if (live && roomId) {
@@ -658,7 +659,7 @@ let servicesStarted = false;
 function tazeleBildirim() {
   const roomId = currentRoom();
   if (!roomId) return;
-  const calistir = () => {
+  uyelikGecince(roomId, () => {
     try {
       if (sessionStorage.getItem('bizim.bildirim.tazelendi') === roomId) return;
       sessionStorage.setItem('bizim.bildirim.tazelendi', roomId);
@@ -666,7 +667,11 @@ function tazeleBildirim() {
     import('./bildirim.js')
       .then(async (m) => { if ((await m.bildirimDurumu()) === 'acik') await m.bildirimAc(roomId); })
       .catch((e) => console.warn('[bildirim]', e));
-  };
+  }, 'bildirim');
+}
+
+/** Bu cihaz odaya onaylıysa hemen, değilse onay gelince ('bizim:uyelik') bir kez çalıştırır. */
+function uyelikGecince(roomId, calistir, etiket) {
   import('./uyelik.js').then((u) => {
     if (u.girisAcikMi(u.sonDurum(roomId))) {
       calistir();
@@ -678,7 +683,40 @@ function tazeleBildirim() {
       calistir();
     };
     window.addEventListener('bizim:uyelik', bekle);
-  }).catch((e) => console.warn('[bildirim]', e));
+  }).catch((e) => console.warn(`[${etiket}]`, e));
+}
+
+// ---------- Canlı konum: uygulama açıkken her sayfada (sayfalar/konum/paylasim.js) ----------
+/** Yerel işaret: kendi canlı paylaşımımın bitişi (ISO). paylasim.js yazar, kapanınca siler. */
+export function canliKonumAnahtari(roomId, clientId) {
+  return `bizim.konum.canli.${roomId}.${clientId}`;
+}
+
+/** İşaret gelecekteki bir an mı? (canlı izleyici yüklensin mi) Saf. */
+export function canliKonumAcikMi(isaret, simdi = Date.now()) {
+  if (typeof isaret !== 'string') return false;
+  const t = Date.parse(isaret);
+  return Number.isFinite(t) && t > +new Date(simdi);
+}
+
+let canliKonumOda = null;
+/**
+ * Canlı paylaşım açıksa izleyiciyi başlat (sayfa başına bir kez; paylasim.js canliServis tek watchPosition açar).
+ * room yoksa (ana sayfa) { roomId, me } ile: yazımlar sunucuya gider, karşı taraf dakikalık tazelemeyle görür.
+ * İşaret yoksa hiçbir şey yüklenmez.
+ */
+function canliKonum(room = null) {
+  const roomId = room?.roomId || currentRoom();
+  if (!roomId || canliKonumOda === roomId) return;
+  let clientId;
+  try { clientId = me().clientId; } catch { return; }
+  if (!canliKonumAcikMi(readStore('local', canliKonumAnahtari(roomId, clientId)))) return;
+  canliKonumOda = roomId;
+  uyelikGecince(roomId, () => {
+    import('../../sayfalar/konum/paylasim.js')
+      .then((m) => m.canliServis(room?.roomId ? room : { roomId, me: me() }))
+      .catch((e) => console.warn('[konum]', e));
+  }, 'konum');
 }
 
 export function startAppServices() {
@@ -710,6 +748,7 @@ export function startAppServices() {
     }),
   })).catch((e) => console.warn('[mobil]', e));
   tazeleBildirim();
+  canliKonum();
 }
 
 // ---------- Alt sekme çubuğu ----------

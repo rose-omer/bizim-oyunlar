@@ -165,7 +165,7 @@ test('görev: oku sonucu gorevOzeti ve odulYamasi ile çalışır; ödül iki ki
 });
 
 // ---------- Tuvalet ve jeton bağlantısı ----------
-import { LAZIMLIK, CIS_VAR, KAZA_METNI } from '../sayfalar/yavru/mantik.js';
+import { LAZIMLIK, CIS_VAR, KAZA_METNI, kartRuhu } from '../sayfalar/yavru/mantik.js';
 import * as T from '../sayfalar/yavru/tuvalet.js';
 import { jetonBakiye, URUNLER } from '../sayfalar/yavru/jeton.js';
 
@@ -199,6 +199,25 @@ test('durumMetni önceliği: keyifsiz → çişi var (uyanık) → kaza → özl
   assert.equal(durum(unutulmus, T0 + 12.5 * SAAT), 'Sizi özledi 🥺');
   assert.equal(durum(unutulmus, T0 + 20.5 * SAAT), CIS_VAR);
   assert.equal(durumMetni(cis, T0), 'İyi görünüyor', 'tuvalet parametresi yoksa eski davranış');
+});
+
+test('kartRuhu: yüz durum metniyle uyumlu (keyifsiz/kaza üzgün, çişi var şaşkın; uykuda ve yumurtada değişmez)', () => {
+  const ruh = (y, simdi, keyifsiz = false) => kartRuhu(y, simdi, { keyifsiz, tuvalet: T.tuvaletDurumu(y, simdi) });
+  const iyi = kucuk({ tokluk: 90, mutluluk: 90, temizlik: 90, enerji: 90 });
+  assert.equal(ruh(iyi, T0), 'mutlu');
+  const cis = kucuk({ tokluk: 90, mutluluk: 90, temizlik: 90, enerji: 90 }, { tuvalet: { v: 80, t: iso(T0) } });
+  assert.equal(ruh(cis, T0), 'sasirma');
+  assert.equal(ruh(cis, T0, true), 'uzgun', 'keyifsizlik önce');
+  const kaza = kucuk({ tokluk: 90, mutluluk: 90, temizlik: 90, enerji: 90 }, { tuvalet: { v: 0, t: iso(T0 - 10 * DK), kaza: iso(T0 - 10 * DK) } });
+  assert.equal(ruh(kaza, T0), 'uzgun');
+  assert.equal(ruh(kaza, T0 + 2 * SAAT), 'mutlu', 'kaza metni bitince eski yüz');
+  const unutulmus = kucuk({ tokluk: 100, mutluluk: 100, temizlik: 100, enerji: 100 }, { tuvalet: { v: 0, t: iso(T0) } });
+  assert.equal(ruh(unutulmus, T0 + 12.5 * SAAT), 'uzgun', 'özledi');
+  const uyku = { bas: iso(T0), bit: iso(T0 + 8 * SAAT) };
+  assert.equal(ruh(kucuk({}, { uyku, tuvalet: { v: 80, t: iso(T0) } }), T0 + SAAT, true), 'uyuyor');
+  assert.equal(ruh(oku(yeniYumurta({ roomId: 'x', simdi: T0 })), T0, true), 'yumurta');
+  assert.equal(kartRuhu(null, T0), 'yumurta');
+  assert.equal(kartRuhu(kucuk({ tokluk: 10 }), T0), 'ac', 'parametre yoksa ruhHali');
 });
 
 test('yemek yaması tuvaletYamasi ile birleşir; lazımlık bakım satırı, bildirim; kaza ve satın alma satırı', () => {

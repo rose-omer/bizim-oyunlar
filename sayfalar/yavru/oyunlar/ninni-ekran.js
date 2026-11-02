@@ -12,12 +12,31 @@ const YILDIZ_D = 'M50 6 L61.8 36.2 L94 38.2 L69 58.8 L77.2 90.2 L50 72.6 L22.8 9
 const BULUT_D = 'M14 30 C4 30 4 18 14 18 C15 9 28 7 32 15 C38 9 50 13 48 21 C56 21 56 30 48 30 Z';
 
 let actx = null;
+/**
+ * AudioContext'i kurar ya da uyandırır; sessizde null. iOS sesi yalnız kullanıcı hareketi içinde açar: kur() bunu oyun
+ * kutusundaki dokunuşa (Başla) bağlar, yoksa ilk "dinle" notası sessiz kalır.
+ */
+function sesAc() {
+  if (isMuted()) return null;
+  if (!actx) {
+    const AC = globalThis.AudioContext || globalThis.webkitAudioContext;
+    if (!AC) return null;
+    try { actx = new AC(); } catch { return null; }
+    // Eski iOS: hareket içinde çalınan tek örneklik sessiz tampon kilidi açar.
+    try {
+      const b = actx.createBufferSource();
+      b.buffer = actx.createBuffer(1, 1, 22050);
+      b.connect(actx.destination);
+      b.start(0);
+    } catch { /* ses kritik değil */ }
+  }
+  if (actx.state !== 'running') actx.resume().catch(() => {}); // suspended ya da iOS 'interrupted'
+  return actx;
+}
+
 function nota(i, ms) {
-  if (isMuted()) return;
-  const AC = globalThis.AudioContext || globalThis.webkitAudioContext;
-  if (!AC) return;
-  try { actx ??= new AC(); } catch { return; }
-  if (actx.state === 'suspended') actx.resume().catch(() => {});
+  const actx = sesAc();
+  if (!actx) return;
   try {
     const t0 = actx.currentTime;
     const son = t0 + ms / 1000 + 0.35;
@@ -62,6 +81,10 @@ export function kur({ sahne, tohum, azHareket, duyur }) {
     if (Number.isInteger(i) && i >= 0 && i < YILDIZ) { e.preventDefault(); tikla(i); }
   };
   sahne.addEventListener('keydown', tus);
+  // Ses kilidi: oyun kutusundaki her dokunuşta (Başla dahil) senkron açılır; açıkken etkisiz.
+  const kutu = sahne.closest('.oy') || sahne;
+  const HAREKET = ['pointerup', 'touchend', 'keydown', 'click'];
+  for (const t of HAREKET) kutu.addEventListener(t, sesAc, { capture: true, passive: true });
 
   function tikla(i) {
     const r = dokun(s, i);
@@ -116,6 +139,10 @@ export function kur({ sahne, tohum, azHareket, duyur }) {
       ciz(dt);
       return { skor: s.skor, bitti: s.bitti, kalanMs: kalanMs(s), ilerleme: s.t / SURE };
     },
-    temizle() { sahne.removeEventListener('keydown', tus); kok.remove(); },
+    temizle() {
+      sahne.removeEventListener('keydown', tus);
+      for (const t of HAREKET) kutu.removeEventListener(t, sesAc, { capture: true });
+      kok.remove();
+    },
   };
 }

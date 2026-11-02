@@ -1,6 +1,7 @@
 // Yavrumuz: oda arka planları ve sahne eşyaları (kodla SVG; dış görsel yok). Saf metin üretir, DOM yok.
-// Arka plan viewBox 0 0 560 272, zemin çizgisi y 196 (duvar, zemin, sonra eşyalar); "xMidYMax slice": dar ekranda (≈350 px) yalnız orta x 105..455
-// görünür, bu yüzden ana eşyalar bu bantta; bebek ortada (x 182..378) durur. Renkler style.css'teki --yvo-* jetonları
+// Arka plan viewBox 0 0 560 272, zemin çizgisi y 196 (duvar, zemin, sonra eşyalar); "xMidYMax slice": en dar ekranda (320 px)
+// yalnız orta x 128..432 görünür (390 px'te 106..454), bu yüzden ayrık eşyalar bu bantta; duvara dayalı tezgâh, süs ipi ve
+// halı taşabilir. Bebek çizimi ortada (≈ x 220..340) durur. Renkler style.css'teki --yvo-* jetonları
 // (oda başına ton, iki tema). Desen id'leri oda başına sabit: sahnede aynı anda tek oda arka planı olur.
 // Eşyalar: küvet ön yüzü (bebek viewBox'ı 0 0 200 200, bebeğin üstünde), lazımlık, sabun.
 
@@ -35,35 +36,35 @@ const perde = (x, w, y) => {
 const MUTFAK = svg('mutfak',
   '<pattern id="yvo-karo-mutfak" width="18" height="18" patternUnits="userSpaceOnUse"><rect class="yvo-desen" x="1" y="1" width="16" height="16" rx="2.5"/></pattern>',
   '<rect fill="url(#yvo-karo-mutfak)" y="112" width="560" height="76"/>'
-  + kat('yvo-pencere', pencere(112, 28, 60, 56) + perde(112, 60, 24))
+  + kat('yvo-pencere', pencere(138, 28, 60, 56) + perde(138, 60, 24))
   // Raf ve kavanozlar
-  + '<rect class="yvo-esya-koyu" x="392" y="74" width="86" height="6" rx="3"/>'
-  + '<rect class="yvo-cam" x="400" y="46" width="20" height="28" rx="6"/><rect class="yvo-vurgu" x="398" y="40" width="24" height="8" rx="3"/>'
-  + '<rect class="yvo-cam" x="428" y="54" width="16" height="20" rx="5"/><rect class="yvo-vurgu2" x="426" y="49" width="20" height="7" rx="3"/>'
-  + '<path class="yvo-esya" d="M452 56 H472 V66 A10 8 0 0 1 452 66 Z"/><path class="yvo-cizgi" d="M472 59 q7 0 7 5 q0 5 -7 5"/>'
+  + '<rect class="yvo-esya-koyu" x="342" y="74" width="86" height="6" rx="3"/>'
+  + '<rect class="yvo-cam" x="350" y="46" width="20" height="28" rx="6"/><rect class="yvo-vurgu" x="348" y="40" width="24" height="8" rx="3"/>'
+  + '<rect class="yvo-cam" x="378" y="54" width="16" height="20" rx="5"/><rect class="yvo-vurgu2" x="376" y="49" width="20" height="7" rx="3"/>'
+  + '<path class="yvo-esya" d="M402 56 H422 V66 A10 8 0 0 1 402 66 Z"/><path class="yvo-cizgi" d="M422 59 q7 0 7 5 q0 5 -7 5"/>'
   // Asılı kepçe ve tava
-  + '<path class="yvo-cizgi" d="M410 92 V122"/><ellipse class="yvo-esya" cx="410" cy="126" rx="7" ry="5"/>'
-  + '<path class="yvo-cizgi" d="M444 92 V104"/><circle class="yvo-esya-koyu" cx="444" cy="120" r="15"/><circle class="yvo-esya" cx="444" cy="120" r="11"/>'
+  + '<path class="yvo-cizgi" d="M370 92 V122"/><ellipse class="yvo-esya" cx="370" cy="126" rx="7" ry="5"/>'
+  + '<path class="yvo-cizgi" d="M404 92 V104"/><circle class="yvo-esya-koyu" cx="404" cy="120" r="15"/><circle class="yvo-esya" cx="404" cy="120" r="11"/>'
   // Tezgâh ve dolap
   + '<rect class="yvo-esya" x="36" y="148" width="136" height="84" rx="5"/>'
   + '<rect class="yvo-tezgah" x="30" y="138" width="148" height="12" rx="4"/>'
   + '<path class="yvo-cizgi" d="M104 156 V226"/><circle class="yvo-esya-koyu" cx="96" cy="176" r="3"/><circle class="yvo-esya-koyu" cx="112" cy="176" r="3"/>'
-  + '<path class="yvo-vurgu" d="M136 138 c0 -14 22 -14 22 0 Z"/><rect class="yvo-cam" x="120" y="118" width="12" height="20" rx="4"/>');
+  + '<path class="yvo-vurgu" d="M150 138 c0 -14 22 -14 22 0 Z"/><rect class="yvo-cam" x="134" y="118" width="12" height="20" rx="4"/>');
 
 const BANYO = svg('banyo',
   '<pattern id="yvo-karo-banyo" width="22" height="22" patternUnits="userSpaceOnUse"><rect class="yvo-desen" x="1" y="1" width="20" height="20" rx="3"/></pattern>',
   '<rect fill="url(#yvo-karo-banyo)" width="560" height="188"/>'
   // Ayna
-  + '<ellipse class="yvo-cerceve" cx="140" cy="74" rx="30" ry="38"/><ellipse class="yvo-cam" cx="140" cy="74" rx="23" ry="31"/>'
-  + '<path class="yvo-parilti" d="M128 60 q4 -12 14 -14 M126 72 q1 -4 3 -6"/>'
+  + '<ellipse class="yvo-cerceve" cx="166" cy="74" rx="30" ry="38"/><ellipse class="yvo-cam" cx="166" cy="74" rx="23" ry="31"/>'
+  + '<path class="yvo-parilti" d="M154 60 q4 -12 14 -14 M152 72 q1 -4 3 -6"/>'
   // Havluluk ve havlu
-  + '<rect class="yvo-esya-koyu" x="396" y="60" width="72" height="5" rx="2.5"/>'
-  + '<rect class="yvo-vurgu" x="406" y="62" width="48" height="66" rx="5"/><path class="yvo-vurgu2" d="M406 112 H454 M406 118 H454"/>'
+  + '<rect class="yvo-esya-koyu" x="354" y="60" width="72" height="5" rx="2.5"/>'
+  + '<rect class="yvo-vurgu" x="364" y="62" width="48" height="66" rx="5"/><path class="yvo-vurgu2" d="M364 112 H412 M364 118 H412"/>'
   // Raf: şişeler ve ördek
-  + '<rect class="yvo-esya-koyu" x="400" y="150" width="70" height="5" rx="2.5"/>'
-  + '<rect class="yvo-vurgu2" x="406" y="128" width="13" height="22" rx="4"/><rect class="yvo-esya" x="409" y="122" width="7" height="7" rx="2"/>'
-  + '<rect class="yvo-cam" x="424" y="134" width="11" height="16" rx="4"/>'
-  + '<path class="yvo-sari" d="M444 150 c0 -10 8 -12 12 -8 c2 -8 12 -8 12 0 c0 4 -3 6 -6 7 c4 0 8 1 8 1 Z"/><circle class="yvo-goz" cx="461" cy="138" r="1.4"/>');
+  + '<rect class="yvo-esya-koyu" x="358" y="150" width="70" height="5" rx="2.5"/>'
+  + '<rect class="yvo-vurgu2" x="364" y="128" width="13" height="22" rx="4"/><rect class="yvo-esya" x="367" y="122" width="7" height="7" rx="2"/>'
+  + '<rect class="yvo-cam" x="382" y="134" width="11" height="16" rx="4"/>'
+  + '<path class="yvo-sari" d="M402 150 c0 -10 8 -12 12 -8 c2 -8 12 -8 12 0 c0 4 -3 6 -6 7 c4 0 8 1 8 1 Z"/><circle class="yvo-goz" cx="419" cy="138" r="1.4"/>');
 
 const TUVALET = svg('tuvalet', '',
   // Lambri
@@ -71,32 +72,32 @@ const TUVALET = svg('tuvalet', '',
   + '<path class="yvo-cizgi yvo-ince" d="M0 118 H560 M40 118 V188 M80 118 V188 M120 118 V188 M160 118 V188 M200 118 V188 M240 118 V188 M280 118 V188 M320 118 V188 M360 118 V188 M400 118 V188 M440 118 V188 M480 118 V188 M520 118 V188"/>'
   + '<rect class="yvo-esya-koyu" y="114" width="560" height="5"/>'
   // Çerçeveli resim (yıldız)
-  + '<rect class="yvo-cerceve" x="114" y="34" width="54" height="46" rx="4"/><rect class="yvo-cam" x="120" y="40" width="42" height="34" rx="2"/>'
-  + yildiz(141, 57, 11)
+  + '<rect class="yvo-cerceve" x="138" y="34" width="54" height="46" rx="4"/><rect class="yvo-cam" x="144" y="40" width="42" height="34" rx="2"/>'
+  + yildiz(165, 57, 11)
   // Yuvarlak küçük pencere
-  + kat('yvo-pencere', '<circle class="yvo-cerceve" cx="430" cy="52" r="26"/><circle class="yvo-cam" cx="430" cy="52" r="20"/><path class="yvo-cerceve-cizgi" d="M430 32 V72 M410 52 H450"/>')
+  + kat('yvo-pencere', '<circle class="yvo-cerceve" cx="396" cy="52" r="26"/><circle class="yvo-cam" cx="396" cy="52" r="20"/><path class="yvo-cerceve-cizgi" d="M396 32 V72 M376 52 H416"/>')
   // Tuvalet kâğıdı
-  + '<rect class="yvo-esya-koyu" x="410" y="132" width="34" height="5" rx="2.5"/><circle class="yvo-kagit" cx="427" cy="146" r="11"/><circle class="yvo-esya" cx="427" cy="146" r="3.5"/>'
-  + '<path class="yvo-kagit" d="M416 146 V170 H427 V146 Z"/>');
+  + '<rect class="yvo-esya-koyu" x="150" y="132" width="34" height="5" rx="2.5"/><circle class="yvo-kagit" cx="167" cy="146" r="11"/><circle class="yvo-esya" cx="167" cy="146" r="3.5"/>'
+  + '<path class="yvo-kagit" d="M156 146 V170 H167 V146 Z"/>');
 
 const YATAK = svg('yatak', '',
   // Gece penceresi: ay ve yıldızlar
-  kat('yvo-pencere', pencere(108, 28, 66, 60, 'yvo-gece-cam')
-    + '<path class="yvo-ay" d="M158 40 a12 12 0 1 0 6 22 a9 9 0 1 1 -6 -22 Z"/>'
-    + yildiz(124, 44, 3.6, 'yvo-ay') + yildiz(138, 74, 2.6, 'yvo-ay') + yildiz(160, 76, 2.2, 'yvo-ay')
-    + perde(108, 66, 24))
+  kat('yvo-pencere', pencere(136, 28, 66, 60, 'yvo-gece-cam')
+    + '<path class="yvo-ay" d="M186 40 a12 12 0 1 0 6 22 a9 9 0 1 1 -6 -22 Z"/>'
+    + yildiz(152, 44, 3.6, 'yvo-ay') + yildiz(166, 74, 2.6, 'yvo-ay') + yildiz(188, 76, 2.2, 'yvo-ay')
+    + perde(136, 66, 24))
   // Duvar yıldızları
-  + yildiz(214, 40, 6, 'yvo-desen-koyu') + yildiz(350, 30, 5, 'yvo-desen-koyu') + yildiz(388, 70, 4, 'yvo-desen-koyu')
+  + yildiz(228, 40, 6, 'yvo-desen-koyu') + yildiz(350, 30, 5, 'yvo-desen-koyu') + yildiz(388, 70, 4, 'yvo-desen-koyu')
   // Beşik (bebeğin arkasında)
-  + '<rect class="yvo-esya" x="186" y="128" width="188" height="10" rx="5"/>'
-  + `<path class="yvo-cubuk" d="${Array.from({ length: 11 }, (_, i) => `M${200 + i * 16} 138 V192`).join(' ')}"/>`
-  + '<rect class="yvo-esya-koyu" x="180" y="108" width="12" height="92" rx="5"/><rect class="yvo-esya-koyu" x="368" y="108" width="12" height="92" rx="5"/>'
-  + '<circle class="yvo-vurgu" cx="186" cy="106" r="7"/><circle class="yvo-vurgu" cx="374" cy="106" r="7"/>'
+  + '<rect class="yvo-esya" x="200" y="128" width="160" height="10" rx="5"/>'
+  + `<path class="yvo-cubuk" d="${Array.from({ length: 10 }, (_, i) => `M${208 + i * 16} 138 V192`).join(' ')}"/>`
+  + '<rect class="yvo-esya-koyu" x="194" y="108" width="12" height="92" rx="5"/><rect class="yvo-esya-koyu" x="354" y="108" width="12" height="92" rx="5"/>'
+  + '<circle class="yvo-vurgu" cx="200" cy="106" r="7"/><circle class="yvo-vurgu" cx="360" cy="106" r="7"/>'
   // Komodin ve lamba (ışık: yvo-isik; uyurken söner)
-  + '<rect class="yvo-esya" x="404" y="150" width="56" height="44" rx="5"/><path class="yvo-cizgi" d="M404 170 H460"/><circle class="yvo-esya-koyu" cx="432" cy="160" r="2.5"/><circle class="yvo-esya-koyu" cx="432" cy="181" r="2.5"/>'
-  + '<circle class="yvo-isik" cx="432" cy="118" r="34"/>'
-  + '<rect class="yvo-esya-koyu" x="429" y="122" width="6" height="26" rx="3"/><ellipse class="yvo-esya-koyu" cx="432" cy="149" rx="13" ry="3"/>'
-  + '<path class="yvo-abajur" d="M416 124 L422 100 H442 L448 124 Z"/>'
+  + '<rect class="yvo-esya" x="372" y="150" width="56" height="44" rx="5"/><path class="yvo-cizgi" d="M372 170 H428"/><circle class="yvo-esya-koyu" cx="400" cy="160" r="2.5"/><circle class="yvo-esya-koyu" cx="400" cy="181" r="2.5"/>'
+  + '<circle class="yvo-isik" cx="400" cy="118" r="34"/>'
+  + '<rect class="yvo-esya-koyu" x="397" y="122" width="6" height="26" rx="3"/><ellipse class="yvo-esya-koyu" cx="400" cy="149" rx="13" ry="3"/>'
+  + '<path class="yvo-abajur" d="M384 124 L390 100 H410 L416 124 Z"/>'
   + '<ellipse class="yvo-hali" cx="280" cy="232" rx="190" ry="22"/>');
 
 const BAYRAK = [1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6, 1];
@@ -110,16 +111,16 @@ const OYUN = svg('oyun', '',
     return `<path class="yvo-b${r}" d="M${x - 11} ${y.toFixed(1)} L${x + 11} ${(y + 1).toFixed(1)} L${x} ${(y + 22).toFixed(1)} Z"/>`;
   }).join('')
   // Duvar yıldızları ve bulut
-  + yildiz(132, 92, 8, 'yvo-b6') + yildiz(426, 84, 7, 'yvo-b2') + yildiz(462, 122, 5, 'yvo-b1')
-  + '<path class="yvo-bulut" d="M112 140 a12 12 0 0 1 20 -10 a14 14 0 0 1 26 4 a10 10 0 0 1 2 20 H116 a10 10 0 0 1 -4 -14 Z"/>'
+  + yildiz(158, 92, 8, 'yvo-b6') + yildiz(396, 84, 7, 'yvo-b2') + yildiz(418, 122, 5, 'yvo-b1')
+  + '<path class="yvo-bulut" d="M140 140 a12 12 0 0 1 20 -10 a14 14 0 0 1 26 4 a10 10 0 0 1 2 20 H144 a10 10 0 0 1 -4 -14 Z"/>'
   // Halı
   + '<ellipse class="yvo-hali" cx="280" cy="232" rx="210" ry="26"/><ellipse class="yvo-hali-ic" cx="280" cy="232" rx="170" ry="17"/>'
   // Küpler (sol) ve top (sağ)
-  + '<rect class="yvo-b5" x="112" y="186" width="30" height="30" rx="5"/><text class="yvo-harf" x="127" y="208">A</text>'
-  + '<rect class="yvo-b1" x="144" y="196" width="22" height="22" rx="4"/><text class="yvo-harf kucuk" x="155" y="212">B</text>'
-  + '<rect class="yvo-b4" x="122" y="160" width="24" height="24" rx="4" transform="rotate(-8 134 172)"/><text class="yvo-harf kucuk" x="134" y="177" transform="rotate(-8 134 172)">C</text>'
-  + '<circle class="yvo-b3" cx="420" cy="214" r="20"/><path class="yvo-top-serit" d="M402 206 Q420 216 438 206 M404 224 Q420 214 436 224"/>'
-  + '<circle class="yvo-parilti-dolgu" cx="412" cy="204" r="4"/>');
+  + '<rect class="yvo-b5" x="136" y="186" width="30" height="30" rx="5"/><text class="yvo-harf" x="151" y="208">A</text>'
+  + '<rect class="yvo-b1" x="168" y="196" width="22" height="22" rx="4"/><text class="yvo-harf kucuk" x="179" y="212">B</text>'
+  + '<rect class="yvo-b4" x="146" y="160" width="24" height="24" rx="4" transform="rotate(-8 158 172)"/><text class="yvo-harf kucuk" x="158" y="177" transform="rotate(-8 158 172)">C</text>'
+  + '<circle class="yvo-b3" cx="398" cy="214" r="20"/><path class="yvo-top-serit" d="M380 206 Q398 216 416 206 M382 224 Q398 214 414 224"/>'
+  + '<circle class="yvo-parilti-dolgu" cx="390" cy="204" r="4"/>');
 
 const SVGLER = { mutfak: MUTFAK, banyo: BANYO, tuvalet: TUVALET, yatak: YATAK, oyun: OYUN };
 

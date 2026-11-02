@@ -186,6 +186,7 @@ export const SAYFALAR = [
   { id: 'cark', title: 'Karar Çarkı', icon: '🎡', path: 'sayfalar/cark/', desc: 'Ne yesek, ne izlesek? Çark karar versin.' },
   { id: 'not', title: 'Not Bırak', icon: '✍️', path: 'sayfalar/not/', desc: 'Yazı, çizim ya da fotoğraf: sevgiline küçük bir not bırak.' },
   { id: 'konum', title: 'Konum', icon: '📍', path: 'sayfalar/konum/', desc: 'Neredesin? Canlı konum ve aranızdaki mesafe.' },
+  { id: 'sohbetozet', title: 'Sohbet Özetimiz', icon: '📊', path: 'sayfalar/sohbet-ozeti/', desc: 'WhatsApp sohbetinizin özeti: kim çok yazdı, ilk "seviyorum", rekorlar.' },
 ];
 
 // Alt sekme çubuğu sırası.

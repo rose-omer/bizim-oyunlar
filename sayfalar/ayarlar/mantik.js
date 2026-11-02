@@ -110,6 +110,7 @@ export const YEDEK_TURLERI = [
   'kupon', 'bilgi',
   'kumbara', 'katki',
   'not',
+  'sohbetozet',
 ];
 
 /**

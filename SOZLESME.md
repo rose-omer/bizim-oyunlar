@@ -485,6 +485,7 @@ v3 bölümleri v1 ve v2'nin üstüne gelir. Çatışmada v3 geçerli.
 | `kumbara` | uuid | `{ baslik, emoji, hedef (kuruş), son?: gün, tamam?: ISO }` (`tamam` = hedefe ilk ulaşılan an; para alınsa da kalır) | Ortak Harcamalar → Kumbara (`sayfalar/harcama/kumbara-mantik.js`) |
 | `katki` | uuid | `{ kumbara (id), tutar (kuruş; eksi = kumbaradan alma), kim (clientId), not?, tarih: gün }` | Ortak Harcamalar → Kumbara |
 | `not` | uuid | `{ tur: 'yazi'/'cizim'/'foto', metin? (≤200), foto?: url (çizim WebP), kime, kimden (clientId), surpriz: bool, acildi?: ISO }` (sürpriz: alan kişi dokununca açılır; açılınca da arşivde kalır) | Not Bırak (`sayfalar/not/mantik.js`) |
+| `sohbetozet` | `'bizim'` | `{ v: 1, at, yukleyen, kaynak: { bicim, ilk, son, mesaj, gun, konusulanGun, medyaTuru, saniye }, ilkMesaj, gunluk, aylik, saat, haftaGunu, enYogunGunler, seri, sessizlik, sohbet, arama, kisi: { [clientId]: { mesaj, kelime, soz, sozIlk, kelimeler, emojiler, … } } }` (WhatsApp dışa aktarımından yalnız sayılar; ham mesaj gitmez; dosya telefonda bellekte işlenir; < 32 KB; yeni yükleme üstüne yazar) | Sohbet Özetimiz (`sayfalar/sohbet-ozeti/hesapla.js`) |
 - `konum` (v3, §17'deki satırın yerine): paylaşıyorsa `{ lat, lng, hassas: 'yaklasik'|'tam', dogruluk?: metre (yalnız tam), yer?: 'Kadıköy, İstanbul', pil?: 0–100, sarj?: bool, canli?: ISO bitiş ('Ben kapatana dek' = '9999-12-31T00:00:00Z'), at: ISO }`;
   yaklaşık 2 ondalık (~1 km), tam 5 ondalık. Durdurunca `{ kapali: true, at }` (putDoc; **removeDoc kullanılmaz**: silme veriyi saklar, koordinat sunucuda kalırdı).
   Eski `{ lat, lng, sehir?, at }` yaklaşık sayılır. Okuyan her yer `kapali` belgeyi "paylaşmıyor" sayar (`paylasiyorMu`).
@@ -496,7 +497,7 @@ v3 bölümleri v1 ve v2'nin üstüne gelir. Çatışmada v3 geçerli.
 - Yeni tür `sayfalar/ayarlar/mantik.js` `YEDEK_TURLERI` sonuna eklenir.
 
 ## 27. Yeni sayfalar, oyunlar ve ortak modüller
-- SAYFALAR: `ruh`, `skor`, `yilimiz`, `rozetler`, `gunfoto`, `haftalik`, `harcama`, `konum` (Daha › Biz; Ayarlar'daki eski Mesafe bölümünün yerine). GAMES: `satranc`, `pisti`, `duello` (Kelime Düellosu), `sudoku`.
+- SAYFALAR: `ruh`, `skor`, `yilimiz`, `rozetler`, `gunfoto`, `haftalik`, `harcama`, `konum` (Daha › Biz; Ayarlar'daki eski Mesafe bölümünün yerine), `sohbetozet` (Sohbet Özetimiz, Daha › Biz, `yilimiz`'ın arkasında; `sayfalar/sohbet-ozeti/`). GAMES: `satranc`, `pisti`, `duello` (Kelime Düellosu), `sudoku`.
 - Rekabetçi oyun bitişinde ev sahibi `logGame` yanında `skorKaydet(room, oyunId, { kazanan })` çağırır; kutlamaya `toplamSatiri(...)` eklenir.
 - Masa oyunları `games/dama/masa.js` `bootMasa` üstüne kurulur. `game.save?(s)` kayda gideni belirler (varsayılan `view`). "Sıra sende" bildirimini sırayı devreden cihaz yollar; `partnerGoruyor(partner, ns)` doğruysa yollanmaz.
 - `storage.js`: `uploadAudio(blob, roomId)` (`<oda>/<uuid>.webm|m4a`, en çok 2 MB); `uploadPhoto` yolu `.webp` ya da `.jpg`. Kova: `image/jpeg|webp|png`, `audio/webm|mp4`.

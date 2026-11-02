@@ -93,7 +93,8 @@ const AGIZLAR = {
   dalga: '<path class="yvb-dudak" d="M-7.5 28 Q-3.8 25 0 28 Q3.8 31 7.5 28"/>',
   aglama: '<path class="yvb-agiz-ic" d="M-11 33 C-11 21 11 21 11 33 Q0 30 -11 33 Z"/><ellipse class="yvb-dil" cx="0" cy="31.2" rx="5" ry="1.8"/>',
 };
-const agiz = (tur) => `<g class="yvb-agiz">${AGIZLAR[tur]}</g>`;
+// Konuşma ağzı (ses taklidi): gizli; ata öğede [data-konusuyor] varken görünür, açıklığı --yvb-konus (0..1).
+const agiz = (tur) => `<g class="yvb-agiz">${AGIZLAR[tur]}<ellipse class="yvb-agiz-konus" cx="0" cy="29" rx="7.5" ry="7"/></g>`;
 
 const yanak = (k, guclu) => `<g class="yvb-yanak${guclu ? ' guclu' : ''}">`
   + `<ellipse fill="url(#${k}-allik)" cx="-31" cy="18" rx="11" ry="7.5"/><ellipse fill="url(#${k}-allik)" cx="31" cy="18" rx="11" ry="7.5"/></g>`;
@@ -403,6 +404,9 @@ export const BEBEK_CSS = `
 .yvb-dudak { fill: none; stroke: var(--yvb-dudak); stroke-width: 2.2; stroke-linecap: round; }
 .yvb-agiz-ic { fill: var(--yvb-agiz); stroke: var(--yvb-murekkep); stroke-width: 1.2; stroke-linejoin: round; }
 .yvb-dil { fill: var(--yvb-dil); }
+.yvb-agiz-konus { display: none; fill: var(--yvb-agiz); stroke: var(--yvb-murekkep); stroke-width: 1.2; transform-box: fill-box; transform-origin: 50% 15%; transform: scaleY(var(--yvb-konus, 0.12)); }
+[data-konusuyor] .yvb-agiz > :not(.yvb-agiz-konus), [data-konusuyor] .yvb-emzik { display: none; }
+[data-konusuyor] .yvb-agiz-konus { display: inline; }
 .yvb-yanak.guclu ellipse { transform: scale(1.12); transform-box: fill-box; transform-origin: center; }
 .yvb-damla { fill: var(--yv-damla); stroke: color-mix(in oklab, var(--yv-damla) 55%, var(--yvb-murekkep)); stroke-width: 0.9; }
 .yvb-iz { fill: none; stroke: var(--yv-damla); stroke-width: 3; stroke-linecap: round; opacity: 0.7; }

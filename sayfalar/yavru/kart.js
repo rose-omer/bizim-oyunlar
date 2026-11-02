@@ -11,6 +11,7 @@ import {
 } from './mantik.js';
 import { keyifsizMi } from './saglik.js';
 import { tuvaletDurumu } from './tuvalet.js';
+import { giyimOku } from './giyim.js';
 import { yavruSvg, CIZIM_CSS } from './cizim.js';
 import { BEBEK_CSS } from './bebek.js';
 
@@ -75,11 +76,13 @@ export async function mountYavruKart(el, { room } = {}) {
     const metin = dogumGunu ? DOGUM_GUNU_METNI : durumMetni(y, simdi, keyifsiz, tuvalet);
     const baslik = asama === 'yumurta' ? 'Yavrumuz' : y.ad || 'Yavrumuz';
     const kisilik = y?.kisilik || '';
-    const k = [asama, renk, ruh, hazir, metin, baslik, kisilik].join('|');
+    const giyim = giyimOku(y);
+    const k = [asama, renk, ruh, hazir, metin, baslik, kisilik, JSON.stringify(giyim)].join('|');
     if (k === anahtar) return;
     anahtar = k;
     kart.style.setProperty('--yv-govde', `var(--yv-r${renk})`);
-    gorsel.innerHTML = yavruSvg({ asama, ruh, renk, hazir, kisilik });
+    // Kart küçük: parmaksız sade el (kucukBoy).
+    gorsel.innerHTML = yavruSvg({ asama, ruh, renk, hazir, kisilik, giyim, kucukBoy: true });
     ad.textContent = baslik;
     durum.textContent = metin;
     kart.dataset.dogumgunu = String(dogumGunu);

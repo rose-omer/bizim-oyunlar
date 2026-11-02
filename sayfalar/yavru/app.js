@@ -271,7 +271,10 @@ app.replaceChildren(kok);
 
 // ---------- Çizim ----------
 function cizSahne() {
-  const gercekRuh = M.ruhHali(y, simdi);
+  const keyifsiz = S.keyifsizMi(y, simdi);
+  const tuvalet = T.tuvaletDurumu(y, simdi);
+  // Yüz durum yazısıyla uyumlu: çişi var, kaza, keyifsiz, özledi (kart.js ile aynı kural).
+  const gercekRuh = M.kartRuhu(y, simdi, { keyifsiz, tuvalet });
   // Dokunma tepkisi yalnız uyanık bebekte ve süresince (yumurtada ruhHali 'yumurta').
   const uyanik = !['yumurta', 'uyuyor'].includes(gercekRuh);
   const tepkide = !!gecici && simdi < gecici.bitis && uyanik;
@@ -284,7 +287,7 @@ function cizSahne() {
   const kisilik = y?.kisilik || '';
   const hazir = asama === 'yumurta' && !!y && M.catlamaHazir(y, simdi);
   const giyim = y ? giyimOku(y) : {};
-  const anahtar = `${asama}|${ruh}|${renk}|${hazir}|${kisilik}|${giyim.bas}|${giyim.goz}|${giyim.boyun}`;
+  const anahtar = `${asama}|${ruh}|${renk}|${hazir}|${kisilik}|${JSON.stringify(giyim)}`;
   if (anahtar !== svgAnahtar) {
     svgAnahtar = anahtar;
     cizimEl.innerHTML = yavruSvg({ asama, ruh, renk, hazir, kisilik, giyim });
@@ -298,8 +301,6 @@ function cizSahne() {
   const uyuyor = ruh === 'uyuyor';
   sahne.toggleAttribute('data-gece', uyuyor);
   dokunBtn.setAttribute('aria-label', asama === 'yumurta' ? 'Yumurtayı ısıt' : `${y?.ad || 'Yavrunuzu'} sev`);
-  const keyifsiz = S.keyifsizMi(y, simdi);
-  const tuvalet = T.tuvaletDurumu(y, simdi);
   let soz = (uyanik && odaSozu()) || (tepkide ? gecici.metin : M.durumMetni(y, simdi, keyifsiz, tuvalet));
   if (uyuyor) {
     const kalan = M.kalanMetni(Date.parse(y.uyku.bit) - simdi);

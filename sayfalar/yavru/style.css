@@ -831,6 +831,8 @@
 .yv-eylem[data-ek='ninni'][aria-pressed='true'] { --eylem-bg: var(--accent-soft); }
 /* Salla: yalnız ağlarken, sahnenin sağ üstünde */
 .yv-salla { position: absolute; top: 12px; right: 12px; z-index: 3; gap: 6px; }
+/* Banyoda Durula aynı köşede: Salla altına iner */
+.yv-sahne[data-oda='banyo'] .yv-salla { top: 56px; }
 .yv-salla[hidden] { display: none; }
 .yv-p-nota { left: var(--x); bottom: 48%; color: var(--accent); font-size: 1.5rem; font-weight: 800; line-height: 1; animation: yv-nota 2.4s ease-out both; }
 .yv-sahne[data-gece] .yv-p-nota { color: var(--hero-ink); }

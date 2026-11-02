@@ -647,6 +647,7 @@
 
 /* Banyo: bebek küvette, kıyafetsiz; köpük ve duş */
 .yv-sahne[data-oda='banyo'] .yvb-kiyafet,
+.yv-sahne[data-oda='banyo'] .yvb-giyim,
 .yv-sahne[data-oda='banyo'] .yvb-zemin { display: none; }
 .yv-kuvet, .yv-kopukler { position: absolute; inset: 0; pointer-events: none; }
 .yv-kuvet:empty { display: none; }

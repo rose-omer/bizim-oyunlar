@@ -29,6 +29,9 @@ import * as O from './odalar.js';
 import { odaSvg, KUVET_SVG, LAZIMLIK_SVG, SABUN_SVG } from './oda-cizim.js';
 import { OYUNLAR, oyunAc } from './oyunlar/cerceve.js';
 import { taklitBaslat, taklitDestegi, mikrofonAcikMi } from './taklit.js';
+import { giyimOku } from './giyim.js';
+import { magazaAc as magazaKatmani } from './magaza.js';
+import { buyumeSahnesi, buyumeSahnesiGerekli } from './buyume-sahne.js';
 
 const { room, roomId, me } = await bootPage({ ns: 'yavru', title: 'Yavrumuz', tab: 'daha' });
 const app = document.getElementById('app');
@@ -269,10 +272,11 @@ function cizSahne() {
   const renk = y?.renk || M.renkSec(roomId);
   const kisilik = y?.kisilik || '';
   const hazir = asama === 'yumurta' && !!y && M.catlamaHazir(y, simdi);
-  const anahtar = `${asama}|${ruh}|${renk}|${hazir}|${kisilik}`;
+  const giyim = y ? giyimOku(y) : {};
+  const anahtar = `${asama}|${ruh}|${renk}|${hazir}|${kisilik}|${giyim.bas}|${giyim.goz}|${giyim.boyun}`;
   if (anahtar !== svgAnahtar) {
     svgAnahtar = anahtar;
-    cizimEl.innerHTML = yavruSvg({ asama, ruh, renk, hazir, kisilik });
+    cizimEl.innerHTML = yavruSvg({ asama, ruh, renk, hazir, kisilik, giyim });
   }
   if (!tepkide) delete sahne.dataset.dokunma;
   cizKisayol(gercekRuh === 'yumurta' || gercekRuh === 'uyuyor' ? '' : asama);
@@ -686,6 +690,13 @@ function gecisler() {
   gorunenAsama = y?.asama || null;
   if (!sahneOynuyor && M.catlamaSahnesiGerekli(y, !!readStore(sahneDepo(), SAHNE_KEY), simdi)) {
     catlamaSahnesi();
+  } else if (!sahneOynuyor && buyumeSahnesiGerekli(y, !!readStore(sahneDepo(), BUYUME_KEY), simdi)) {
+    writeStore(sahneDepo(), BUYUME_KEY, '1'); // başta: yarıda kapansa da yeniden oynamaz
+    sahneOynuyor = true;
+    buyumeSahnesi(document.body, {
+      renk: y.renk, kisilik: y.kisilik, giyim: giyimOku(y), ad: y.ad,
+      onBitti: () => { sahneOynuyor = false; },
+    });
   } else if (degisti && !sahneOynuyor) {
     olay(y.asama === 'buyuk' ? 'buyudu' : 'dogdu', 1600);
     sfx('win');
@@ -725,6 +736,7 @@ async function catla() {
 // ---------- Çatlama sahnesi: cihaz başına bir kez (çatlatan da sonra açan sevgili de görür) ----------
 // Yerel modda (?yerel=1) iki sekme iki ayrı kişi: kimlik gibi sekmeye özel depo. Gerçekte cihazın localStorage'ı.
 const SAHNE_KEY = `bizim.yavru.catlamaGoruldu.${roomId}`;
+const BUYUME_KEY = `bizim.yavru.buyumeGoruldu.${roomId}`;
 const sahneDepo = () => (isLocalMode() ? 'session' : 'local');
 let sahneOynuyor = false;
 
@@ -793,11 +805,7 @@ async function buyu() {
   bakim.put({ eylem: 'buyume', kim: me.clientId, at: new Date(t).toISOString() }).catch(() => {});
   partnerBildir('buyume');
   buyuyor = false;
-  celebrate({
-    title: `${y?.ad || 'Yavrunuz'} büyüdü!`,
-    lines: ['Birlikte baktınız, birlikte büyüttünüz 💛'],
-    buttons: [{ label: 'Ne güzel', primary: true }],
-  });
+  ciz(); // büyüme sahnesi gecisler'de oynar
 }
 
 // ---------- Eylemler ----------
@@ -1253,8 +1261,26 @@ function taklitDegisti(d, ek = {}) {
   cizPanel();
 }
 
-/** Mağaza kancası: koordinatör magaza.js'e bağlar (şimdilik boş). */
-function magazaAc() {}
+/** Mağaza: alt sayfa (magaza.js). Satın alma bakım günlüğüne yazılır ve partnere bildirilir. */
+let magaza = null;
+function magazaAc() {
+  if (magaza || !y || y.asama === 'yumurta') return;
+  magaza = magazaKatmani(document.body, {
+    veri: () => y,
+    kim: me.clientId,
+    simdi: Date.now,
+    bebekOpts: { renk: y.renk, kisilik: y.kisilik },
+    onKapat: () => { magaza = null; },
+    // Hata yakalanmaz: mağaza iletiyi kendisi gösterir.
+    yaz: async (yama, kayit) => {
+      await col.patch(M.BELGE_ID, yama);
+      if (kayit) {
+        bakim.put(kayit).catch(() => {});
+        partnerBildir('satinal', { deger: kayit.deger });
+      }
+    },
+  });
+}
 
 // ---------- Tepkiler (kısa; hareket azaltmada yalnız durum değişir) ----------
 const rnd = (a, b) => a + Math.random() * (b - a);
@@ -1350,7 +1376,7 @@ const hataGoster = (err) => {
 };
 col.on('error', hataGoster);
 bakim.on('error', hataGoster);
-col.on('change', ciz);
+col.on('change', () => { ciz(); magaza?.guncelle(); });
 bakim.on('change', () => { yeniBakimlar(); cizBakimlar(); cizGorev(); });
 profil?.on('change', ciz);
 room.on('presence', (p) => { partner = p || null; cizPartner(); cizPanel(); cizGorev(); });

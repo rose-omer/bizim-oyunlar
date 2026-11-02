@@ -128,6 +128,7 @@ export function oku(data) {
     tuvalet: nesne(d.tuvalet),
     jeton: nesne(d.jeton),
     dolap: nesne(d.dolap),
+    giyim: nesne(d.giyim),
   };
 }
 

@@ -1,4 +1,4 @@
-/* Yavrumuz — yalnız değişkenler (base.css + cizim.js --yv-* jetonları). Tek ana an: sahnedeki yavru. */
+/* Yavrumuz — yalnız değişkenler (base.css + cizim.js --yv-*, bebek.js --yvb-* jetonları). Tek ana an: sahnedeki yavru. */
 
 .yv {
   width: 100%;
@@ -61,9 +61,9 @@
   transform: rotate(-12deg);
 }
 .yv-sahne[data-gece] .yv-gok { opacity: 1; }
-.yv-sahne[data-gece] .yv-z,
-.yv-sahne[data-gece] .yv-zzz text { fill: var(--hero-ink); }
-.yv-sahne[data-gece] .yv-zemin { fill: var(--hero-ink); opacity: 0.1; }
+.yv-sahne[data-gece] .yvb-z,
+.yv-sahne[data-gece] .yvb-zzz text { fill: var(--hero-ink); }
+.yv-sahne[data-gece] .yvb-zemin { fill: var(--hero-ink); opacity: 0.1; }
 
 .yv-dokun {
   position: relative;
@@ -91,6 +91,39 @@
   opacity: 0;
 }
 .yv-cizim { display: block; width: 100%; height: 100%; }
+
+/* Dokunma kısayolları: görünmez; klavyeyle odaklanınca sahnenin üstünde görünür (ekran okuyucu her zaman bulur). */
+.yv-kisayol {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  right: 10px;
+  z-index: 3;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+}
+.yv-kisayol[hidden] { display: none; }
+.yv-kisayol:not(:focus-within) {
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.yv-kisayol-btn {
+  min-height: 44px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  color: var(--text);
+  font-size: 0.875rem;
+  font-weight: 750;
+}
+.yv-kisayol-btn:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 
 .yv-soz {
   max-width: 100%;
@@ -159,10 +192,11 @@
 .yv-sahne[data-gece] .yv-p-pirilti { background: var(--hero-ink); }
 
 @media (prefers-reduced-motion: no-preference) {
-  .yv-sahne[data-tepki='cigne'] .yv-agiz-g { transform-box: fill-box; transform-origin: center; animation: yv-cigne 0.28s ease-in-out 4; }
+  .yv-sahne[data-tepki='cigne'] .yvb-agiz { transform-box: fill-box; transform-origin: center; animation: yv-cigne 0.28s ease-in-out 4; }
   .yv-sahne[data-tepki='oyna'] .yv-cizim { animation: yv-zipla 0.6s var(--ease) 2; }
   .yv-sahne[data-tepki='sev'] .yv-cizim,
-  .yv-sahne[data-tepki='dokun'] .yv-cizim { animation: yv-kipir 0.5s var(--ease); }
+  .yv-sahne[data-tepki='dokun'] .yv-cizim,
+  .yv-sahne[data-tepki='lazimlik'] .yv-cizim { animation: yv-kipir 0.5s var(--ease); }
   .yv-sahne[data-tepki='yika'] .yv-cizim { animation: yv-silken 0.8s ease-in-out; }
   .yv-sahne[data-tepki='uyut'] .yv-cizim,
   .yv-sahne[data-tepki='uyandir'] .yv-cizim { animation: yv-gerin 0.9s var(--ease); }
@@ -170,7 +204,33 @@
   .yv-sahne[data-tepki='isit'] .yv-dokun::before { animation: yv-isi 1.4s ease-out; }
   .yv-sahne[data-olay='dogdu'] .yv-cizim { animation: yv-dogdu 0.9s var(--ease) both; }
   .yv-sahne[data-olay='buyudu'] .yv-cizim { animation: yv-buyudu 1.1s var(--ease) both; }
+  /* Dokunma tepkileri (dokunma.js animasyon adı); ifade değişimi hareket azaltmada da kalır. */
+  .yv-sahne[data-dokunma] .yv-cizim > svg { transform-origin: 50% 92%; }
+  .yv-sahne[data-dokunma='gidik'] .yv-cizim > svg { animation: yv-gidik 0.9s ease-in-out; }
+  .yv-sahne[data-dokunma='oksa'] .yv-cizim > svg { animation: yv-oksa 1.6s ease-in-out; }
+  .yv-sahne[data-dokunma='hapsu'] .yv-cizim > svg { animation: yv-hapsu 0.7s var(--ease); }
+  .yv-sahne[data-dokunma='sik'] .yv-cizim > svg { animation: yv-sik 0.5s var(--ease); }
+  .yv-sahne[data-dokunma='salla'] .yv-cizim > svg { animation: yv-salla-el 0.9s ease-in-out; }
+  .yv-sahne[data-dokunma='agla'] .yv-cizim > svg { animation: yv-agla 0.32s ease-in-out 5; }
 }
+@keyframes yv-gidik {
+  0%, 100% { transform: none; }
+  15% { transform: translateY(-7px) rotate(-3deg); }
+  30% { transform: translateY(0) rotate(3deg) scale(1.03, 0.97); }
+  48% { transform: translateY(-5px) rotate(-2deg); }
+  66% { transform: translateY(0) rotate(2deg) scale(1.02, 0.98); }
+  82% { transform: translateY(-2px); }
+}
+@keyframes yv-oksa { 0%, 100% { transform: none; } 35%, 65% { transform: rotate(-3deg) scale(1.02, 0.99); } }
+@keyframes yv-hapsu {
+  0%, 100% { transform: none; }
+  35% { transform: translateY(-2px) scale(0.97, 1.04); }
+  50% { transform: translateY(3px) scale(1.06, 0.92); }
+  70% { transform: translateY(0) scale(0.99, 1.01); }
+}
+@keyframes yv-sik { 40% { transform: scale(0.9, 1.04); } 75% { transform: scale(1.02, 0.99); } }
+@keyframes yv-salla-el { 0%, 100% { transform: none; } 20% { transform: rotate(-4deg); } 45% { transform: rotate(4deg); } 70% { transform: rotate(-2deg); } }
+@keyframes yv-agla { 0%, 100% { transform: none; } 25% { transform: translateX(-2px); } 75% { transform: translateX(2px); } }
 @keyframes yv-yemek {
   0% { opacity: 0; transform: translate(-50%, 34px) scale(0.6); }
   30% { opacity: 1; transform: translate(-50%, 0) scale(1.1); }
@@ -252,6 +312,7 @@
 }
 .yv-asama { background: var(--accent-soft); color: var(--accent-strong); }
 .yv-kisilik { background: var(--tint-6); color: var(--text); cursor: help; }
+.yv-jeton { gap: 4px; background: var(--surface-2); color: var(--text); font-variant-numeric: tabular-nums; }
 .yv-buyume { margin: 0; color: var(--muted); font-size: 0.875rem; font-weight: 650; line-height: 1.4; }
 
 .yv-adform {
@@ -301,6 +362,11 @@
   transition: width 0.6s var(--ease), background-color 0.3s ease;
 }
 .yv-ihtiyac[data-dusuk] .yv-cubuk-dolu { background: var(--yv-sicak); }
+/* Tuvalet: dört ihtiyacın altında ayrı satır; çubuk sıkışıklık (dolu = çişi var), sakinken soluk. */
+.yv-tuvalet { grid-column: 1 / -1; padding-top: 12px; border-top: 1px solid var(--line); }
+.yv-tuvalet .yv-ihtiyac-deger { font-variant-numeric: tabular-nums; }
+.yv-tuvalet .yv-cubuk-dolu { background: var(--muted); opacity: 0.45; }
+.yv-tuvalet[data-dusuk] .yv-cubuk-dolu { opacity: 1; }
 .yv-ihtiyac[data-dusuk] .yv-ihtiyac-ikon,
 .yv-ihtiyac[data-dusuk] .yv-ihtiyac-deger { color: var(--yv-sicak); }
 
@@ -352,7 +418,6 @@
 .yv-eylemler { display: flex; flex-direction: column; gap: 8px; }
 .yv-eylemler[hidden], .yv-yumurta-panel[hidden] { display: none; }
 .yv-eylem-grup { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
-.yv-eylem-grup.yemek { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .yv-eylem-grup.ilac { grid-template-columns: minmax(0, 1fr); }
 .yv-eylem-grup[hidden] { display: none; }
 .yv-eylem {
@@ -382,6 +447,7 @@
 .yv-eylem[data-eylem='yika'] { --eylem-bg: var(--tint-5); }
 .yv-eylem[data-eylem='sev'] { --eylem-bg: var(--tint-1); }
 .yv-eylem[data-eylem='uyut'] { --eylem-bg: var(--tint-2); }
+.yv-eylem[data-eylem='lazimlik'] { --eylem-bg: var(--tint-6); }
 .yv-eylem[data-eylem='uyandir'] { --eylem-bg: var(--accent); color: var(--accent-ink); }
 .yv-eylem[data-eylem='ilac'] { --eylem-bg: var(--good-soft); flex-direction: row; gap: 8px; min-height: 52px; font-size: 0.9375rem; }
 .yv-eylem { position: relative; }

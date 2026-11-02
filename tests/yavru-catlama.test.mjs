@@ -46,7 +46,7 @@ test('catlamaMetinleri: ad yoksa ad sorar; varsa (sevgili koyduysa) adı göster
 
 test('catlamaSvg: üst kabuk, alt kabuk, yavru, çatlaklar, kırıntılar; dış kaynak yok', () => {
   const s = catlamaSvg({ renk: 3 });
-  assert.match(s, /^<svg [^>]*class="yv-svg yv-cs-svg"/);
+  assert.match(s, /^<svg [^>]*class="yv-svg yvb-svg yv-cs-svg"/);
   assert.match(s, /<\/svg>$/);
   assert.match(s, /--yv-govde:var\(--yv-r3\)/);
   assert.match(s, /aria-hidden="true"/);
@@ -54,25 +54,30 @@ test('catlamaSvg: üst kabuk, alt kabuk, yavru, çatlaklar, kırıntılar; dış
   assert.ok((s.match(/class="yv-cs-catlak"/g) || []).length >= 3, 'en az üç çatlak');
   assert.ok((s.match(/class="yv-cs-kirinti"/g) || []).length >= 3, 'kırıntılar');
   assert.ok((s.match(/class="yv-cs-yildiz"/g) || []).length >= 4, 'parıltılar');
-  assert.doesNotMatch(s, /https?:|href|<script|url\(/i);
+  assert.doesNotMatch(s, /https?:|href|<script|url\((?!#)/i);
   // Sıra: yavru kabuğun arkasında (önce çizilir), üst kabuk en önde.
   assert.ok(s.indexOf('yv-cs-yavru') < s.indexOf('yv-cs-alt'));
   assert.ok(s.indexOf('yv-cs-alt') < s.indexOf('yv-cs-ust'));
   // Boşta hareketi (nefes, salla) sahneye karışmasın.
   assert.doesNotMatch(s, /yv-beden/);
-  assert.equal(catlamaSvg({ renk: 99 }), catlamaSvg({ renk: 1 }));
-  assert.equal(catlamaSvg({ ruh: '<x>' }), catlamaSvg({ ruh: 'mutlu' }));
+  assert.equal(catlamaSvg({ renk: 99, kimlik: 'c' }), catlamaSvg({ renk: 1, kimlik: 'c' }));
+  assert.equal(catlamaSvg({ ruh: '<x>', kimlik: 'c' }), catlamaSvg({ ruh: 'mutlu', kimlik: 'c' }));
+  // Her url(#…) aynı SVG'deki bir id'ye gider.
+  const idler = [...s.matchAll(/\sid="([^"]+)"/g)].map((m) => m[1]);
+  for (const [, ref] of s.matchAll(/url\(#([^)]+)\)/g)) assert.ok(idler.includes(ref), ref);
 });
 
-test('catlamaSvg: son kare küçük yavru çizimiyle aynı (geçişte sıçrama yok)', () => {
-  const sahne = catlamaSvg({ renk: 2, ruh: 'mutlu' });
-  const kucuk = yavruSvg({ asama: 'kucuk', ruh: 'mutlu', renk: 2 });
-  const govde = kucuk.match(/<g class="yv-beden">([\s\S]*)<\/g><\/svg>$/)[1];
-  const kabukBas = govde.indexOf('<path class="yv-kabuk"');
+test('catlamaSvg: son kare küçük bebek çizimiyle aynı (geçişte sıçrama yok)', () => {
+  const sahne = catlamaSvg({ renk: 2, ruh: 'mutlu', kimlik: 'c' });
+  const kucuk = yavruSvg({ asama: 'kucuk', ruh: 'mutlu', renk: 2, kimlik: 'c' });
+  const govde = kucuk.match(/<g class="yvb-beden">([\s\S]*)<\/g><\/svg>$/)[1];
+  const kabukBas = govde.indexOf('<g class="yvb-kabuk">');
   assert.ok(kabukBas > 0);
-  assert.ok(sahne.includes(govde.slice(0, kabukBas)), 'yavru gövdesi ve yüzü aynı');
-  assert.ok(sahne.includes(govde.slice(kabukBas)), 'alt kabuk aynı');
-  assert.ok(sahne.includes('<ellipse class="yv-zemin" cx="100" cy="182" rx="48" ry="6.5"/>'), 'zemin aynı');
+  assert.ok(sahne.includes(govde.slice(0, kabukBas)), 'bebek gövdesi ve yüzü aynı');
+  const kabuk = govde.slice(kabukBas).match(/^<g class="yvb-kabuk">([\s\S]*?)<\/g>/)[1];
+  assert.ok(sahne.includes(`<g class="yv-cs-alt">${kabuk}</g>`), 'alt kabuk aynı');
+  assert.ok(sahne.includes(kucuk.match(/<defs>[\s\S]*<\/defs>/)[0]), 'gradyanlar aynı');
+  assert.ok(sahne.includes('<ellipse class="yvb-zemin" cx="100" cy="182" rx="48" ry="6.5"/>'), 'zemin aynı');
 });
 
 test('CIZIM_CSS: sahne katmanı, hareket yalnız no-preference altında', () => {

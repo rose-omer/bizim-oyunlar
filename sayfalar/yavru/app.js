@@ -1,6 +1,7 @@
 // Yavrumuz: çiftin birlikte baktığı sanal yavru (yumurta → küçük → büyük).
-// Saf mantık mantik.js'te, SVG çizimi cizim.js'te (ana sayfa kartı da kullanır).
-// Kişilik kisilik.js, keyifsizlik ve ilaç saglik.js, günlük ortak görev gorev.js (hepsi saf).
+// Saf mantık mantik.js'te, SVG çizimi cizim.js'te (yumurta) ve bebek.js'te (küçük, büyük); ana sayfa kartı da kullanır.
+// Kişilik kisilik.js, keyifsizlik ve ilaç saglik.js, günlük ortak görev gorev.js, tuvalet tuvalet.js, jeton jeton.js,
+// dokunma tepkileri dokunma.js (hepsi saf). Dokunma tepkisi geçici görsel durumdur, belgeye yazılmaz.
 // Veri: 'yavru' türünde tek belge 'bizim' (alan düzeyinde yama), bakım günlüğü 'yavrubakim' (son 50: günlük görev sayımı; liste son 10).
 import { bootPage } from '../../js/core/sayfa.js';
 import { openCollection } from '../../js/core/veri.js';
@@ -16,11 +17,15 @@ import * as S from './saglik.js';
 import * as G from './gorev.js';
 import { KISILIKLER, favoriBonus } from './kisilik.js';
 import { toDay } from '../../js/core/gunler.js';
+import * as T from './tuvalet.js';
+import * as D from './dokunma.js';
+import { jetonBakiye, URUNLER } from './jeton.js';
 import { yavruSvg, catlamaSvg, CIZIM_CSS } from './cizim.js';
+import { BEBEK_CSS } from './bebek.js';
 
 const { room, roomId, me } = await bootPage({ ns: 'yavru', title: 'Yavrumuz', tab: 'daha' });
 const app = document.getElementById('app');
-document.head.append(h('style', { id: 'yv-cizim-stil' }, CIZIM_CSS));
+document.head.append(h('style', { id: 'yv-cizim-stil' }, CIZIM_CSS + BEBEK_CSS));
 app.replaceChildren(h('div', { class: 'yv' }, h('p', { class: 'yv-yukleniyor muted', role: 'status' }, 'Yavrunuz geliyor…')));
 
 const [col, bakim, profil] = await Promise.all([
@@ -33,7 +38,7 @@ const azHareket = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 const bekle = (ms) => new Promise((r) => setTimeout(r, ms));
 const YEMEK = ['mama', 'meyve', 'tatli'];
 const BAKIM = ['oyna', 'yika', 'sev', 'uyut'];
-const tanim = (eylem) => (eylem === 'ilac' ? S.ILAC : M.EYLEMLER[eylem]);
+const tanim = (eylem) => (eylem === 'ilac' ? S.ILAC : eylem === 'lazimlik' ? T.LAZIMLIK : M.EYLEMLER[eylem]);
 /** Puan: keyifsizken yarım puan olabilir ("12,5"). */
 const puanMetni = (n) => n.toLocaleString('tr-TR', { maximumFractionDigits: 1 });
 const ASAMA_ADI = { yumurta: 'Yumurta', kucuk: 'Küçük', buyuk: 'Büyük' };
@@ -45,6 +50,7 @@ const IHTIYAC_IKON = {
   temizlik: `<svg ${IKON}><path d="M12 3.6s-5.6 6.2-5.6 10.1a5.6 5.6 0 0 0 11.2 0c0-3.9-5.6-10.1-5.6-10.1z"/><path d="M9.6 14.4a2.6 2.6 0 0 0 2.2 2.2"/></svg>`,
   enerji: `<svg ${IKON}><path d="M13.2 3 5.6 13.4h6.1l-1 7.6 7.7-10.6h-6.2z"/></svg>`,
 };
+const TUVALET_IKON = `<svg ${IKON}><path d="M7 4.5h6.5v6"/><path d="M4.5 10.5h15a7 7 0 0 1-6.2 6.9l.7 3.1H9.5l.7-3.1a7 7 0 0 1-5.7-6.9z"/></svg>`;
 const KALEM = `<svg ${IKON}><path d="M4.5 19.5 5.6 15 15.8 4.8a2.1 2.1 0 0 1 3 3L8.6 18l-4.1 1.5z"/><path d="m14 6.6 3 3"/></svg>`;
 const saatBicim = new Intl.DateTimeFormat('tr-TR', { hour: '2-digit', minute: '2-digit' });
 
@@ -83,15 +89,22 @@ let olayZaman = 0;
 let sonrakiZaman = 0;
 let hatKey = null;
 let partner = room.partner?.() || null;
+let kazaYazilan = null; // bu cihazın yazdığı son kaza kaydı (tuvalet.js kazaYamasi kayitId)
+let dokunGecmis = []; // son dokunuş anları (dokunma.js çok dürtme)
+let gecici = null; // dokunma tepkisi: { ruh, metin, animasyon, bitis } (belgeye yazılmaz)
+let geciciZaman = 0;
+let kisayolAnahtar = '';
 
 // ---------- İskelet ----------
 const cizimEl = h('span', { class: 'yv-cizim' });
 const dokunBtn = h('button', { type: 'button', class: 'yv-dokun', onclick: sahneDokun }, cizimEl);
+// Dokunma kısayolları: klavye ve ekran okuyucu için; görünmez, odaklanınca sahnenin üstünde görünür.
+const kisayolEl = h('div', { class: 'yv-kisayol', role: 'group', 'aria-label': 'Dokun', hidden: true });
 const parcaEl = h('div', { class: 'yv-parca', 'aria-hidden': 'true' });
 const sozEl = h('p', { class: 'yv-soz', 'aria-live': 'polite' });
 const buradaEl = h('span', { class: 'yv-burada', hidden: true });
 const sahne = h('section', { class: 'yv-sahne', 'aria-label': 'Yavrumuz' },
-  h('span', { class: 'yv-gok', 'aria-hidden': 'true' }), buradaEl, dokunBtn, parcaEl, sozEl);
+  h('span', { class: 'yv-gok', 'aria-hidden': 'true' }), buradaEl, dokunBtn, kisayolEl, parcaEl, sozEl);
 
 const adBaslik = h('h2', { class: 'yv-ad', id: 'yv-ad' });
 const adBtn = h('button', {
@@ -129,6 +142,19 @@ const ihtiyacEl = h('div', { class: 'yv-ihtiyaclar', role: 'group', 'aria-label'
     ihtiyacHucre[ad] = { el, deger, dolu, cubuk };
     return el;
   }));
+// Tuvalet: dört ihtiyaçtan ayrı satır (çubuk sıkışıklığı gösterir; dolu = çişi var).
+const tuvaletDeger = h('span', { class: 'yv-ihtiyac-deger' });
+const tuvaletDolu = h('span', { class: 'yv-cubuk-dolu' });
+const tuvaletCubuk = h('span', {
+  class: 'yv-cubuk', role: 'meter', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-labelledby': 'yv-ih-tuvalet',
+}, tuvaletDolu);
+const tuvaletEl = h('div', { class: 'yv-ihtiyac yv-tuvalet' },
+  h('div', { class: 'yv-ihtiyac-bas' },
+    h('span', { class: 'yv-ihtiyac-ikon', html: TUVALET_IKON }),
+    h('span', { class: 'yv-ihtiyac-ad', id: 'yv-ih-tuvalet' }, 'Tuvalet'),
+    tuvaletDeger),
+  tuvaletCubuk);
+ihtiyacEl.append(tuvaletEl);
 
 /** Eylem düğmesi: kalıcı öğe (odak yeniden çizimde kaybolmasın); içerik ciz() ile güncellenir. */
 function eylemDugmesi(eylem) {
@@ -138,12 +164,12 @@ function eylemDugmesi(eylem) {
   const btn = h('button', { type: 'button', class: 'yv-eylem', dataset: { eylem }, onclick: () => eylemTikla(btn.dataset.eylem) }, emoji, ad, fav);
   return { btn, emoji, ad, fav };
 }
-const dugmeler = [...YEMEK, ...BAKIM].map(eylemDugmesi);
+const dugmeler = [...YEMEK, 'lazimlik', ...BAKIM].map(eylemDugmesi);
 const ilacDugme = eylemDugmesi('ilac'); // yalnız keyifsizken görünür
 const ilacGrup = h('div', { class: 'yv-eylem-grup ilac', role: 'group', 'aria-label': 'Sağlık', hidden: true }, ilacDugme.btn);
 const eylemlerEl = h('div', { class: 'yv-eylemler' }, ilacGrup,
-  h('div', { class: 'yv-eylem-grup yemek', role: 'group', 'aria-label': 'Besle' }, dugmeler.slice(0, 3).map((d) => d.btn)),
-  h('div', { class: 'yv-eylem-grup', role: 'group', 'aria-label': 'Bakım' }, dugmeler.slice(3).map((d) => d.btn)));
+  h('div', { class: 'yv-eylem-grup', role: 'group', 'aria-label': 'Besle ve tuvalet' }, dugmeler.slice(0, 4).map((d) => d.btn)),
+  h('div', { class: 'yv-eylem-grup', role: 'group', 'aria-label': 'Bakım' }, dugmeler.slice(4).map((d) => d.btn)));
 
 const ilerlemeEl = h('p', { class: 'yv-ilerleme' });
 const isitAd = h('span', {}, 'Isıt');
@@ -174,28 +200,47 @@ app.replaceChildren(kok);
 
 // ---------- Çizim ----------
 function cizSahne() {
-  const ruh = M.ruhHali(y, simdi);
+  const gercekRuh = M.ruhHali(y, simdi);
+  // Dokunma tepkisi yalnız uyanık bebekte ve süresince (yumurtada ruhHali 'yumurta').
+  const tepkide = !!gecici && simdi < gecici.bitis && !['yumurta', 'uyuyor'].includes(gercekRuh);
+  const ruh = tepkide ? gecici.ruh : gercekRuh;
   const asama = y?.asama || 'yumurta';
   const renk = y?.renk || M.renkSec(roomId);
+  const kisilik = y?.kisilik || '';
   const hazir = asama === 'yumurta' && !!y && M.catlamaHazir(y, simdi);
-  const anahtar = `${asama}|${ruh}|${renk}|${hazir}`;
+  const anahtar = `${asama}|${ruh}|${renk}|${hazir}|${kisilik}`;
   if (anahtar !== svgAnahtar) {
     svgAnahtar = anahtar;
-    cizimEl.innerHTML = yavruSvg({ asama, ruh, renk, hazir });
+    cizimEl.innerHTML = yavruSvg({ asama, ruh, renk, hazir, kisilik });
   }
+  if (!tepkide) delete sahne.dataset.dokunma;
+  cizKisayol(gercekRuh === 'yumurta' || gercekRuh === 'uyuyor' ? '' : asama);
   kok.style.setProperty('--yv-govde', `var(--yv-r${renk})`);
   sahne.dataset.asama = asama;
   const uyuyor = ruh === 'uyuyor';
   sahne.toggleAttribute('data-gece', uyuyor);
   dokunBtn.setAttribute('aria-label', asama === 'yumurta' ? 'Yumurtayı ısıt' : `${y?.ad || 'Yavrunuzu'} sev`);
   const keyifsiz = S.keyifsizMi(y, simdi);
-  let soz = M.durumMetni(y, simdi, keyifsiz);
+  const tuvalet = T.tuvaletDurumu(y, simdi);
+  let soz = tepkide ? gecici.metin : M.durumMetni(y, simdi, keyifsiz, tuvalet);
   if (uyuyor) {
     const kalan = M.kalanMetni(Date.parse(y.uyku.bit) - simdi);
     if (kalan) soz += ` · ${kalan}`;
   }
   if (sozEl.textContent !== soz) sozEl.textContent = soz;
-  sozEl.dataset.ton = asama !== 'yumurta' && (keyifsiz || M.ozledi(y, simdi) || ['ac', 'kirli', 'uykulu', 'uzgun'].includes(ruh)) ? 'ihtiyac' : '';
+  const ihtiyac = keyifsiz || tuvalet?.cisVar || tuvalet?.yeniKaza || M.ozledi(y, simdi) || ['ac', 'kirli', 'uykulu', 'uzgun', 'aglama'].includes(ruh);
+  sozEl.dataset.ton = asama !== 'yumurta' && ihtiyac ? 'ihtiyac' : '';
+}
+
+/** Bölge kısayolları (aşama değişince yeniden kurulur). asama '' = gizli (yumurta, uyku). */
+function cizKisayol(asama) {
+  if (asama === kisayolAnahtar) return;
+  const odakIcerde = kisayolEl.contains(document.activeElement);
+  kisayolAnahtar = asama;
+  const bolgeler = D.bolgeler(asama);
+  kisayolEl.hidden = !bolgeler.length;
+  kisayolEl.replaceChildren(...bolgeler.map((b) => h('button', { type: 'button', class: 'yv-kisayol-btn', onclick: () => dokun(b) }, D.BOLGE_ADI[b])));
+  if (odakIcerde) (kisayolEl.querySelector('button') || dokunBtn).focus({ preventScroll: true });
 }
 
 function cizBilgi() {
@@ -224,7 +269,11 @@ function cizBilgi() {
     h('span', { class: 'chip yv-asama' }, ASAMA_ADI[y?.asama || 'yumurta']),
     ...(kisilik ? [h('span', { class: 'chip yv-kisilik', title: kisilik.aciklama },
       h('span', { 'aria-hidden': 'true' }, kisilik.emoji), kisilik.ad,
-      h('span', { class: 'sr-only' }, `: ${kisilik.aciklama}`))] : []));
+      h('span', { class: 'sr-only' }, `: ${kisilik.aciklama}`))] : []),
+    // Ortak jeton bakiyesi (mağaza sonra); eşzamanlı harcamada kısa süre eksi olabilir, 0 gösterilir.
+    ...(y ? [h('span', { class: 'chip yv-jeton', title: 'Ortak jeton' },
+      h('span', { 'aria-hidden': 'true' }, '🪙'), h('span', { class: 'sr-only' }, 'Ortak jeton: '),
+      String(Math.max(0, jetonBakiye(y))))] : []));
 
   let buyume = '';
   if (y?.asama === 'kucuk') {
@@ -258,6 +307,14 @@ function cizIhtiyac() {
     c.cubuk.setAttribute('aria-valuetext', `${v}${v < M.DUSUK ? ', az' : ''}`);
     c.el.toggleAttribute('data-dusuk', v < M.DUSUK);
   }
+  const t = T.tuvaletDurumu(y, simdi);
+  const v = Math.round(t.deger);
+  const metin = t.cisVar ? (t.kalan ? `Çişi var · ${M.kalanMetni(t.kalan)}` : 'Çişi var') : 'Rahat';
+  tuvaletDeger.textContent = metin;
+  tuvaletDolu.style.width = `${v}%`;
+  tuvaletCubuk.setAttribute('aria-valuenow', String(v));
+  tuvaletCubuk.setAttribute('aria-valuetext', t.cisVar ? `Çişi var${t.kalan ? `, ${M.kalanMetni(t.kalan)} içinde lazımlığa` : ''}` : 'Rahat');
+  tuvaletEl.toggleAttribute('data-dusuk', t.cisVar);
 }
 
 function cizPanel() {
@@ -292,7 +349,8 @@ function cizPanel() {
     const e = tanim(eylem);
     d.btn.dataset.eylem = eylem;
     d.emoji.textContent = e.emoji;
-    const kalan = eylem === 'ilac' ? S.ilacKalan(y, me.clientId, simdi) : M.kalanBekleme(y, me.clientId, eylem, simdi);
+    const kalan = eylem === 'ilac' ? S.ilacKalan(y, me.clientId, simdi)
+      : eylem === 'lazimlik' ? T.lazimlikKalan(y, me.clientId, simdi) : M.kalanBekleme(y, me.clientId, eylem, simdi);
     const kapali = uyuyor && eylem !== 'sev' && eylem !== 'uyandir';
     const favori = favoriBonus(y.kisilik, eylem) > 0;
     const ad = favori ? `${e.ad} (en sevdiği)` : e.ad;
@@ -326,7 +384,9 @@ function cizBakimlar() {
     const gun = formatDay(t, bugun);
     const zaman = Number.isNaN(t.getTime()) ? '' : `${gun === 'bugün' ? '' : `${gun} `}${saatBicim.format(t)}`;
     return h('li', { class: 'yv-bakim', dataset: { ben: String(kim === me.clientId) } },
-      h('span', { class: 'yv-bakim-metin' }, M.bakimSatiri({ eylem, ad: kim === me.clientId ? 'Sen' : kisiAdi(kim), deger })),
+      h('span', { class: 'yv-bakim-metin' }, M.bakimSatiri({
+        eylem, ad: kim === me.clientId ? 'Sen' : kisiAdi(kim), deger, urun: eylem === 'satinal' && Object.hasOwn(URUNLER, deger ?? '') ? URUNLER[deger] : null,
+      })),
       h('time', { class: 'yv-bakim-zaman', datetime: at || '' }, zaman));
   }));
   bakimListe.hidden = !docs.length;
@@ -416,6 +476,23 @@ function ciz() {
   gecisler();
   hatirlaticiPlanla();
   zamanla();
+  kazaYaz();
+}
+
+/**
+ * Olmuş kazayı belgeye yazar (açılışta ve her çizimde). Yama mutlak, kayıt id'si 'kaza-<ms>': iki cihaz
+ * aynı anda yazsa da kaza bir kez uygulanır, günlükte tek satır kalır. Sonda: iyimser yazım yeniden çizdirir.
+ */
+function kazaYaz() {
+  if (!y || y.asama === 'yumurta') return;
+  const r = T.kazaYamasi(y, { kim: me.clientId, simdi });
+  if (!r || r.kayitId === kazaYazilan) return;
+  kazaYazilan = r.kayitId;
+  col.patch(M.BELGE_ID, r.yama).catch((e) => {
+    kazaYazilan = null;
+    console.warn('[yavru] kaza yazılamadı', e);
+  });
+  bakim.put(r.kayit, r.kayitId).catch(() => {});
 }
 
 /** Sonraki yeniden hesap: en geç 1 dk; bir bekleme ya da dakika metni daha önce değişiyorsa o an. */
@@ -423,8 +500,11 @@ function zamanla() {
   clearTimeout(sonrakiZaman);
   let ms = M.DK;
   if (y && y.asama !== 'yumurta') {
-    const kalanlar = [...Object.keys(M.EYLEMLER).map((e) => M.kalanBekleme(y, me.clientId, e, simdi)), S.ilacKalan(y, me.clientId, simdi)];
+    const kalanlar = [...Object.keys(M.EYLEMLER).map((e) => M.kalanBekleme(y, me.clientId, e, simdi)), S.ilacKalan(y, me.clientId, simdi),
+      T.lazimlikKalan(y, me.clientId, simdi)];
     for (const k of kalanlar) if (k > 0) ms = Math.min(ms, k % M.DK || M.DK);
+    const kaza = T.tuvaletDurumu(y, simdi)?.kazaAn;
+    if (kaza > simdi) ms = Math.min(ms, kaza - simdi);
   } else if (y) {
     const r = M.isit(y, { kim: me.clientId, simdi });
     if (r.hata === 'erken') ms = Math.min(ms, r.kalan % M.DK || M.DK);
@@ -584,9 +664,10 @@ function isitTikla() {
 function eylemTikla(eylem) {
   if (!y || y.asama === 'yumurta') return;
   const t = Date.now();
-  const r = eylem === 'ilac'
-    ? S.ilacEylemi(y, { kim: me.clientId, simdi: t })
-    : M.eylemYap(y, { eylem, kim: me.clientId, simdi: t, puanArtis: S.puanArtisi(y, t) });
+  const puanArtis = S.puanArtisi(y, t);
+  const r = eylem === 'ilac' ? S.ilacEylemi(y, { kim: me.clientId, simdi: t })
+    : eylem === 'lazimlik' ? T.lazimlikEylemi(y, { kim: me.clientId, simdi: t, puanArtis })
+      : M.eylemYap(y, { eylem, kim: me.clientId, simdi: t, puanArtis });
   if (r.hata === 'bekle') {
     toast(`${tanim(eylem).ad} için ${M.kalanMetni(r.kalan)} bekleyelim.`);
     return;
@@ -601,24 +682,68 @@ function eylemTikla(eylem) {
     return;
   }
   if (r.hata) return;
+  // Yemek sıkışıklığı artırır; uyut/uyandır uyku aralığı değişmeden önce sabitler (tuvalet.js; yamanın arkasına).
+  const tuvaletli = YEMEK.includes(eylem) || eylem === 'uyut' || eylem === 'uyandir';
+  const yama = tuvaletli ? { ...r.yama, ...T.tuvaletYamasi(y, { simdi: t, artis: T.YEMEK_ARTIS[eylem] || 0 }) } : r.yama;
   tepki(eylem === 'ilac' ? 'dokun' : eylem);
   sfx(eylem === 'uyut' ? 'tick' : 'pop');
   titret(15);
-  yaz(r.yama, r.kayit, eylem);
+  yaz(yama, r.kayit, eylem);
   if (r.mesaj) toast(r.mesaj);
 }
 
-/** Sahneye dokunmak: yumurtayı ısıtır, yavruyu sever (beklemedeyse yalnız küçük bir kıpırdanma). */
-function sahneDokun() {
+/**
+ * Sahneye dokunmak: yumurtayı ısıtır. Uyanık bebekte dokunulan bölgeye göre tepki (dokunma.js); klavyeyle
+ * (konumsuz tık) başı okşar. Uyurken eskisi gibi sever (beklemedeyse yalnız küçük bir kıpırdanma).
+ */
+function sahneDokun(e) {
   if (!y || y.asama === 'yumurta') {
     isitTikla();
     return;
   }
-  if (M.eylemYap(y, { eylem: 'sev', kim: me.clientId, simdi: Date.now() }).hata) {
+  if (M.uyuyorMu(y.uyku, Date.now())) {
+    if (!sevDene()) tepki('dokun');
+    return;
+  }
+  const svg = cizimEl.querySelector('svg');
+  let bolge = 'bas';
+  if (e?.detail > 0 && svg) {
+    const k = svg.getBoundingClientRect();
+    bolge = D.bolgeBul(((e.clientX - k.left) / k.width) * 200, ((e.clientY - k.top) / k.height) * 200, y.asama);
+  }
+  dokun(bolge);
+}
+
+/** Sev eylemini dener (bekleme ve günlük puan sınırı eylemYap'ta). Bekliyorsa sessizce false. */
+function sevDene() {
+  if (M.eylemYap(y, { eylem: 'sev', kim: me.clientId, simdi: Date.now() }).hata) return false;
+  eylemTikla('sev');
+  return true;
+}
+
+/** Bölgeye dokunuş: geçici ifade + kısa hareket; baş ve karın sev'i de dener. Bölge yoksa küçük kıpırdanma. */
+function dokun(bolge) {
+  if (!y || y.asama === 'yumurta' || M.uyuyorMu(y.uyku, Date.now())) return;
+  const t = Date.now();
+  const r = D.tepki(bolge, dokunGecmis, t);
+  dokunGecmis = D.gecmisEkle(dokunGecmis, t);
+  if (!r) {
     tepki('dokun');
     return;
   }
-  eylemTikla('sev');
+  gecici = { ruh: r.ruh, metin: r.metin, animasyon: r.animasyon, bitis: t + r.sure };
+  clearTimeout(geciciZaman);
+  geciciZaman = setTimeout(() => {
+    gecici = null;
+    simdi = Date.now();
+    cizSahne();
+  }, r.sure);
+  delete sahne.dataset.dokunma;
+  void sahne.offsetWidth; // aynı hareketi baştan başlat
+  sahne.dataset.dokunma = r.animasyon;
+  simdi = t;
+  cizSahne();
+  if (!(r.sev && sevDene())) titret(r.ruh === 'aglama' ? [25, 60, 25] : 12);
 }
 
 async function adKaydet(e) {
@@ -725,7 +850,7 @@ function yeniBakimlar() {
     gorulenBakim.add(d.id);
     const { eylem, kim, at } = d.data || {};
     if (!kim || kim === me.clientId || Date.now() - Date.parse(at) > 2 * M.DK) continue;
-    if (eylem in M.EYLEMLER || eylem === 'isit') {
+    if (eylem in M.EYLEMLER || eylem === 'isit' || eylem === 'lazimlik') {
       tepki(eylem);
       sfx('pop');
     }

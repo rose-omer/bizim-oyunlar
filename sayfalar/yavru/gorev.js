@@ -12,7 +12,7 @@ export const GOREV_TUT = 7; // belgede tutulan gün işareti
 
 const BESLE = ['mama', 'meyve', 'tatli'];
 // Bakım sayılan eylemler (uyandır sayılmaz: uyut/uyandır döngüsüyle görev bitmesin).
-const BAKIM = [...BESLE, 'oyna', 'yika', 'sev', 'uyut'];
+const BAKIM = [...BESLE, 'oyna', 'yika', 'sev', 'uyut', 'lazimlik'];
 
 /**
  * Koşul türleri:

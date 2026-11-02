@@ -4,11 +4,13 @@
 //     ihtiyac: { tokluk|mutluluk|temizlik|enerji: { v, t } }, uyku: { bas, bit } | null,
 //     puan: { [clientId]: n }, isitma: { [clientId]: [ISO] (son 10) },
 //     son: { [clientId]: { [eylem]: ISO, sevGun?, sevPuan? } },
-//     kisilik?: kisilik.js adı (çatlarken bir kez), gorev?: { [gün]: { id, at } } (gorev.js) }
+//     kisilik?: kisilik.js adı (çatlarken bir kez), gorev?: { [gün]: { id, at } } (gorev.js),
+//     tuvalet?: { v, t, kaza? } (tuvalet.js), jeton?: { [clientId]: sayaç }, dolap?: { [ürün]: { at, kim, fiyat } } (jeton.js) }
 // Değer saklanmaz, hesaplanır: şimdiki = v − düşüş × geçen saat (uyku aralığı ayrı), 0–100 kırpılır.
 // Yazım yalnız alan düzeyinde yama (veri.js patch; anahtar en çok iki düzey: 'ihtiyac.tokluk', 'son.<clientId>').
 // Bakım günlüğü: tür 'yavrubakim', id uuid, { eylem, kim, at, deger? }.
-// Keyifsizlik saglik.js'te; o bu modülü içe alır, döngü olmasın diye burada import yok (gereken bilgi parametreyle gelir).
+// Keyifsizlik saglik.js'te, tuvalet tuvalet.js'te, jeton jeton.js'te; onlar bu modülü içe alır, döngü olmasın diye
+// burada import yok (gereken bilgi parametreyle gelir; ortak metin tanımları burada).
 import { toDay, addDays, parseDay, nextOccurrence } from '../../js/core/gunler.js';
 import { hashStr } from '../gunun-sorusu/mantik.js';
 import { kisilikSec, kisilikOku, kisilikCarpan, favoriBonus } from './kisilik.js';
@@ -56,6 +58,12 @@ export const EYLEMLER = {
 const ISIT = { emoji: '🥚', fiil: ['ısıttı', 'ısıttın'] };
 /** İlaç (saglik.js ilacEylemi). Metinler burada kullanıldığı için tanım burada; saglik.js yeniden dışa verir. */
 export const ILAC = { ad: 'İlaç', emoji: '💊', bekleme: 60 * DK, fiil: ['ilaç verdi', 'ilaç verdin'], tok: null };
+/** Lazımlık (tuvalet.js lazimlikEylemi) ve tuvalet metinleri: ILAC gibi tanım burada, tuvalet.js yeniden dışa verir. */
+export const LAZIMLIK = {
+  ad: 'Lazımlık', emoji: '🚽', bekleme: 20 * DK, fiil: ['tuvalete götürdü', 'tuvalete götürdün'], tok: 'Şu an çişi yok 😊',
+};
+export const CIS_VAR = 'Çişi var 🚽';
+export const KAZA_METNI = 'Ufak bir kaza oldu, olsun 💛';
 
 const IHTIYAC_RUH = { tokluk: 'ac', mutluluk: 'uzgun', temizlik: 'kirli', enerji: 'uykulu' };
 const DURUM = {
@@ -116,6 +124,10 @@ export function oku(data) {
     puan, isitma, son,
     kisilik: kisilikOku(d.kisilik),
     gorev: nesne(d.gorev),
+    // Ham taşınır; tuvalet.js (tuvaletOku) ve jeton.js (jetonKaydi) kendisi doğrular.
+    tuvalet: nesne(d.tuvalet),
+    jeton: nesne(d.jeton),
+    dolap: nesne(d.dolap),
   };
 }
 
@@ -189,11 +201,18 @@ export function ozledi(y, simdi) {
   return Number.isFinite(son) && simdi - son >= OZLEDI_SURE;
 }
 
-/** Kısa durum cümlesi (sahne altı ve ana sayfa kartı). y null: belge yok. keyifsiz: saglik.js keyifsizMi (uyurken değil). */
-export function durumMetni(y, simdi, keyifsiz = false) {
+/**
+ * Kısa durum cümlesi (sahne altı ve ana sayfa kartı). y null: belge yok. keyifsiz: saglik.js keyifsizMi.
+ * tuvalet: tuvalet.js tuvaletDurumu sonucu (yoksa etkisiz). Öncelik: yumurta → keyifsiz → çişi var → kaza → özledi
+ * → ruh hâli; ilk üçü yalnız uyanıkken.
+ */
+export function durumMetni(y, simdi, keyifsiz = false, tuvalet = null) {
   if (!y) return 'Bir yumurtanız var 🥚 Isıtalım mı?';
   if (y.asama === 'yumurta') return catlamaHazir(y, simdi) ? 'Çatlamaya hazır! 🐣' : 'Isıtılmayı bekliyor 🥚';
-  if (keyifsiz && !uyuyorMu(y.uyku, simdi)) return DURUM.keyifsiz;
+  const uyanik = !uyuyorMu(y.uyku, simdi);
+  if (keyifsiz && uyanik) return DURUM.keyifsiz;
+  if (tuvalet?.cisVar && uyanik) return CIS_VAR;
+  if (tuvalet?.yeniKaza && uyanik) return KAZA_METNI;
   if (ozledi(y, simdi)) return 'Sizi özledi 🥺';
   return DURUM[ruhHali(y, simdi)] || DURUM.normal;
 }
@@ -447,8 +466,8 @@ export function bildirimGerekli({ son = null, simdi, eylem = null }) {
   return !Number.isFinite(son) || simdi - son >= BILDIRIM_ARALIK;
 }
 
-/** Bildirim metni: "Gül yavrunuzu besledi 🍼". */
-export function bildirimMetni({ ad, eylem, deger = '', yavruAd = '' }) {
+/** Bildirim metni: "Gül yavrunuzu besledi 🍼". urun: satinal'da jeton.js URUNLER kaydı ({ ad, emoji }). */
+export function bildirimMetni({ ad, eylem, deger = '', yavruAd = '', urun = null }) {
   const kim = String(ad || '').trim() || 'Sevgilin';
   const e = EYLEMLER[eylem];
   switch (eylem) {
@@ -460,6 +479,9 @@ export function bildirimMetni({ ad, eylem, deger = '', yavruAd = '' }) {
     case 'uyandir': return `${kim} yavrunuzu uyandırdı ☀️`;
     case 'isit': return `${kim} yumurtanızı ısıttı 🥚`;
     case 'ilac': return `${kim} yavrunuza ${ILAC.fiil[0]} ${ILAC.emoji}`;
+    case 'lazimlik': return `${kim} yavrunuzu ${LAZIMLIK.fiil[0]} ${LAZIMLIK.emoji}`;
+    case 'kaza': return `Yavrunuzun ufak bir kazası oldu, olsun 💛`;
+    case 'satinal': return urun ? `${kim} yavrunuza ${urun.emoji} ${urun.ad} aldı` : `${kim} yavrunuza bir şey aldı 🛍️`;
     case 'catlama': return 'Yumurtanız çatladı! Yavrunuz dünyaya geldi 🐣';
     case 'buyume': return `${String(yavruAd || '').trim() || 'Yavrunuz'} büyüdü ✨`;
     case 'ad': return `${kim} yavrunuza “${deger}” adını verdi 💛`;
@@ -467,13 +489,18 @@ export function bildirimMetni({ ad, eylem, deger = '', yavruAd = '' }) {
   }
 }
 
-/** Son bakımlar satırı: "Gül besledi 🍼", "Sen yıkadın 🫧". ad === 'Sen' ise ikinci tekil. */
-export function bakimSatiri({ eylem, ad, deger = '' }) {
+/**
+ * Son bakımlar satırı: "Gül besledi 🍼", "Sen yıkadın 🫧". ad === 'Sen' ise ikinci tekil.
+ * urun: satinal'da jeton.js URUNLER kaydı ({ ad, emoji }); yoksa genel satır.
+ */
+export function bakimSatiri({ eylem, ad, deger = '', urun = null }) {
   const sen = ad === 'Sen';
   if (eylem === 'catlama') return 'Yumurta çatladı 🐣';
   if (eylem === 'buyume') return 'Yavrumuz büyüdü ✨';
   if (eylem === 'ad') return `${ad} adını “${deger}” ${sen ? 'koydun' : 'koydu'}`;
-  const e = eylem === 'isit' ? ISIT : eylem === 'ilac' ? ILAC : EYLEMLER[eylem];
+  if (eylem === 'kaza') return KAZA_METNI;
+  if (eylem === 'satinal') return urun ? `${ad} ${urun.emoji} ${urun.ad} ${sen ? 'aldın' : 'aldı'}` : `${ad} bir şey ${sen ? 'aldın' : 'aldı'} 🛍️`;
+  const e = eylem === 'isit' ? ISIT : eylem === 'ilac' ? ILAC : eylem === 'lazimlik' ? LAZIMLIK : EYLEMLER[eylem];
   if (!e) return '';
   return `${ad} ${e.fiil[sen ? 1 : 0]} ${e.emoji}`;
 }

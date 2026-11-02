@@ -163,3 +163,56 @@ test('görev: oku sonucu gorevOzeti ve odulYamasi ile çalışır; ödül iki ki
   assert.equal(gorevOzeti(sonra, { roomId: 'testpaka23', gun, kayitlar: [], kisiler: [A, B] }).odullendi, true);
   assert.equal(gorevOzeti(oku(yeniYumurta({ roomId: 'x', simdi: T0 })), { roomId: 'x', gun, kayitlar: [], kisiler: [A, B] }), null, 'yumurtada yok');
 });
+
+// ---------- Tuvalet ve jeton bağlantısı ----------
+import { LAZIMLIK, CIS_VAR, KAZA_METNI } from '../sayfalar/yavru/mantik.js';
+import * as T from '../sayfalar/yavru/tuvalet.js';
+import { jetonBakiye, URUNLER } from '../sayfalar/yavru/jeton.js';
+
+test('oku: tuvalet, jeton, dolap ham taşınır; bozuk alan {}; tuvalet.js aynı tanımları verir', () => {
+  const y = kucuk({}, { tuvalet: { v: 40, t: iso(T0) }, jeton: { [A]: { kazanc: 30, harcama: 0 } }, dolap: { fiyonk: { at: iso(T0), kim: A, fiyat: 40 } } });
+  assert.deepEqual(y.tuvalet, { v: 40, t: iso(T0) });
+  assert.equal(jetonBakiye(y), -10, 'oku sonucu jeton.js ile çalışır');
+  for (const bozuk of [null, 'x', [1]]) {
+    const z = kucuk({}, { tuvalet: bozuk, jeton: bozuk, dolap: bozuk });
+    assert.deepEqual([z.tuvalet, z.jeton, z.dolap], [{}, {}, {}]);
+  }
+  assert.equal(T.LAZIMLIK, LAZIMLIK);
+  assert.equal(T.CIS_VAR, CIS_VAR);
+  assert.equal(T.KAZA_METNI, KAZA_METNI);
+  assert.equal(T.tuvaletDurumu(kucuk(), T0).cisVar, false, 'eski belge: tuvalet yok');
+});
+
+test('durumMetni önceliği: keyifsiz → çişi var (uyanık) → kaza → özledi → ruh hâli', () => {
+  const durum = (y, simdi, keyifsiz = false) => durumMetni(y, simdi, keyifsiz, T.tuvaletDurumu(y, simdi));
+  const cis = kucuk({}, { tuvalet: { v: 80, t: iso(T0) } });
+  assert.equal(durum(cis, T0), CIS_VAR);
+  assert.equal(durum(cis, T0, true), 'Biraz keyifsiz 🤒', 'keyifsizlik önce');
+  const uyku = { bas: iso(T0), bit: iso(T0 + 8 * SAAT) };
+  assert.equal(durum(kucuk({}, { uyku, tuvalet: { v: 80, t: iso(T0) } }), T0 + SAAT), 'Mışıl mışıl uyuyor', 'uykuda çiş yazmaz');
+  // Kaza 10 dk önce oldu (yazılmış): kaza metni; bir saat geçince normal.
+  const kaza = kucuk({}, { tuvalet: { v: 0, t: iso(T0 - 10 * DK), kaza: iso(T0 - 10 * DK) } });
+  assert.equal(durum(kaza, T0), KAZA_METNI);
+  assert.equal(durum(kaza, T0 + 2 * SAAT), 'İyi görünüyor');
+  // Özledi ile çişi var: ikisi birden olunca çiş önce (özledi 12 saatte, eşik 20 saatte: 30 + 2 × 20).
+  const unutulmus = kucuk({ tokluk: 100, mutluluk: 100, temizlik: 100, enerji: 100 }, { tuvalet: { v: 30, t: iso(T0) } });
+  assert.equal(durum(unutulmus, T0 + 12.5 * SAAT), 'Sizi özledi 🥺');
+  assert.equal(durum(unutulmus, T0 + 20.5 * SAAT), CIS_VAR);
+  assert.equal(durumMetni(cis, T0), 'İyi görünüyor', 'tuvalet parametresi yoksa eski davranış');
+});
+
+test('yemek yaması tuvaletYamasi ile birleşir; lazımlık bakım satırı, bildirim; kaza ve satın alma satırı', () => {
+  const y = kucuk({ tokluk: 40 }, { tuvalet: { v: 10, t: iso(T0) } });
+  const r = eylemYap(y, { eylem: 'mama', kim: A, simdi: T0 + SAAT });
+  const z = oku(applyPatch(y, { ...r.yama, ...T.tuvaletYamasi(y, { simdi: T0 + SAAT, artis: T.YEMEK_ARTIS.mama }) }));
+  assert.equal(z.tuvalet.v, 32, '10 + 2 (1 saat) + 20');
+  assert.equal(z.ihtiyac.tokluk.v, 66);
+  assert.equal(bakimSatiri({ eylem: 'lazimlik', ad: 'Gül' }), 'Gül tuvalete götürdü 🚽');
+  assert.equal(bakimSatiri({ eylem: 'lazimlik', ad: 'Sen' }), 'Sen tuvalete götürdün 🚽');
+  assert.equal(bildirimMetni({ ad: 'Gül', eylem: 'lazimlik' }), 'Gül yavrunuzu tuvalete götürdü 🚽');
+  assert.equal(bakimSatiri({ eylem: 'kaza', ad: 'Gül' }), KAZA_METNI);
+  assert.ok(bildirimMetni({ ad: 'Gül', eylem: 'kaza' }));
+  assert.equal(bakimSatiri({ eylem: 'satinal', ad: 'Sen', deger: 'cilek', urun: URUNLER.cilek }), 'Sen 🍓 Çilek aldın');
+  assert.equal(bakimSatiri({ eylem: 'satinal', ad: 'Gül', deger: 'x' }), 'Gül bir şey aldı 🛍️');
+  assert.equal(bildirimMetni({ ad: 'Gül', eylem: 'satinal', urun: URUNLER.tac }), 'Gül yavrunuza 👑 Taç aldı');
+});

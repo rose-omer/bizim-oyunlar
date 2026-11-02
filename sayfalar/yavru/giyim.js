@@ -1,26 +1,30 @@
 // Yavrumuz: giydirme (saf mantık, DOM yok, Node'da test edilir).
-// Belgede: giyim: { bas?, goz?, boyun? } = ürün id | yok. Yama alan düzeyinde: 'giyim.<yuva>' (çıkarınca null).
-// Yalnız dolapta olan kıyafet giyilir (dolap: jeton.js). Dolapta olmayan ya da yuvasına uymayan değer okunurken
-// yok sayılır. Baş yuvası boşsa çizim varsayılan pembe fiyonku (saç bandı) gösterir (bebek.js).
+// Belgede: giyim: { bas?, goz?, boyun?, govde?, agiz?, kucak? } = ürün id | yok. Yama alan düzeyinde: 'giyim.<yuva>'
+// (çıkarınca null). Yalnız dolapta olan kıyafet giyilir (dolap: jeton.js). Dolapta olmayan ya da yuvasına uymayan değer
+// okunurken yok sayılır. Baş yuvası boşsa çizim varsayılan pembe fiyonku, gövde yuvası boşsa benekli tulumu gösterir (bebek.js).
+// Satın alınan kıyafet hemen giyilir: satinAlGiyYamasi tek yama (dolap + giyim) döndürür.
 // y: mantik.js oku() sonucu + ham 'giyim' alanı, ya da ham belge verisi.
-import { URUNLER, dolaptaMi } from './jeton.js';
+import { URUNLER, dolaptaMi, satinAl } from './jeton.js';
 
 /** yuva → giyilebilen ürün id'leri. */
 export const YUVALAR = Object.freeze({
   bas: Object.freeze(['fiyonk', 'tac', 'sapka']),
   goz: Object.freeze(['gozluk']),
   boyun: Object.freeze(['atki']),
+  govde: Object.freeze(['pijama', 'ayicik', 'elbise']),
+  agiz: Object.freeze(['emzik']),
+  kucak: Object.freeze(['battaniye']),
 });
 
 const nesne = (x) => (x && typeof x === 'object' && !Array.isArray(x) ? x : {});
 
-/** Ürünün yuvası ('bas'|'goz'|'boyun') ya da null (yiyecek, bilinmeyen). */
+/** Ürünün yuvası ('bas'|'goz'|'boyun'|'govde'|'agiz'|'kucak') ya da null (yiyecek, bilinmeyen). */
 export function yuvaBul(urun) {
   for (const [yuva, liste] of Object.entries(YUVALAR)) if (liste.includes(urun)) return yuva;
   return null;
 }
 
-/** Geçerli giyim: { bas, goz, boyun } (her biri ürün id | null). */
+/** Geçerli giyim: { bas, goz, boyun, govde, agiz, kucak } (her biri ürün id | null). */
 export function giyimOku(y) {
   const g = nesne(y?.giyim);
   const sonuc = {};
@@ -43,4 +47,15 @@ export function giyYamasi(y, { urun } = {}) {
 export function cikarYamasi(y, { yuva } = {}) {
   if (!Object.hasOwn(YUVALAR, yuva ?? '')) return { hata: 'bilinmiyor' };
   return { yama: { [`giyim.${yuva}`]: null } };
+}
+
+/**
+ * Kıyafeti satın al ve hemen giy (tek yazım). -> satinAl hatası | { yama, kayit }
+ * yama = satinAl yaması ('dolap.<id>') + 'giyim.<yuva>': urun. Yiyecekte satinAl sonucu aynen döner.
+ */
+export function satinAlGiyYamasi(y, { kim, urun, simdi }) {
+  const r = satinAl(y, { kim, urun, simdi });
+  const yuva = r.hata ? null : yuvaBul(urun);
+  if (!yuva) return r;
+  return { yama: { ...r.yama, [`giyim.${yuva}`]: urun }, kayit: r.kayit };
 }

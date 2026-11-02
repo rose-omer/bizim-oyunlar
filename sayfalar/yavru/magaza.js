@@ -1,8 +1,8 @@
-// Yavrumuz: mağaza (alt sayfa). Yiyecek al, kıyafet al, giy ve çıkar; giyimde canlı önizleme.
+// Yavrumuz: mağaza (alt sayfa). Yiyecek al, kıyafet al (alınca hemen giyilir), giy ve çıkar; giyimde canlı önizleme.
 // Kural ve yama jeton.js (satinAl) ile giyim.js'ten gelir; yazımı çağıran yapar (yaz). Stil MAGAZA_CSS (ilk açılışta
 // <head>'e bir kez eklenir; bebek stili yoksa o da eklenir). Üst düzeyde DOM yok: saf yardımcılar Node'da test edilir.
 import { URUNLER, satinAl, jetonBakiye, dolaptaMi } from './jeton.js';
-import { giyimOku, giyYamasi, cikarYamasi, yuvaBul } from './giyim.js';
+import { giyimOku, giyYamasi, cikarYamasi, yuvaBul, satinAlGiyYamasi } from './giyim.js';
 import { bebekSvg, giyimParcaSvg, BEBEK_CSS } from './bebek.js';
 import { CIZIM_CSS } from './cizim.js';
 
@@ -243,8 +243,8 @@ export function magazaAc(kok, { veri, kim, simdi = () => Date.now(), yaz, bebekO
     const adlar = Object.values(giyili).filter(Boolean).map((id) => URUNLER[id].ad);
     onizMetin.textContent = denenen && giyili[yuvaBul(denenen)] !== denenen
       ? `${URUNLER[denenen].ad} deneniyor`
-      : adlar.length ? `Üstünde: ${adlar.join(', ')}` : 'Bir aksesuar seç, üstünde dene';
-    onizNot.textContent = asama === 'kucuk' ? 'Kundaktayken yalnız başlık görünür; gözlük ve atkı büyüyünce.' : '';
+      : adlar.length ? `Üstünde: ${adlar.join(', ')}` : 'Bir kıyafet seç, üstünde dene';
+    onizNot.textContent = asama === 'kucuk' ? 'Kundaktayken yalnız başlık görünür; kıyafet, gözlük, atkı, emzik ve battaniye büyüyünce.' : '';
   }
 
   async function eylemYap(id) {
@@ -264,10 +264,11 @@ export function magazaAc(kok, { veri, kim, simdi = () => Date.now(), yaz, bebekO
       basari = `${u.ad} çok yakıştı ✨`;
       denenen = null;
     } else {
-      r = satinAl(v, { kim, urun: id, simdi: t });
+      // Kıyafet: satın alma ve giyme tek yazım (dolap + giyim yaması birlikte).
+      r = u.tur === 'kiyafet' ? satinAlGiyYamasi(v, { kim, urun: id, simdi: t }) : satinAl(v, { kim, urun: id, simdi: t });
       kayit = r.kayit || null;
-      basari = u.tur === 'kiyafet' ? `${u.emoji} ${u.ad} dolaba girdi. Hemen giydirelim mi?` : `${u.emoji} Afiyet olsun!`;
-      if (u.tur === 'kiyafet') denenen = id;
+      basari = u.tur === 'kiyafet' ? `${u.emoji} ${u.ad} alındı ve giyildi ✨` : `${u.emoji} Afiyet olsun!`;
+      if (u.tur === 'kiyafet') denenen = null;
     }
     if (r.hata) { mesaj(hataMetni(r), 'hata'); return; }
     mesgul = true;
@@ -364,7 +365,7 @@ export const MAGAZA_CSS = `
 }
 .yvm-emoji { font-size: 2.75rem; line-height: 1; }
 .yvm-dene { width: 100%; padding: 12px 16px; border: 2px solid transparent; cursor: pointer; color: inherit; font: inherit; }
-.yvm-dene svg { width: 100%; height: 100%; }
+.yvm-dene svg { width: 100%; height: 60px; } /* kare parçalar (emzik) kutudan taşmasın */
 .yvm-dene[aria-pressed='true'] { border-color: var(--accent); background: var(--accent-soft); }
 .yvm-rozet {
   position: absolute; top: 16px; right: 16px; padding: 2px 8px; border-radius: var(--radius-pill);

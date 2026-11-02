@@ -115,7 +115,9 @@ test('giyim: her yuva ürünü kendi <g class="yvb-giyim"> katmanında; baş dol
   for (const [yuva, liste] of Object.entries(YUVALAR)) {
     for (const id of liste) {
       const s = bebekSvg({ asama: 'buyuk', kimlik: 'g', giyim: { [yuva]: id } });
-      assert.match(s, new RegExp(`<g class="yvb-giyim yvb-giyim-${yuva}" data-urun="${id}"`), `${yuva}/${id}`);
+      // Gövde yuvası kıyafet katmanında (.yvb-kiyafet), diğerleri aksesuar katmanında (.yvb-giyim).
+      const sinif = yuva === 'govde' ? 'yvb-kiyafet yvb-kiyafet-govde' : `yvb-giyim yvb-giyim-${yuva}`;
+      assert.match(s, new RegExp(`<g class="${sinif}" data-urun="${id}"`), `${yuva}/${id}`);
       assert.ok(dengeli(s), `${id}: etiketler dengeli`);
       assert.doesNotMatch(s, /undefined|NaN/, id);
       assert.equal(/yvb-aksesuar/.test(s), yuva !== 'bas', `${id}: varsayılan fiyonk yalnız baş boşken`);
@@ -180,4 +182,99 @@ test('giyimParcaSvg: her kıyafet için tek parça (kart önizlemesi); bilinmeye
   assert.equal(giyimParcaSvg('__proto__'), '');
   assert.equal(giyimParcaSvg(), '');
   assert.match(giyimParcaSvg('tac', { renk: 9 }), /--yv-r1\)/);
+});
+
+// ---------- Kıyafet (gövde yuvası), emzik, battaniye ----------
+const KIYAFET_HEPSI = { ...HEPSI, govde: 'elbise', agiz: 'emzik', kucak: 'battaniye' };
+
+test('giyim: küçükte (kundak) gövde ve kucak yok; ağız yuvası yok sayılır (emzik zaten var)', () => {
+  for (const ruh of BEBEK_RUHLARI) {
+    assert.equal(bebekSvg({ asama: 'kucuk', ruh, kimlik: 'k', giyim: { govde: 'elbise', agiz: 'emzik', kucak: 'battaniye' } }), bebekSvg({ asama: 'kucuk', ruh, kimlik: 'k' }), ruh);
+  }
+});
+
+test('kıyafet: gövde boşsa bugünkü benekli tulum; dolu ise kıyafet ve tulum benekleri yok', () => {
+  const v = bebekSvg({ asama: 'buyuk', kimlik: 't' });
+  assert.match(v, /<g class="yvb-kiyafet yvb-kiyafet-govde"><path class="yvb-kumas" fill="url\(#t-kumas\)"/);
+  assert.match(v, /fill="url\(#t-benek\)"/, 'tulum benekli');
+  assert.doesNotMatch(v, /yvb-kiyafet-bacak|data-urun/);
+  assert.equal(bebekSvg({ asama: 'buyuk', kimlik: 't', giyim: { govde: 'tulum' } }), v, 'tulum ürün değil; yok sayılır');
+  const ciktilar = new Set([v]);
+  for (const id of YUVALAR.govde) {
+    const s = bebekSvg({ asama: 'buyuk', kimlik: 't', giyim: { govde: id } });
+    ciktilar.add(s);
+    assert.doesNotMatch(s, /url\(#t-benek\)/, `${id}: tulum beneği yok`);
+    assert.match(s, new RegExp(`<g class="yvb-kiyafet yvb-kiyafet-kol" data-urun="${id}"`), id);
+    assert.ok(dengeli(s), id);
+    assert.doesNotMatch(s, /undefined|NaN/, id);
+    assert.match(s, /class="yvb-kumas" fill="url\(#t-kumas\)"/, `${id}: renk --yv-govde kumaşından`);
+  }
+  assert.equal(ciktilar.size, YUVALAR.govde.length + 1, 'her kıyafet ayrı çizim');
+  // Etek ve paça bacakların üstünde, ayakların altında.
+  for (const id of ['elbise', 'pijama']) {
+    const s = bebekSvg({ asama: 'buyuk', kimlik: 't', giyim: { govde: id } });
+    const i = (x) => s.indexOf(x);
+    assert.ok(i('<g class="yvb-bacak">') < i('yvb-kiyafet-bacak') && i('yvb-kiyafet-bacak') < i('<g class="yvb-ayak"'), id);
+  }
+  assert.ok((bebekSvg({ asama: 'buyuk', giyim: { govde: 'elbise' } }).match(/class="yvb-etek-fisto"/g) || []).length >= 3, 'kat kat fistolu etek');
+});
+
+test('kıyafet: banyo gizlemesi için yeni katmanlar .yvb-kiyafet ya da .yvb-giyim altında; id benzersiz', () => {
+  const s = bebekSvg({ asama: 'buyuk', kimlik: 'b', giyim: KIYAFET_HEPSI });
+  for (const x of ['yvb-kiyafet yvb-kiyafet-govde', 'yvb-kiyafet yvb-kiyafet-bacak', 'yvb-kiyafet yvb-kiyafet-kol',
+    'yvb-giyim yvb-giyim-agiz', 'yvb-giyim yvb-giyim-kucak']) {
+    assert.match(s, new RegExp(`<g class="${x}"`), x);
+  }
+  // Yeni süs sınıfları yalnız bu katmanların içinde.
+  for (const [sinif, kap] of [['yvb-etek-fisto', 'yvb-kiyafet-bacak'], ['yvb-g-battaniye', 'yvb-giyim-kucak'], ['yvb-emzik-kalkan', 'yvb-giyim-agiz']]) {
+    const bas = s.indexOf(`${kap}"`);
+    assert.ok(bas > 0 && s.indexOf(sinif) > bas, sinif);
+  }
+  assert.ok(dengeli(s));
+  const ids = idler(s);
+  assert.equal(new Set(ids).size, ids.length, 'id tekrar yok');
+  for (const [, ref] of s.matchAll(/url\(#([^)]+)\)/g)) assert.ok(ids.includes(ref), ref);
+  const b = bebekSvg({ asama: 'buyuk', giyim: KIYAFET_HEPSI });
+  const c = bebekSvg({ asama: 'buyuk', giyim: KIYAFET_HEPSI });
+  assert.equal(idler(b).filter((x) => idler(c).includes(x)).length, 0, 'iki kıyafetli SVG ortak id taşımaz');
+});
+
+test('emzik: ağzın üstünde; ağlama ve kahkahada çıkar (ağız görünür); konuşmada CSS gizler', () => {
+  const ag = (x) => x.slice(x.indexOf('<g class="yvb-agiz">'), x.indexOf('</g>', x.indexOf('<g class="yvb-agiz">')));
+  for (const ruh of BEBEK_RUHLARI) {
+    const s = bebekSvg({ asama: 'buyuk', ruh, kimlik: 'e', giyim: { agiz: 'emzik' } });
+    const yok = bebekSvg({ asama: 'buyuk', ruh, kimlik: 'e' });
+    if (['aglama', 'kahkaha'].includes(ruh)) {
+      assert.equal(s, yok, `${ruh}: emzik yok, çizim aynı`);
+    } else {
+      assert.match(s, /<g class="yvb-giyim yvb-giyim-agiz" data-urun="emzik" transform="translate\(100 102\)"><g class="yvb-emzik">/, ruh);
+      assert.match(ag(s), /M-3\.5 27 Q0 29 3\.5 27/, `${ruh}: ağız emziğin altında minik`);
+      assert.ok(s.indexOf('yvb-giyim-agiz') > s.indexOf('<g class="yvb-yuz"'), `${ruh}: emzik yüzün önünde`);
+    }
+  }
+  assert.match(BEBEK_CSS, /\[data-konusuyor\] \.yvb-emzik \{ display: none; \}/);
+  assert.match(ag(bebekSvg({ asama: 'buyuk', ruh: 'mutlu', kimlik: 'e' })), /yvb-agiz-ic/, 'emziksiz mutlu ağız açık');
+});
+
+test('battaniye: elin altında (bacaklardan sonra, kol katmanından önce)', () => {
+  const s = bebekSvg({ asama: 'buyuk', kimlik: 'b', giyim: { kucak: 'battaniye' } });
+  const i = (x) => s.indexOf(x);
+  assert.ok(i('<g class="yvb-bacak">') < i('yvb-giyim-kucak') && i('yvb-giyim-kucak') < i('<g class="yvb-kol">'));
+});
+
+test('kucukBoy: büyükte el ve ayak parmaksız; baş, yüz, kıyafet aynı; yavruSvg geçirir', () => {
+  const normal = bebekSvg({ asama: 'buyuk', kimlik: 'kb', giyim: KIYAFET_HEPSI });
+  const kucuk = bebekSvg({ asama: 'buyuk', kimlik: 'kb', giyim: KIYAFET_HEPSI, kucukBoy: true });
+  assert.match(normal, /yvb-parmak/);
+  assert.doesNotMatch(kucuk, /yvb-parmak/, 'el parmaksız');
+  assert.equal((kucuk.match(/<g class="yvb-el"/g) || []).length, 2);
+  assert.equal((kucuk.match(/<circle class="yvb-ten"/g) || []).length, 0, 'ayak parmağı yok');
+  const bas = (x) => x.slice(x.indexOf('<g class="yvb-bas">'));
+  assert.equal(bas(kucuk), bas(normal), 'baş, yüz ve aksesuarlar aynı');
+  const ust = (x) => x.slice(0, x.indexOf('<g class="yvb-bacak">'));
+  assert.equal(ust(kucuk), ust(normal), 'gövde ve kıyafet aynı');
+  assert.ok(dengeli(kucuk));
+  assert.equal(bebekSvg({ asama: 'kucuk', kimlik: 'kb', kucukBoy: true }), bebekSvg({ asama: 'kucuk', kimlik: 'kb' }), 'kundakta el yok; aynı');
+  assert.equal(bebekSvg({ kimlik: 'kb', kucukBoy: 'evet' }), bebekSvg({ kimlik: 'kb' }), 'yalnız true');
+  assert.equal(yavruSvg({ asama: 'buyuk', kimlik: 'kb', kucukBoy: true }), bebekSvg({ asama: 'buyuk', kimlik: 'kb', kucukBoy: true }));
 });

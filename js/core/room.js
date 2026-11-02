@@ -4,6 +4,8 @@
 // Presence yükü: { clientId, name, page: ns, host, gorunur }. host = oyun sayfasının ev sahibi (URL'deki host);
 // lobide ya da URL'de yoksa null. Lobi, partnerin oyununa doğru ev sahibiyle katılmak için kullanır.
 // gorunur = sekme öndeyse true (document.visibilityState). Eski istemcide alan yoksa true sayılır.
+// alan (isteğe bağlı) = sayfa içi yer (ör. Yavrumuz'da oda); room.setAlan(metin|null) ile yayılır. Boşsa yükte yok;
+// partner nesnesinde de yalnız doluysa bulunur (eski istemci alanı bilmez, görmezden gelir).
 // Cihaz üyeliği (TALIMAT §5.3): Supabase konusu 'oda:' + kanal (uyelik.js). Onaysız cihaz kanala katılmaz;
 // kanal değişince (bir cihaz çıkarıldı) yenisine geçer. Yerel modda BroadcastChannel adı değişmez.
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../config.js';
@@ -31,15 +33,23 @@ export function pickPartner(state, myClientId) {
       page: String(meta.page || ''),
       host: meta.host ? String(meta.host) : null,
       gorunur: meta.gorunur !== false,
+      ...alanAl(meta.alan),
     };
   }
   return null;
 }
 
+export const ALAN_MAX = 40;
+/** Presence alanı: boş olmayan kısa metin → { alan }, değilse {} (yükte ve partnerde alan hiç olmaz). */
+export function alanAl(v) {
+  const s = typeof v === 'string' ? v.trim().slice(0, ALAN_MAX) : '';
+  return s ? { alan: s } : {};
+}
+
 export function samePartner(a, b) {
   if (!a || !b) return a === b;
   return a.clientId === b.clientId && a.name === b.name && a.page === b.page && a.host === b.host
-    && a.gorunur === b.gorunur;
+    && a.gorunur === b.gorunur && (a.alan ?? null) === (b.alan ?? null);
 }
 
 /**
@@ -79,13 +89,14 @@ export function applyLocalPresence(peers, d, myClientId, now) {
     page: String(d.page || ''),
     host: d.host ? String(d.host) : null,
     gorunur: d.gorunur !== false,
+    ...alanAl(d.alan),
     inst: String(d.inst || ''),
     seen: now,
   };
   peers.set(d.clientId, next);
   const isNew = !prev || prev.inst !== next.inst;
   const changed = isNew || prev.name !== next.name || prev.page !== next.page || prev.host !== next.host
-    || prev.gorunur !== next.gorunur;
+    || prev.gorunur !== next.gorunur || (prev.alan ?? null) !== (next.alan ?? null);
   return { changed, reply: isNew };
 }
 
@@ -133,6 +144,8 @@ function createBase({ roomId, ns, me, backend }) {
     send: () => false,
     sendAll: () => false,
     partner: () => partner,
+    /** Sayfa içi yer (ör. oda id'si) presence ile yayılır; null siler. Yalnız oda: etkisiz. */
+    setAlan: () => {},
     leave: () => {},
     /** 'message' | 'presence' | 'status'. presence ve status hemen bir kez çağrılır. → abonelikten çık */
     on(event, fn) {
@@ -212,7 +225,8 @@ export function openLocalRoom({ roomId, ns, me, host = null, heartbeatMs = 3000,
       return false;
     }
   };
-  const hello = () => post({ _p: 'here', clientId: me.clientId, name: me.name, page: ns, host: host || null, gorunur: visible(), inst });
+  let alan = {};
+  const hello = () => post({ _p: 'here', clientId: me.clientId, name: me.name, page: ns, host: host || null, gorunur: visible(), ...alan, inst });
   const bye = () => post({ _p: 'bye', clientId: me.clientId, inst });
   const recompute = () => {
     const state = Object.fromEntries([...peers].map(([id, p]) => [id, [p]]));
@@ -260,6 +274,12 @@ export function openLocalRoom({ roomId, ns, me, host = null, heartbeatMs = 3000,
 
   room.send = (m) => sendEnv(ns, m);
   room.sendAll = (m) => sendEnv('*', m);
+  room.setAlan = (v) => {
+    const yeni = alanAl(v);
+    if (yeni.alan === alan.alan) return;
+    alan = yeni;
+    hello();
+  };
   room.leave = () => {
     if (left) return;
     bye();
@@ -356,7 +376,8 @@ export function openSupabaseRoom({ roomId, ns, me, host = null, getClient = getS
   const updatePresence = () => {
     base.setPartner(joined && ch ? pickPartner(ch.presenceState(), me.clientId) : null);
   };
-  const payload = () => ({ clientId: me.clientId, name: me.name, page: ns, host: host || null, gorunur: visible() });
+  let alan = {};
+  const payload = () => ({ clientId: me.clientId, name: me.name, page: ns, host: host || null, gorunur: visible(), ...alan });
   const track = () => {
     if (!joined || !ch) return;
     try {
@@ -538,6 +559,12 @@ export function openSupabaseRoom({ roomId, ns, me, host = null, getClient = getS
 
   room.send = (m) => sendEnv(ns, m);
   room.sendAll = (m) => sendEnv('*', m);
+  room.setAlan = (v) => {
+    const yeni = alanAl(v);
+    if (yeni.alan === alan.alan) return;
+    alan = yeni;
+    track(); // bağlı değilse SUBSCRIBED'da zaten yeni yükle track edilir
+  };
   room.leave = async () => {
     if (left) return;
     left = true;

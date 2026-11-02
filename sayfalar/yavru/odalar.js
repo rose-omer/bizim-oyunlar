@@ -1,16 +1,20 @@
 // Yavrumuz: odalar ve sürükle-bırak bakımın saf parçaları (DOM yok, Node'da test edilir).
-// Oda: sekme sırası, kaydırma (swipe) yönü, son oda okuma, ihtiyaç noktası. Oda seçimi belgeye yazılmaz (cihaz başı).
+// Oda: sekme sırası, kaydırma (swipe) yönü, son oda okuma, ihtiyaç noktası. Oda seçimi belgeye yazılmaz (cihaz başı);
+// partnere presence alanıyla (room.setAlan) gider: "Gül şu an banyoda 🫧" (partnerOdaMetni).
 // Sürükleme: istemci noktası → bebek viewBox'ı (bebek.js, 0 0 200 200), ağız ve kutu isabeti, köpük ilerlemesi.
 // Eylemin kendisi değişmez: sürükleme bitince app.js var olan eylemTikla yolunu çağırır.
 import { DUSUK } from './mantik.js';
 
-/** Sekme sırası. eylemler: odanın eylem düğmeleri (uyut düğmesi uyurken 'uyandir' olur). kisa: sekme yazısı. */
+/**
+ * Sekme sırası. eylemler: odanın eylem düğmeleri (uyut düğmesi uyurken 'uyandir' olur). kisa: sekme yazısı.
+ * bulunma: "şu an banyoda"; yonelme: "Banyoya git" (Türkçe hâl ekleri elle; ses uyumu kurala bağlanmaz).
+ */
 export const ODALAR = Object.freeze([
-  Object.freeze({ id: 'mutfak', ad: 'Mutfak', kisa: 'Mutfak', emoji: '🍼', eylemler: Object.freeze(['mama', 'meyve', 'tatli']), ipucu: 'Yemeği ağzına sürükle ya da dokun' }),
-  Object.freeze({ id: 'banyo', ad: 'Banyo', kisa: 'Banyo', emoji: '🫧', eylemler: Object.freeze(['yika']), ipucu: 'Sabunu yavrunun üstünde gezdir' }),
-  Object.freeze({ id: 'tuvalet', ad: 'Tuvalet', kisa: 'Tuvalet', emoji: '🚽', eylemler: Object.freeze(['lazimlik']), ipucu: 'Yavruyu lazımlığa taşı ya da lazımlığa dokun' }),
-  Object.freeze({ id: 'yatak', ad: 'Yatak odası', kisa: 'Yatak', emoji: '🌙', eylemler: Object.freeze(['uyut']), ipucu: '' }),
-  Object.freeze({ id: 'oyun', ad: 'Oyun odası', kisa: 'Oyun', emoji: '⚽', eylemler: Object.freeze(['oyna', 'sev']), ipucu: '' }),
+  Object.freeze({ id: 'mutfak', ad: 'Mutfak', kisa: 'Mutfak', emoji: '🍼', bulunma: 'mutfakta', yonelme: 'Mutfağa', eylemler: Object.freeze(['mama', 'meyve', 'tatli']), ipucu: 'Yemeği basılı tutup ağzına sürükle ya da dokun' }),
+  Object.freeze({ id: 'banyo', ad: 'Banyo', kisa: 'Banyo', emoji: '🫧', bulunma: 'banyoda', yonelme: 'Banyoya', eylemler: Object.freeze(['yika']), ipucu: 'Sabunu yavrunun üstünde gezdir' }),
+  Object.freeze({ id: 'tuvalet', ad: 'Tuvalet', kisa: 'Tuvalet', emoji: '🚽', bulunma: 'tuvalette', yonelme: 'Tuvalete', eylemler: Object.freeze(['lazimlik']), ipucu: 'Yavruyu lazımlığa taşı ya da lazımlığa dokun' }),
+  Object.freeze({ id: 'yatak', ad: 'Yatak odası', kisa: 'Yatak', emoji: '🌙', bulunma: 'yatak odasında', yonelme: 'Yatak odasına', eylemler: Object.freeze(['uyut']), ipucu: 'Önce bir ninni, sonra uyut' }),
+  Object.freeze({ id: 'oyun', ad: 'Oyun odası', kisa: 'Oyun', emoji: '⚽', bulunma: 'oyun odasında', yonelme: 'Oyun odasına', eylemler: Object.freeze(['oyna', 'sev']), ipucu: '' }),
 ]);
 export const ODA_IDLERI = Object.freeze(ODALAR.map((o) => o.id));
 export const VARSAYILAN_ODA = 'mutfak';
@@ -28,6 +32,13 @@ export const odaTanimi = (id) => ODA[odaOku(id)];
 export function eylemOdasi(eylem) {
   const e = eylem === 'uyandir' ? 'uyut' : eylem;
   return ODALAR.find((o) => o.eylemler.includes(e))?.id ?? null;
+}
+
+/** Partnerin presence alanı → "Gül şu an banyoda 🫧"; alan geçerli oda değilse null (eski istemci, yumurta). */
+export function partnerOdaMetni(ad, alan) {
+  if (typeof alan !== 'string' || !Object.hasOwn(ODA, alan)) return null;
+  const o = ODA[alan];
+  return `${ad || 'Sevgilin'} şu an ${o.bulunma} ${o.emoji}`;
 }
 
 /** Komşu oda: yon +1 sonraki, -1 önceki. Uçta null (dolanmaz). */
@@ -67,6 +78,26 @@ export function odaNoktalari({ ihtiyac = {}, cisVar = false, uyuyor = false } = 
 export const SURUKLE_ESIK = 8; // px: bundan az hareket dokunuştur (tık yolu çalışır)
 /** Basılı tutup bu kadar kayınca sürükleme başlar. */
 export const surukleBasladi = (dx, dy, esik = SURUKLE_ESIK) => Math.hypot(dx, dy) >= esik;
+
+// Mutfak yemek düğmeleri: dikey kaydırma tarayıcıya kalsın (CSS touch-action: pan-y). Sürükleme yalnız yatay ya da
+// yukarı-çapraz belirgin hareketle ya da kısa basılı tutmayla başlar. Düz dikey (yukarı ya da aşağı) = sayfa kaydırması:
+// parmağı yukarı itmek sayfanın en yaygın kaydırma hareketidir, sürükleme sayılmaz.
+export const BASILI_TUT = 300; // ms: kıpırdamadan bu kadar basılı tutunca sürükleme hazır
+export const CAPRAZ_ORAN = 0.3; // yukarı harekette |dx| / |dy| en az bu (≈ 17°): yan düğmeden ağza doğru çapraz
+export const KARAR_ESIK = 10; // px: yön kararı için (ilk birkaç pikselin titremesi karar vermesin)
+/**
+ * dx, dy: başlangıçtan bu yana kayma (px); basili: basılı tutma süresi doldu mu.
+ * -> 'surukle' | 'kaydir' | null (henüz karar yok: eşik altı).
+ */
+export function yemekSurukleKarar(dx, dy, basili = false, esik = KARAR_ESIK) {
+  if (!Number.isFinite(dx) || !Number.isFinite(dy)) return null;
+  if (basili) return 'surukle';
+  if (!surukleBasladi(dx, dy, esik)) return null;
+  const ax = Math.abs(dx);
+  const ay = Math.abs(dy);
+  if (ax >= ay) return 'surukle';
+  return dy < 0 && ax >= ay * CAPRAZ_ORAN ? 'surukle' : 'kaydir';
+}
 
 /** İstemci noktası → bebek viewBox'ı (0..200). kutu: SVG'nin getBoundingClientRect(). Kutu bozuksa null. */
 export function vbNokta(x, y, kutu) {

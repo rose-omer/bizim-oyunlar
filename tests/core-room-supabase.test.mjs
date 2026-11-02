@@ -351,3 +351,22 @@ test('üyelik: bekleyen cihaz kanala katılmaz; eski sunucu ve çevrimdışı', 
     mock.timers.reset();
   }
 });
+
+test('supabase: setAlan yükü yeniden track eder; bağlanmadan önce verilen alan ilk track’te gider', async () => {
+  const client = fakeClient();
+  const { room } = openSupabaseRoom({ roomId: 'abcdefghij', ns: 'yavru', me: ME, getClient: async () => client });
+  await flush();
+  const c = client.all[0];
+  room.setAlan('mutfak'); // bağlı değil: track yok
+  assert.equal(c.tracked, null);
+  c.cb('SUBSCRIBED');
+  assert.deepEqual(c.tracked, { clientId: 'A', name: 'Ali', page: 'yavru', host: null, gorunur: true, alan: 'mutfak' });
+  room.setAlan('yatak');
+  assert.equal(c.tracked.alan, 'yatak');
+  room.setAlan(null);
+  assert.equal('alan' in c.tracked, false);
+  c.state = { B: [{ clientId: 'B', name: 'Ayşe', page: 'yavru', alan: 'banyo' }] };
+  c.fire('presence', 'sync');
+  assert.equal(room.partner().alan, 'banyo');
+  await room.leave();
+});

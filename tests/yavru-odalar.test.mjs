@@ -5,6 +5,7 @@ import {
   ODALAR, ODA_IDLERI, VARSAYILAN_ODA, odaOku, odaTanimi, eylemOdasi, komsuOda, kaydirmaYonu, KAYDIRMA_ESIK,
   odaNoktalari, surukleBasladi, SURUKLE_ESIK, vbNokta, AGIZ, agizUzaklik, agizIsabet, agizYakin, kutuIsabet,
   kopukBaslat, kopukIlerle, kopukOrani, kopukTamam, KOPUK_YOL, KABARCIK_ARALIK, KOPUK_ADIM,
+  partnerOdaMetni, yemekSurukleKarar, BASILI_TUT,
 } from '../sayfalar/yavru/odalar.js';
 import { odaSvg, KUVET_SVG, LAZIMLIK_SVG, SABUN_SVG } from '../sayfalar/yavru/oda-cizim.js';
 import { EYLEMLER, DUSUK } from '../sayfalar/yavru/mantik.js';
@@ -174,4 +175,29 @@ test('bebek konuşma ağzı: her ruhta ağız katmanında gizli öğe; stil [dat
   assert.match(BEBEK_CSS, /\.yvb-agiz-konus \{ display: none;/);
   assert.match(BEBEK_CSS, /\[data-konusuyor\] \.yvb-agiz-konus \{ display: inline; \}/);
   assert.match(BEBEK_CSS, /scaleY\(var\(--yvb-konus/);
+});
+
+test('partnerOdaMetni: geçerli oda → "Gül şu an banyoda 🫧"; değilse null', () => {
+  assert.equal(partnerOdaMetni('Gül', 'banyo'), 'Gül şu an banyoda 🫧');
+  assert.equal(partnerOdaMetni('Gül', 'yatak'), 'Gül şu an yatak odasında 🌙');
+  assert.equal(partnerOdaMetni('', 'mutfak'), 'Sevgilin şu an mutfakta 🍼');
+  assert.equal(partnerOdaMetni('Gül', null), null, 'eski istemci: alan yok');
+  assert.equal(partnerOdaMetni('Gül', 'salon'), null);
+  assert.equal(partnerOdaMetni('Gül', '__proto__'), null);
+  for (const o of ODALAR) assert.ok(o.bulunma && o.yonelme, o.id);
+});
+
+test('yemekSurukleKarar: dikey kaydırma tarayıcıya; yatay, yukarı-çapraz ve basılı tutma sürükler', () => {
+  assert.ok(BASILI_TUT >= 200 && BASILI_TUT <= 500);
+  assert.equal(yemekSurukleKarar(2, 3), null, 'eşik altı: karar yok');
+  assert.equal(yemekSurukleKarar(0, 30), 'kaydir', 'aşağı');
+  assert.equal(yemekSurukleKarar(0, -30), 'kaydir', 'düz yukarı (sayfa kaydırması)');
+  assert.equal(yemekSurukleKarar(5, -30), 'kaydir', 'yukarıya yakın dik');
+  assert.equal(yemekSurukleKarar(30, 2), 'surukle', 'yatay');
+  assert.equal(yemekSurukleKarar(-20, -30), 'surukle', 'yukarı-çapraz (ağza doğru)');
+  assert.equal(yemekSurukleKarar(-20, 30), 'kaydir', 'aşağı-çapraz');
+  assert.equal(yemekSurukleKarar(-11, -30), 'surukle', 'yan düğmeden ağza (~20°)');
+  assert.equal(yemekSurukleKarar(-7, -30), 'kaydir', 'dike yakın (~13°)');
+  assert.equal(yemekSurukleKarar(0, 0, true), 'surukle', 'basılı tutma');
+  assert.equal(yemekSurukleKarar(NaN, 0), null);
 });

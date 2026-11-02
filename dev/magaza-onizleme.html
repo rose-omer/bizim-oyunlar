@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Mağaza önizleme · Yavrumuz</title>
+  <!-- Geliştirici önizlemesi (yayına girmez; pages.yml dev/'i hariç tutar). Sahte veri; yazım yalnız bellekte.
+       Adres seçenekleri: ?mod=acik|koyu  &ac=yiyecek|giyim (mağazayı açık başlat)  &dolap=1 (dolap dolu, taç+gözlük giyili)
+       &asama=kucuk|buyuk  &jeton=n (başlangıç bakiyesi)  &sahne=1 (büyüme sahnesini oynat)  &izgara=1 (yalnız aksesuar ızgarası) -->
+  <link rel="stylesheet" href="../css/base.css">
+  <style>
+    body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font-body, system-ui); }
+    main { max-width: 760px; margin: 0 auto; padding: 16px; }
+    header { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; justify-content: space-between; margin-bottom: 8px; }
+    h1 { margin: 0; font-family: var(--font-display); font-size: 1.5rem; }
+    h2 { margin: 20px 0 8px; font-size: 1rem; color: var(--muted); font-weight: 750; }
+    .araclar { display: flex; flex-wrap: wrap; gap: 8px; }
+    .sahne { display: grid; grid-template-columns: 180px 1fr; gap: 14px; align-items: center; padding: 12px; border-radius: 22px; background: var(--surface); }
+    .sahne .cizim { width: 180px; aspect-ratio: 1; }
+    .sahne p { margin: 0 0 4px; }
+    .izgara { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 8px; }
+    .hucre { display: grid; gap: 2px; justify-items: center; padding: 8px 6px 6px; border-radius: 16px; background: var(--surface); }
+    .hucre .cizim { width: 100%; aspect-ratio: 1; }
+    .hucre span { font-size: 0.75rem; color: var(--muted); text-align: center; }
+    body.izgara-tek header, body.izgara-tek .sahne, body.izgara-tek .araclar { display: none; }
+    @media (max-width: 480px) { .sahne { grid-template-columns: 120px 1fr; } .sahne .cizim { width: 120px; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Mağaza · önizleme</h1>
+      <button type="button" class="btn small" id="tema">Koyu tema</button>
+    </header>
+    <section class="sahne" aria-label="Yavru">
+      <div class="cizim" id="yavru"></div>
+      <div>
+        <p id="ozet"></p>
+        <div class="araclar">
+          <button type="button" class="btn primary small" id="ac">Mağazayı aç</button>
+          <button type="button" class="btn small" id="jeton">+100 jeton</button>
+          <button type="button" class="btn small" id="asama">Küçült</button>
+          <button type="button" class="btn small" id="sahne">Büyüme sahnesi</button>
+        </div>
+      </div>
+    </section>
+    <h2>Aksesuarlar · büyük</h2>
+    <div class="izgara" id="izgara-buyuk"></div>
+    <h2>Aksesuarlar · küçük (kundak: yalnız baş)</h2>
+    <div class="izgara" id="izgara-kucuk"></div>
+    <h2>Birlikte · renk ve ifade</h2>
+    <div class="izgara" id="izgara-birlikte"></div>
+  </main>
+  <script type="module">
+    import { bebekSvg, giyimParcaSvg, BEBEK_CSS } from '../sayfalar/yavru/bebek.js';
+    import { CIZIM_CSS } from '../sayfalar/yavru/cizim.js';
+    import { applyPatch } from '../js/core/veri.js';
+    import { URUNLER, jetonBakiye } from '../sayfalar/yavru/jeton.js';
+    import { giyimOku } from '../sayfalar/yavru/giyim.js';
+    import { magazaAc } from '../sayfalar/yavru/magaza.js';
+    import { buyumeSahnesi } from '../sayfalar/yavru/buyume-sahne.js';
+
+    const stil = document.createElement('style');
+    stil.id = 'yv-cizim-stil';
+    stil.textContent = CIZIM_CSS + BEBEK_CSS;
+    document.head.append(stil);
+
+    const q = new URLSearchParams(location.search);
+    const kok = document.documentElement;
+    const temaDugme = document.getElementById('tema');
+    const temaYaz = (mod) => { kok.dataset.mod = mod; temaDugme.textContent = mod === 'koyu' ? 'Açık tema' : 'Koyu tema'; };
+    temaYaz(q.get('mod') === 'koyu' ? 'koyu' : 'acik');
+    temaDugme.addEventListener('click', () => temaYaz(kok.dataset.mod === 'koyu' ? 'acik' : 'koyu'));
+    if (q.get('izgara')) document.body.classList.add('izgara-tek');
+
+    const BEN = 'omer-onizleme';
+    const simdi = () => Date.now();
+    const at = new Date().toISOString();
+    const ihtiyac = Object.fromEntries(['tokluk', 'mutluluk', 'temizlik', 'enerji'].map((ad) => [ad, { v: 60, t: at }]));
+    let y = {
+      asama: q.get('asama') === 'kucuk' ? 'kucuk' : 'buyuk', ad: 'Pamuk', renk: 3, kisilik: 'neseli', dogum: at, catlama: at, buyume: at,
+      ihtiyac, uyku: null, puan: {}, isitma: {}, son: {},
+      jeton: { [BEN]: { kazanc: Number(q.get('jeton') ?? 140), harcama: 0, gun: null, bugun: 0 } }, dolap: {}, giyim: {},
+    };
+    if (q.get('dolap')) {
+      for (const id of ['tac', 'gozluk', 'fiyonk']) y.dolap[id] = { at, kim: BEN, fiyat: 0 };
+      y.giyim = { bas: 'tac', goz: 'gozluk' };
+    }
+
+    let magaza = null;
+    function ciz() {
+      const g = giyimOku(y);
+      document.getElementById('yavru').innerHTML = bebekSvg({ asama: y.asama, ruh: 'mutlu', renk: y.renk, kisilik: y.kisilik, giyim: g, etiket: 'Pamuk' });
+      const adlar = Object.values(g).filter(Boolean).map((id) => URUNLER[id].ad);
+      document.getElementById('ozet').textContent = `🪙 ${jetonBakiye(y)} · ${adlar.length ? adlar.join(', ') : 'aksesuar yok'}`;
+      document.getElementById('asama').textContent = y.asama === 'buyuk' ? 'Küçült' : 'Büyüt';
+      magaza?.guncelle();
+    }
+    async function yaz(yama, kayit) {
+      await new Promise((r) => setTimeout(r, 120)); // ağ gecikmesi öykünmesi
+      y = applyPatch(y, yama);
+      if (kayit) console.log('kayıt', kayit);
+      ciz();
+    }
+    function ac(sekme = 'yiyecek') {
+      magaza = magazaAc(document.body, { veri: () => y, kim: BEN, simdi, yaz, sekme, bebekOpts: { renk: y.renk, kisilik: y.kisilik }, onKapat: () => { magaza = null; } });
+      window.magaza = magaza;
+    }
+    document.getElementById('ac').addEventListener('click', () => ac());
+    document.getElementById('jeton').addEventListener('click', () => { y = applyPatch(y, { [`jeton.${BEN}`]: { ...y.jeton[BEN], kazanc: y.jeton[BEN].kazanc + 100 } }); ciz(); });
+    document.getElementById('asama').addEventListener('click', () => { y = { ...y, asama: y.asama === 'buyuk' ? 'kucuk' : 'buyuk' }; ciz(); });
+    document.getElementById('sahne').addEventListener('click', () => {
+      buyumeSahnesi(document.body, { renk: y.renk, kisilik: y.kisilik, giyim: giyimOku(y), ad: y.ad, onBitti: () => console.log('sahne bitti') });
+    });
+
+    // Izgaralar
+    const hucre = (kap, svg, ad) => {
+      const d = document.createElement('div');
+      d.className = 'hucre';
+      d.innerHTML = `<div class="cizim">${svg}</div><span>${ad}</span>`;
+      document.getElementById(kap).append(d);
+    };
+    const tek = [['bas', 'fiyonk'], ['bas', 'tac'], ['bas', 'sapka'], ['goz', 'gozluk'], ['boyun', 'atki']];
+    hucre('izgara-buyuk', bebekSvg({ asama: 'buyuk', renk: 3 }), 'varsayılan');
+    for (const [yuva, id] of tek) hucre('izgara-buyuk', bebekSvg({ asama: 'buyuk', renk: 3, giyim: { [yuva]: id } }), URUNLER[id].ad);
+    for (const [, id] of tek) hucre('izgara-buyuk', giyimParcaSvg(id, { renk: 3 }), `${URUNLER[id].ad} (kart)`);
+    hucre('izgara-kucuk', bebekSvg({ asama: 'kucuk', renk: 2 }), 'varsayılan');
+    for (const id of ['fiyonk', 'tac', 'sapka']) hucre('izgara-kucuk', bebekSvg({ asama: 'kucuk', renk: 2, giyim: { bas: id, goz: 'gozluk', boyun: 'atki' } }), URUNLER[id].ad);
+    const birlikte = [
+      [{ bas: 'tac', goz: 'gozluk', boyun: 'atki' }, 1, 'normal', 'hepsi'],
+      [{ bas: 'sapka', boyun: 'atki' }, 2, 'mutlu', 'şapka+atkı'],
+      [{ bas: 'fiyonk', goz: 'gozluk' }, 4, 'kahkaha', 'fiyonk+gözlük'],
+      [{ goz: 'gozluk' }, 5, 'uyuyor', 'gözlük (uyku)'],
+      [{ bas: 'tac', boyun: 'atki' }, 6, 'aglama', 'taç+atkı'],
+      [{ bas: 'sapka', goz: 'gozluk' }, 3, 'uykulu', 'şapka+gözlük'],
+    ];
+    for (const [giyim, renk, ruh, ad] of birlikte) hucre('izgara-birlikte', bebekSvg({ asama: 'buyuk', renk, ruh, kisilik: 'obur', giyim }), ad);
+
+    ciz();
+    if (q.get('ac')) ac(q.get('ac'));
+    if (q.get('sahne')) document.getElementById('sahne').click();
+  </script>
+</body>
+</html>

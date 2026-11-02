@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Ses taklidi önizleme · Yavrumuz</title>
+  <link rel="stylesheet" href="../css/base.css">
+  <style>
+    body { margin: 0 auto; max-width: 480px; padding: 16px; background: var(--bg); color: var(--text); }
+    h1 { font-size: 1.25rem; margin: 0 0 4px; }
+    .not { color: var(--muted); font-size: .9rem; margin: 0 0 16px; }
+    .kart { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 16px; margin: 0 0 12px; }
+    .ust { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    #durum { font-weight: 600; margin: 0; }
+    .mik { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: var(--radius-pill);
+      background: var(--bad-soft); color: var(--bad); font-size: .85rem; font-weight: 600; }
+    .mik[hidden] { display: none; }
+    .mik::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: currentColor; animation: nabiz 1s infinite; }
+    @keyframes nabiz { 50% { opacity: .3; } }
+    @media (prefers-reduced-motion: reduce) { .mik::before { animation: none; } }
+    .agiz { height: 72px; display: grid; place-items: center; margin: 16px 0 4px; }
+    #agiz { width: 96px; height: 64px; background: var(--accent); border-radius: 50%; transform: scaleY(.06); transform-origin: center; }
+    .dugmeler { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    button { min-height: 48px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--surface-2);
+      color: var(--text); font: inherit; font-weight: 600; cursor: pointer; touch-action: none; user-select: none; -webkit-user-select: none; }
+    button.ana { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+    button:focus-visible, input:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+    #durdur { grid-column: 1 / -1; }
+    label { display: grid; grid-template-columns: 1fr auto; gap: 4px 8px; margin: 0 0 12px; font-size: .95rem; }
+    label input { grid-column: 1 / -1; width: 100%; min-height: 44px; accent-color: var(--accent); }
+    #gunluk { margin: 0; padding-left: 20px; font: 13px/1.5 ui-monospace, monospace; color: var(--muted); max-height: 180px; overflow: auto; }
+  </style>
+</head>
+<body>
+  <h1>Ses taklidi</h1>
+  <p class="not">Yalnız geliştirme. Kayıt cihazda işlenir, hiçbir yere gönderilmez.</p>
+
+  <section class="kart" aria-label="Durum">
+    <div class="ust">
+      <p id="durum" aria-live="polite">Hazır. "Konuş"a dokun.</p>
+      <span class="mik" id="mik" hidden>Mikrofon açık</span>
+    </div>
+    <div class="agiz" aria-hidden="true"><div id="agiz"></div></div>
+  </section>
+
+  <section class="kart dugmeler" aria-label="Kontroller">
+    <button class="ana" id="konus" type="button">Konuş</button>
+    <button id="bas" type="button">Basılı tut</button>
+    <button id="durdur" type="button">Durdur</button>
+  </section>
+
+  <section class="kart" aria-label="Ses ayarı">
+    <label for="ton">Perde (yarım ton) <output id="tonDeger">+6</output>
+      <input id="ton" type="range" min="3" max="10" step="0.5" value="6"></label>
+    <label for="hiz">Hız <output id="hizDeger">×1.12</output>
+      <input id="hiz" type="range" min="1" max="1.3" step="0.02" value="1.12"></label>
+  </section>
+
+  <section class="kart" aria-label="Günlük">
+    <ol id="gunluk"></ol>
+  </section>
+
+  <script type="module">
+    import { taklitBaslat, mikrofonAcikMi, taklitDestegi } from '../sayfalar/yavru/taklit.js';
+
+    const $ = (id) => document.getElementById(id);
+    const YAZI = {
+      dinliyor: 'Dinliyorum… bir şey söyle.',
+      konusuyor: 'Duyuyorum…',
+      tekrar: 'Yavru tekrar ediyor!',
+      bitti: 'Bitti. Yine konuş?',
+      'izin-yok': 'Mikrofon izni yok. Ayarlardan izin verebilirsin.',
+      hata: 'Mikrofon açılamadı.',
+    };
+    const NEDEN = { sessiz: 'Ses duymadım. Yine dener misin?', kisa: 'Çok kısaydı. Biraz daha uzun söyle.' };
+    let t = null;
+    window.taklitGunluk = [];
+
+    function durumGeldi(d, ek) {
+      window.taklitGunluk.push({ d, ek, an: performance.now() });
+      $('durum').textContent = (d === 'bitti' && NEDEN[ek?.neden]) || YAZI[d] || d;
+      $('mik').hidden = !mikrofonAcikMi(d);
+      const li = document.createElement('li');
+      li.textContent = d + (ek && Object.keys(ek).length ? ' ' + JSON.stringify(ek) : '');
+      $('gunluk').append(li);
+      li.scrollIntoView({ block: 'nearest' });
+    }
+    function agizGeldi(v) {
+      window.taklitAgizEnBuyuk = Math.max(window.taklitAgizEnBuyuk || 0, v);
+      $('agiz').style.transform = `scaleY(${Math.max(0.06, v)})`;
+    }
+    function baslat(mod) {
+      t?.durdur();
+      t = taklitBaslat({ mod, onDurum: durumGeldi, onAgiz: agizGeldi, yarimTon: +$('ton').value, hiz: +$('hiz').value });
+    }
+
+    if (!taklitDestegi()) { $('durum').textContent = 'Bu tarayıcı mikrofonu desteklemiyor.'; }
+    $('konus').addEventListener('click', () => baslat('otomatik'));
+    $('bas').addEventListener('pointerdown', (e) => { $('bas').setPointerCapture?.(e.pointerId); baslat('bas-konus'); });
+    for (const ad of ['pointerup', 'pointercancel']) $('bas').addEventListener(ad, () => t?.birak());
+    $('bas').addEventListener('contextmenu', (e) => e.preventDefault());
+    $('durdur').addEventListener('click', () => t?.durdur());
+    $('ton').addEventListener('input', () => { $('tonDeger').textContent = '+' + $('ton').value; });
+    $('hiz').addEventListener('input', () => { $('hizDeger').textContent = '×' + (+$('hiz').value).toFixed(2); });
+  </script>
+</body>
+</html>

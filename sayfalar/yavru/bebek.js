@@ -161,6 +161,101 @@ function ayak(k, x, y, a, ic) {
     + '</g>';
 }
 
+// ---------- Giyim (aksesuar katmanı; giyim.js yuvaları) ----------
+// Her parça kendi yerel koordinatında çizilir (0,0 = oturma noktası); aşamaya göre yerleşim GIYIM_YER'de.
+// Gradyan ve id yok (SVG başına benzersizlik sorunu doğmaz). Yalnız sınıflı düz boya; renkler --yvb-* jetonları.
+
+// Taç: tabanı başın kavsine uyar; beş diş, uçlarda inci, bantta taşlar.
+const TAC = '<path class="yvb-g-altin" d="M-24 0 L-27.5 -22 L-15 -11 L0 -28 L15 -11 L27.5 -22 L24 0 Q0 5.5 -24 0 Z"/>'
+  + '<path class="yvb-g-altin-koyu" d="M-24.6 -6.2 Q0 -1 24.6 -6.2 L24 0 Q0 5.5 -24 0 Z"/>'
+  + '<path class="yvb-g-isik" d="M-21 -9 L-23 -18 M-6 -14 L0 -21"/>'
+  + '<circle class="yvb-g-inci" cx="-27.5" cy="-23.5" r="2.8"/><circle class="yvb-g-inci" cx="0" cy="-29.8" r="3.2"/><circle class="yvb-g-inci" cx="27.5" cy="-23.5" r="2.8"/>'
+  + '<ellipse class="yvb-g-tas-a" cx="0" cy="-2" rx="3.6" ry="2.8"/><circle class="yvb-g-tas-b" cx="-13" cy="-3.2" r="2.1"/><circle class="yvb-g-tas-b" cx="13" cy="-3.2" r="2.1"/>';
+
+// Silindir şapka (küçük, yana yatık): kenar, gövde, kurdele, kurdelede çiçek.
+const SAPKA = '<ellipse class="yvb-g-sapka" cx="0" cy="0" rx="29" ry="6.6"/>'
+  + '<path class="yvb-g-sapka" d="M-17 -1.5 L-15.5 -32 Q0 -36.5 15.5 -32 L17 -1.5 Q0 3 -17 -1.5 Z"/>'
+  + '<ellipse class="yvb-g-sapka-ust" cx="0" cy="-32.2" rx="15.5" ry="3.6"/>'
+  + '<path class="yvb-g-kurdele" d="M-16.6 -9.5 Q0 -6 16.6 -9.5 L17 -2 Q0 2.4 -17 -2 Z"/>'
+  + '<path class="yvb-g-isik" d="M-11 -14 L-10.2 -28"/>'
+  + '<g transform="translate(10 -6)"><circle class="yvb-g-cicek" cx="0" cy="-3.4" r="2.6"/><circle class="yvb-g-cicek" cx="3.3" cy="-1" r="2.6"/>'
+  + '<circle class="yvb-g-cicek" cx="2" cy="2.8" r="2.6"/><circle class="yvb-g-cicek" cx="-2" cy="2.8" r="2.6"/><circle class="yvb-g-cicek" cx="-3.3" cy="-1" r="2.6"/>'
+  + '<circle class="yvb-g-tas-a" cx="0" cy="0" r="1.9"/></g>';
+
+// Büyük puantiyeli fiyonk (satın alınan): yuvarlak kanatlar, kısa kuyruk, beyaz benekler.
+const FIYONK = '<path class="yvb-g-kurdele" d="M-3 3 C-7 9 -10 14 -13 18 L-7 17 L-4.5 22 C-2.5 15 -0.5 9 0.5 5 Z M3 3 C7 9 10 14 13 18 L7 17 L4.5 22 C2.5 15 0.5 9 -0.5 5 Z"/>'
+  + '<path class="yvb-g-kurdele" d="M-3 -1 C-10 -19 -33 -19 -32 -3 C-31 12 -12 12 -3 3 Z"/>'
+  + '<path class="yvb-g-kurdele" d="M3 -1 C10 -19 33 -19 32 -3 C31 12 12 12 3 3 Z"/>'
+  + '<path class="yvb-g-kat" d="M-8 -2 Q-19 -11 -26 -5 M8 -2 Q19 -11 26 -5 M-8 3 Q-18 8 -25 3 M8 3 Q18 8 25 3"/>'
+  + '<circle class="yvb-g-benek" cx="-22" cy="-7" r="2.3"/><circle class="yvb-g-benek" cx="-14" cy="3" r="2"/><circle class="yvb-g-benek" cx="-26" cy="3.5" r="1.7"/>'
+  + '<circle class="yvb-g-benek" cx="22" cy="-7" r="2.3"/><circle class="yvb-g-benek" cx="14" cy="3" r="2"/><circle class="yvb-g-benek" cx="26" cy="3.5" r="1.7"/>'
+  + '<ellipse class="yvb-g-kurdele yvb-g-dugum" cx="0" cy="1" rx="6.5" ry="7.5"/>'
+  + '<ellipse class="yvb-g-isik-dolgu" cx="-20" cy="-9.5" rx="4" ry="1.8" transform="rotate(-18 -20 -9.5)"/>';
+
+// Gözlük (yüz koordinatı: 0,0 gözlerin ortası, gözler ±21): yuvarlak çerçeve, renkli cam (gözler görünür), sap.
+const GOZLUK = '<path class="yvb-g-sap" d="M-37.5 -3 L-51 2 M37.5 -3 L51 2"/>'
+  + '<circle class="yvb-g-cam" cx="-21" cy="1" r="16.5"/><circle class="yvb-g-cam" cx="21" cy="1" r="16.5"/>'
+  + '<path class="yvb-g-cerceve" d="M-4.5 1 A16.5 16.5 0 1 0 -37.5 1 A16.5 16.5 0 1 0 -4.5 1 Z M37.5 1 A16.5 16.5 0 1 0 4.5 1 A16.5 16.5 0 1 0 37.5 1 Z M-4.5 -1.5 Q0 -5.5 4.5 -1.5"/>'
+  + '<path class="yvb-g-cam-isik" d="M-31 -6 Q-28 -11.5 -22 -12.5 M11 -6 Q14 -11.5 20 -12.5"/>';
+
+// Atkı (büyük aşama koordinatı): boyna dolanan bant, sağda sarkan uç, çizgiler ve püsküller.
+const ATKI = '<path class="yvb-g-atki" d="M115 118 C121 132 124 146 126 158 L111 160 C110 148 108 134 104 122 Z"/>'
+  + '<path class="yvb-g-atki-cizgi" d="M108.5 139 L123.6 136.5 M109.8 147.5 L124.9 145"/>'
+  + '<path class="yvb-g-puskul" d="M112.5 160 l-1 5 M116.5 159.6 l-0.4 5 M120.5 159.2 l0.2 5 M124.5 158.6 l0.8 5"/>'
+  + '<path class="yvb-g-atki" d="M69 109 C82 117 118 117 131 109 C135 112 136 118 134 123 C118 132 82 132 66 123 C64 118 65 112 69 109 Z"/>'
+  + '<path class="yvb-g-atki-cizgi" d="M79 116.5 L77.5 128 M121 116.5 L122.5 128"/>'
+  + '<path class="yvb-g-atki-kat" d="M72 119 C86 125 114 125 128 119"/>';
+
+const GIYIM_CIZIM = {
+  bas: { tac: TAC, sapka: SAPKA, fiyonk: FIYONK },
+  goz: { gozluk: GOZLUK },
+  boyun: { atki: ATKI },
+};
+/** Aşama → yuva → ürün → yerleşim (transform). Küçükte (kundak) yalnız baş yuvası: başlığın tepesinde küçük boy. */
+const GIYIM_YER = {
+  buyuk: {
+    bas: { tac: 'translate(102 31) rotate(6) scale(0.92)', sapka: 'translate(113 33) rotate(13) scale(0.8)', fiyonk: 'translate(100 25) scale(1.08)' },
+    goz: { gozluk: 'translate(100 75)' },
+    boyun: { atki: '' },
+  },
+  kucuk: {
+    bas: { tac: 'translate(100 54) rotate(3) scale(0.6)', sapka: 'translate(102 55) rotate(8) scale(0.56)', fiyonk: 'translate(100 52) scale(0.62)' },
+  },
+};
+const GIYIM_BOS = Object.freeze({ bas: null, goz: null, boyun: null });
+
+/** Bilinmeyen yuva ya da değer yok sayılır. -> { bas, goz, boyun } */
+function giyimGecerli(g) {
+  const o = g && typeof g === 'object' ? g : {};
+  const sonuc = {};
+  for (const yuva of Object.keys(GIYIM_BOS)) {
+    const id = o[yuva];
+    sonuc[yuva] = typeof id === 'string' && Object.hasOwn(GIYIM_CIZIM[yuva], id) ? id : null;
+  }
+  return sonuc;
+}
+
+function giyimKatmani(giyim, yuva, asama) {
+  const id = giyim[yuva];
+  const yer = id && GIYIM_YER[asama][yuva]?.[id];
+  if (yer == null) return '';
+  return `<g class="yvb-giyim yvb-giyim-${yuva}" data-urun="${id}"${yer ? ` transform="${yer}"` : ''}>${GIYIM_CIZIM[yuva][id]}</g>`;
+}
+
+// Mağaza kartı için yalnız parça (yerel koordinatta, kırpılmış görünüm kutusu).
+const PARCA_KUTU = { tac: '-34 -38 68 48', sapka: '-36 -42 72 54', fiyonk: '-36 -22 72 48', gozluk: '-54 -20 108 40', atki: '58 100 84 70' };
+
+/**
+ * Tek aksesuarın SVG'si (mağaza kartı önizlemesi). urun: giyim yuvalarındaki id; renk: 1–6 (kıyafet rengi jetonu).
+ * Bilinmeyen ürün -> ''. Süs: aria-hidden.
+ */
+export function giyimParcaSvg(urun, { renk = 1 } = {}) {
+  const yuva = Object.keys(GIYIM_CIZIM).find((y) => Object.hasOwn(GIYIM_CIZIM[y], urun ?? ''));
+  if (!yuva) return '';
+  return `<svg viewBox="${PARCA_KUTU[urun]}" class="yvb-svg yvb-parca" data-urun="${urun}" style="--yv-govde:var(--yv-r${renkGecerli(renk)})" aria-hidden="true" focusable="false">`
+    + `<g class="yvb-giyim yvb-giyim-${yuva}">${GIYIM_CIZIM[yuva][urun]}</g></svg>`;
+}
+
 // ---------- Büyük: oturan bebek (viewBox 0 0 200 200, zemin y≈186) ----------
 
 const MOTIFLER = {
@@ -171,7 +266,7 @@ const MOTIFLER = {
   kalp: '<path class="yvb-motif-a" d="M0 6 C-7 1 -7.5 -4.5 -3.8 -5.6 C-1.8 -6.2 -0.4 -4.8 0 -3.6 C0.4 -4.8 1.8 -6.2 3.8 -5.6 C7.5 -4.5 7 1 0 6 Z"/>',
 };
 
-function buyuk(k, ruh, kisilik) {
+function buyuk(k, ruh, kisilik, giyim) {
   // El: dizde duran bebek eli; avuç üstte, dört kısa parmak (orta uzun, aralıklı, hafif yelpaze) avucun altından
   // çıkar; başparmak iç yanda ayrı ve eğik. s: başparmak yönü.
   const parmak = (x, y, ry, a) => `<ellipse class="yvb-ten yvb-parmak" fill="url(#${k}-ten)" cx="${x}" cy="${y}" rx="2.5" ry="${ry}" transform="rotate(${a} ${x} ${y})"/>`;
@@ -213,6 +308,7 @@ function buyuk(k, ruh, kisilik) {
     + `<path class="yvb-kumas" fill="url(#${k}-kumas)" d="M60 114 C51 118 47 130 51 137 C57 141 70 138 77 129 C79 120 71 110 60 114 Z"/>`
     + `<path class="yvb-kumas" fill="url(#${k}-kumas)" d="M140 114 C149 118 153 130 149 137 C143 141 130 138 123 129 C121 120 129 110 140 114 Z"/>`
     + '</g>'
+    + giyimKatmani(giyim, 'boyun', 'buyuk')
     // Baş: kulaklar, yüz şekli (alt yanaklar tombul), çene gölgesi
     + '<g class="yvb-bas">'
     + '<ellipse class="yvb-golge" cx="100" cy="117" rx="26" ry="6"/>'
@@ -227,8 +323,9 @@ function buyuk(k, ruh, kisilik) {
     + '<path class="yvb-sac-cizgi" d="M106 42 C109 37 102 33 104 29 C105 26 101 24 97 25 M84 51 C87 45 80 42 82 37 C83 34 80 32 76 34 M122 55 C126 50 119 45 122 40 C124 37 121 34 118 33 M136 49 C140 45 135 41 138 37 M44 99 C40 97 41 92 45 92 M156 99 C160 97 159 92 155 92"/>'
     + '<path class="yvb-sac-isik" d="M72 30 C84 23 104 22 118 26"/>'
     + '</g>'
-    // Aksesuar: saç bandı + fiyonk
-    + '<g class="yvb-aksesuar">'
+    + giyimKatmani(giyim, 'goz', 'buyuk')
+    // Aksesuar: baş yuvası boşsa varsayılan saç bandı + pembe fiyonk; doluysa giyilen (giyim katmanı)
+    + (giyim.bas ? giyimKatmani(giyim, 'bas', 'buyuk') : '<g class="yvb-aksesuar">'
     + '<path class="yvb-bant" d="M64 38 C86 22 120 21 142 37 C148 42 152 50 154 58"/>'
     + '<g class="yvb-fiyonk" transform="translate(66 34) rotate(-18)">'
     + '<path class="yvb-fiyonk-kuyruk" d="M-2 3 C-6 9 -9 15 -12 20 L-6.5 18.5 L-4 23 C-2 16 0 10 1 5 Z M2 3 C6 9 9 15 12 20 L6.5 18.5 L4 23 C2 16 0 10 -1 5 Z"/>'
@@ -237,7 +334,7 @@ function buyuk(k, ruh, kisilik) {
     + '<path class="yvb-fiyonk-kat" d="M-7 -1 Q-18 -9 -24 -3 M7 -1 Q18 -9 24 -3"/>'
     + '<ellipse class="yvb-fiyonk-dugum" cx="0" cy="0.5" rx="6" ry="7"/>'
     + '<ellipse class="yvb-parilti yvb-fiyonk-isik" cx="-19" cy="-7" rx="4" ry="2" transform="rotate(-20 -19 -7)"/>'
-    + '</g></g>'
+    + '</g></g>')
     + isaret(ruh, 160, 34, [[68, 104, 4], [118, 152, 5], [140, 176, 3.5]])
     + '</g>';
 }
@@ -251,7 +348,7 @@ const KUCUK_ZEMIN = '<ellipse class="yvb-zemin" cx="100" cy="182" rx="48" ry="6.
 const kucukIsaret = (ruh) => isaret(ruh, 140, 70, [[72, 146, 4], [128, 112, 3.4], [116, 150, 3.5]]);
 
 /** Kabuktan çıkan kısım (kundak, baş, yüz, saç, emzik); kabuk ve işaret hariç. */
-function kucukGovde(k, ruh) {
+function kucukGovde(k, ruh, giyim = GIYIM_BOS) {
   const emzik = EMZIK_RUHLARI.includes(ruh);
   return ''
     // Kundak: başlık (yüzü çerçeveler) ve battaniye (renk jetonundan), çapraz kat, benek
@@ -274,6 +371,8 @@ function kucukGovde(k, ruh) {
     + '<g class="yvb-kiyafet yvb-kundak-on">'
     + `<path class="yvb-kumas" fill="url(#${k}-kumas)" d="M68 133 C84 128 116 128 132 133 C126 140 114 143 100 143 C86 143 74 140 68 133 Z"/>`
     + '</g>'
+    // Baş yuvası (küçük boy, başlığın tepesinde; saç tutamı önünde kıvrılır)
+    + giyimKatmani(giyim, 'bas', 'kucuk')
     // Tek tutam saç
     + `<g class="yvb-sac"><path fill="url(#${k}-sac)" d="M95 62 C92 54 96 46 104 46 C111 46 113 54 107 56 C103 57 101 53 104 51 C99 51 98 56 102 62 Z"/></g>`
     + (emzik
@@ -282,26 +381,28 @@ function kucukGovde(k, ruh) {
       : '');
 }
 
-function kucuk(k, ruh) {
-  return KUCUK_ZEMIN + '<g class="yvb-beden">' + kucukGovde(k, ruh) + `<g class="yvb-kabuk">${KUCUK_KABUK}</g>` + kucukIsaret(ruh) + '</g>';
+function kucuk(k, ruh, giyim) {
+  return KUCUK_ZEMIN + '<g class="yvb-beden">' + kucukGovde(k, ruh, giyim) + `<g class="yvb-kabuk">${KUCUK_KABUK}</g>` + kucukIsaret(ruh) + '</g>';
 }
 
 /**
  * Bebek SVG'si (metin). asama: 'kucuk'|'buyuk'; ruh: BEBEK_RUHLARI; renk: 1–6 (kıyafet/kundak);
  * kisilik: 'obur'|'uykucu'|'neseli'|'titiz' (büyükte göğüs motifi); etiket: erişilebilir ad;
- * kimlik: gradyan id öneki (verilmezse sayaçtan benzersiz). Bilinmeyen değer varsayılana düşer.
+ * kimlik: gradyan id öneki (verilmezse sayaçtan benzersiz); giyim: { bas?, goz?, boyun? } (giyim.js giyimOku;
+ * baş boşsa varsayılan pembe fiyonk; küçükte yalnız baş, küçük boy). Bilinmeyen değer varsayılana düşer / yok sayılır.
  */
 const renkGecerli = (renk) => (Number.isInteger(renk) && renk >= 1 && renk <= 6 ? renk : 1);
 const onek = (kimlik) => String(kimlik).replace(/[^a-zA-Z0-9_-]/g, '') || `yvb${++sayac}`;
 
-export function bebekSvg({ asama = 'buyuk', ruh = 'normal', renk = 1, kisilik = '', etiket = '', kimlik = '' } = {}) {
+export function bebekSvg({ asama = 'buyuk', ruh = 'normal', renk = 1, kisilik = '', etiket = '', kimlik = '', giyim = null } = {}) {
   const a = BEBEK_ASAMALARI.includes(asama) ? asama : 'buyuk';
+  const g = giyimGecerli(giyim);
   const r = BEBEK_RUHLARI.includes(ruh) ? ruh : 'normal';
   const c = renkGecerli(renk);
   const ki = KISILIKLER.includes(kisilik) ? kisilik : '';
   const k = onek(kimlik);
   const erisim = etiket ? `role="img" aria-label="${esc(etiket)}"` : 'aria-hidden="true"';
-  const ic = a === 'buyuk' ? buyuk(k, r, ki) : kucuk(k, r);
+  const ic = a === 'buyuk' ? buyuk(k, r, ki, g) : kucuk(k, r, g);
   return `<svg viewBox="0 0 200 200" class="yvb-svg" data-asama="${a}" data-ruh="${r}"${ki ? ` data-kisilik="${ki}"` : ''}`
     + ` style="--yv-govde:var(--yv-r${c})" ${erisim} focusable="false">${tanimlar(k)}${ic}</svg>`;
 }
@@ -340,6 +441,14 @@ export const BEBEK_CSS = `
   --yvb-pembe: #EE5F8C;
   --yvb-kabuk: #FFF6EA;
   --yvb-zemin-koyu: #0E0612;
+  --yvb-altin: #F6C94E;
+  --yvb-altin-koyu: #C98A1C;
+  --yvb-inci: #FFF8EC;
+  --yvb-sapka: #6C4A8C;
+  --yvb-kurdele: #E5506F;
+  --yvb-cerceve: #5B2D4E;
+  --yvb-cam: #3B2F5C;
+  --yvb-atki: #E86A5A;
 }
 .yvb-svg {
   display: block; width: 100%; height: 100%; overflow: visible;
@@ -418,6 +527,29 @@ export const BEBEK_CSS = `
 .yvb-emzik-kalkan { fill: var(--yvb-fiyonk); stroke: color-mix(in oklab, var(--yvb-fiyonk) 60%, var(--yvb-murekkep)); stroke-width: 1.2; }
 .yvb-emzik-halka { fill: none; stroke: color-mix(in oklab, var(--yvb-fiyonk) 80%, var(--yvb-murekkep)); stroke-width: 2.2; }
 .yvb-emzik-dugme { fill: color-mix(in oklab, var(--yvb-fiyonk) 45%, var(--yvb-ak)); }
+/* Giyim katmanı (aksesuarlar). Kontur mürekkeple karışık; iki temada aynı (pastel bebek gibi). */
+.yvb-g-altin { fill: var(--yvb-altin); stroke: color-mix(in oklab, var(--yvb-altin-koyu) 70%, var(--yvb-murekkep)); stroke-width: 1.5; stroke-linejoin: round; }
+.yvb-g-altin-koyu { fill: var(--yvb-altin-koyu); stroke: color-mix(in oklab, var(--yvb-altin-koyu) 70%, var(--yvb-murekkep)); stroke-width: 1.2; stroke-linejoin: round; }
+.yvb-g-inci { fill: var(--yvb-inci); stroke: color-mix(in oklab, var(--yvb-altin-koyu) 70%, var(--yvb-murekkep)); stroke-width: 1.1; }
+.yvb-g-tas-a { fill: var(--yvb-pembe); stroke: color-mix(in oklab, var(--yvb-pembe) 55%, var(--yvb-murekkep)); stroke-width: 0.9; }
+.yvb-g-tas-b { fill: var(--yvb-iris); stroke: var(--yvb-iris-koyu); stroke-width: 0.9; }
+.yvb-g-isik { fill: none; stroke: var(--hero-ink); stroke-width: 2; stroke-linecap: round; opacity: 0.7; }
+.yvb-g-isik-dolgu { fill: var(--hero-ink); opacity: 0.55; }
+.yvb-g-sapka { fill: var(--yvb-sapka); stroke: color-mix(in oklab, var(--yvb-sapka) 55%, var(--yvb-murekkep)); stroke-width: 1.5; stroke-linejoin: round; }
+.yvb-g-sapka-ust { fill: color-mix(in oklab, var(--yvb-sapka) 82%, var(--yvb-ak)); stroke: color-mix(in oklab, var(--yvb-sapka) 55%, var(--yvb-murekkep)); stroke-width: 1.3; }
+.yvb-g-kurdele { fill: var(--yvb-kurdele); stroke: color-mix(in oklab, var(--yvb-kurdele) 55%, var(--yvb-murekkep)); stroke-width: 1.4; stroke-linejoin: round; }
+.yvb-g-dugum { fill: color-mix(in oklab, var(--yvb-kurdele) 85%, var(--yvb-murekkep)); }
+.yvb-g-kat { fill: none; stroke: color-mix(in oklab, var(--yvb-kurdele) 55%, var(--yvb-murekkep)); stroke-width: 1.1; stroke-linecap: round; opacity: 0.55; }
+.yvb-g-benek { fill: var(--yvb-ak); opacity: 0.9; }
+.yvb-g-cicek { fill: var(--yv-govde); stroke: color-mix(in oklab, var(--yv-govde) 50%, var(--yvb-murekkep)); stroke-width: 0.8; }
+.yvb-g-cam { fill: var(--yvb-cam); opacity: 0.32; }
+.yvb-g-cerceve { fill: none; stroke: var(--yvb-cerceve); stroke-width: 3.4; stroke-linecap: round; stroke-linejoin: round; }
+.yvb-g-sap { fill: none; stroke: var(--yvb-cerceve); stroke-width: 2.8; stroke-linecap: round; }
+.yvb-g-cam-isik { fill: none; stroke: var(--hero-ink); stroke-width: 2.2; stroke-linecap: round; opacity: 0.85; }
+.yvb-g-atki { fill: var(--yvb-atki); stroke: color-mix(in oklab, var(--yvb-atki) 55%, var(--yvb-murekkep)); stroke-width: 1.5; stroke-linejoin: round; }
+.yvb-g-atki-cizgi { fill: none; stroke: var(--yvb-ak); stroke-width: 3; stroke-linecap: round; opacity: 0.9; }
+.yvb-g-atki-kat { fill: none; stroke: color-mix(in oklab, var(--yvb-atki) 55%, var(--yvb-murekkep)); stroke-width: 1.2; stroke-linecap: round; opacity: 0.5; }
+.yvb-g-puskul { fill: none; stroke: color-mix(in oklab, var(--yvb-atki) 70%, var(--yvb-murekkep)); stroke-width: 2; stroke-linecap: round; }
 /* transform özniteliği olan gruplara (yvb-yuz, yvb-ayak, yvb-el, yvb-fiyonk) transform-box verilmez: kayar. */
 .yvb-beden, .yvb-goz-acik, .yvb-dusen { transform-box: fill-box; }
 @media (prefers-reduced-motion: no-preference) {

@@ -26,12 +26,12 @@ function yumurta(hazir) {
 
 /**
  * Yavru SVG'si (metin). asama: 'yumurta'|'kucuk'|'buyuk'; ruh: bebek.js BEBEK_RUHLARI; renk: 1–6; hazir: yumurtada
- * çatlak; kisilik: büyükte göğüs motifi; kimlik: gradyan id öneki (bebek.js; verilmezse benzersiz).
+ * çatlak; kisilik: büyükte göğüs motifi; kimlik: gradyan id öneki (bebek.js; verilmezse benzersiz); giyim: bebek.js aksesuar katmanı.
  * etiket verilirse role="img" + aria-label; yoksa ekran okuyucudan gizli. Bilinmeyen değer varsayılana düşer.
  */
-export function yavruSvg({ asama = 'kucuk', ruh = 'normal', renk = 1, hazir = false, etiket = '', kisilik = '', kimlik = '' } = {}) {
+export function yavruSvg({ asama = 'kucuk', ruh = 'normal', renk = 1, hazir = false, etiket = '', kisilik = '', kimlik = '', giyim = null } = {}) {
   const a = ASAMALAR.includes(asama) ? asama : 'kucuk';
-  if (a !== 'yumurta') return bebekSvg({ asama: a, ruh, renk, kisilik, etiket, kimlik });
+  if (a !== 'yumurta') return bebekSvg({ asama: a, ruh, renk, kisilik, etiket, kimlik, giyim });
   const erisim = etiket ? `role="img" aria-label="${esc(etiket)}"` : 'aria-hidden="true"';
   return `<svg viewBox="0 0 200 200" class="yv-svg" data-asama="yumurta" data-ruh="yumurta" style="--yv-govde:var(--yv-r${renkGecerli(renk)})" ${erisim} focusable="false">${yumurta(!!hazir)}</svg>`;
 }

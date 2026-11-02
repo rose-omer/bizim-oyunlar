@@ -3,6 +3,7 @@
 // paylaşır. Stil CIZIM_CSS + BEBEK_CSS'te: sayfa ve kart ikisini bir <style> ile ekler.
 // Renkler değişkenden: gövde --yv-r1..6 (oda kimliğinden tohumlu), çizgi var(--hero) (iki temada da koyu),
 // parıltı var(--hero-ink) (iki temada da açık). Böylece pastel yavru açık ve koyu zeminde aynı kalır.
+// Kabuk yumurtada, çatlama sahnesinde ve küçük bebekte aynı: krem dolgu (--yvb-kabuk), ince ten konturu, renkli benek.
 import { bebekSvg, bebekCatlamaParcalari } from './bebek.js';
 
 export const ASAMALAR = ['yumurta', 'kucuk', 'buyuk'];
@@ -26,12 +27,13 @@ function yumurta(hazir) {
 
 /**
  * Yavru SVG'si (metin). asama: 'yumurta'|'kucuk'|'buyuk'; ruh: bebek.js BEBEK_RUHLARI; renk: 1–6; hazir: yumurtada
- * çatlak; kisilik: büyükte göğüs motifi; kimlik: gradyan id öneki (bebek.js; verilmezse benzersiz); giyim: bebek.js aksesuar katmanı.
+ * çatlak; kisilik: büyükte göğüs motifi; kimlik: gradyan id öneki (bebek.js; verilmezse benzersiz); giyim: bebek.js aksesuar katmanı;
+ * kucukBoy: ≈64–96 px gösterim (ana sayfa kartı) için sade el (bebek.js).
  * etiket verilirse role="img" + aria-label; yoksa ekran okuyucudan gizli. Bilinmeyen değer varsayılana düşer.
  */
-export function yavruSvg({ asama = 'kucuk', ruh = 'normal', renk = 1, hazir = false, etiket = '', kisilik = '', kimlik = '', giyim = null } = {}) {
+export function yavruSvg({ asama = 'kucuk', ruh = 'normal', renk = 1, hazir = false, etiket = '', kisilik = '', kimlik = '', giyim = null, kucukBoy = false } = {}) {
   const a = ASAMALAR.includes(asama) ? asama : 'kucuk';
-  if (a !== 'yumurta') return bebekSvg({ asama: a, ruh, renk, kisilik, etiket, kimlik, giyim });
+  if (a !== 'yumurta') return bebekSvg({ asama: a, ruh, renk, kisilik, etiket, kimlik, giyim, kucukBoy });
   const erisim = etiket ? `role="img" aria-label="${esc(etiket)}"` : 'aria-hidden="true"';
   return `<svg viewBox="0 0 200 200" class="yv-svg" data-asama="yumurta" data-ruh="yumurta" style="--yv-govde:var(--yv-r${renkGecerli(renk)})" ${erisim} focusable="false">${yumurta(!!hazir)}</svg>`;
 }
@@ -114,13 +116,14 @@ export const CIZIM_CSS = `
 .yv-svg {
   display: block; width: 100%; height: 100%; overflow: visible;
   --yv-murekkep: var(--hero);
-  --yv-kabuk: color-mix(in oklab, var(--hero-ink) 72%, var(--yv-govde));
+  /* Kabuk konturu = bebek.js --yvb-kontur (ten çizgisi + mürekkep) */
+  --yv-kabuk-cizgi: color-mix(in oklab, var(--yvb-ten-cizgi) 78%, var(--hero));
 }
-.yv-kabuk { fill: var(--yv-kabuk); stroke: var(--yv-murekkep); stroke-width: 3.2; stroke-linejoin: round; }
-.yv-benek { fill: color-mix(in oklab, var(--yv-govde) 70%, var(--yv-murekkep)); opacity: 0.6; }
+.yv-kabuk { fill: var(--yvb-kabuk); stroke: var(--yv-kabuk-cizgi); stroke-width: 1.8; stroke-linejoin: round; }
+.yv-benek { fill: var(--yv-govde); opacity: 0.9; }
 .yv-isik { fill: var(--hero-ink); opacity: 0.6; }
 .yv-zemin { fill: var(--yv-murekkep); opacity: 0.14; }
-.yv-catlak { fill: none; stroke: var(--yv-murekkep); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.yv-catlak { fill: none; stroke: var(--yv-kabuk-cizgi); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 @media (prefers-reduced-motion: no-preference) {
   .yv-beden { transform-box: fill-box; transform-origin: 50% 100%; animation: yv-salla 4.6s ease-in-out infinite; }
 }
@@ -152,7 +155,7 @@ export const CIZIM_CSS = `
   font-weight: 600; font-variation-settings: 'SOFT' 100; letter-spacing: -0.01em; line-height: 1.3;
   text-align: center; text-wrap: balance;
 }
-.yv-cs-catlak { fill: none; stroke: var(--yv-murekkep); stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1; }
+.yv-cs-catlak { fill: none; stroke: var(--yv-kabuk-cizgi); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1; }
 .yv-cs-kirinti { fill: var(--yvb-kabuk); stroke: var(--yvb-kontur); stroke-width: 1.6; stroke-linejoin: round; opacity: 0; }
 .yv-cs-yildiz { fill: var(--accent); opacity: 0; }
 .yv-cs-yumurta, .yv-cs-ust, .yv-cs-yavru, .yv-cs-kirinti, .yv-cs-yildiz { transform-box: fill-box; }

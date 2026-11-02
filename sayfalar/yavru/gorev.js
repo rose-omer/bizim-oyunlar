@@ -2,10 +2,12 @@
 // Görev: oda + yerel günden tohumlu seçim (iki cihaz aynı görevi görür). Yumurtada görev yok.
 // İlerleme bakım günlüğünden ('yavrubakim' { eylem, kim, at }) yalnız o yerel günün kayıtlarıyla hesaplanır.
 // Ödül: iki kişiye GOREV_BONUS puan + gün işareti. Belgede alan: gorev: { [gün]: { id, at } } (son GOREV_TUT gün).
+// Görev kartı ilgili odaya geçiş düğmesi gösterir (gorevOdalari: eylemlerden türetilir; genel bakım görevinde yok).
 // Yama anahtarları en çok iki düzey: 'puan.<clientId>', 'gorev.<YYYY-MM-DD>'.
 // veri: ham belge verisi (doc.data) ya da mantik.js oku() sonucu (oku 'gorev' alanını taşır).
 import { toDay, parseDay } from '../../js/core/gunler.js';
 import { gunNo, soruSecici } from '../gunun-sorusu/mantik.js';
+import { eylemOdasi } from './odalar.js';
 
 export const GOREV_BONUS = 2; // kişi başı
 export const GOREV_TUT = 7; // belgede tutulan gün işareti
@@ -31,7 +33,23 @@ export const GOREVLER = [
   { id: 'yika-oyna', metin: 'Biri yıkasın, biri oynasın', emoji: '🫧', kosul: { tur: 'ayri', roller: [['yika'], ['oyna']] } },
   { id: 'besle-yika', metin: 'Biri beslesin, biri yıkasın', emoji: '🛁', kosul: { tur: 'ayri', roller: [BESLE, ['yika']] } },
   { id: 'uyut-sev', metin: 'Biri uyutsun, biri sevsin', emoji: '🌙', kosul: { tur: 'ayri', roller: [['uyut'], ['sev']] } },
+  // Odalara bağlı görevler (kartta "Banyoya git" düğmesi)
+  { id: 'yika-uyut', metin: 'Biri yıkasın, biri uyutsun', emoji: '🧼', kosul: { tur: 'ayri', roller: [['yika'], ['uyut']] } },
+  { id: 'mutfak-2', metin: 'Mutfakta ikiniz de ikişer kez besleyin', emoji: '🍽️', kosul: { tur: 'herkes', eylemler: BESLE, adet: 2 } },
+  { id: 'lazimlik-oyna', metin: 'Biriniz lazımlığa götürsün, öteki oynasın', emoji: '🚽', kosul: { tur: 'ayri', roller: [['lazimlik'], ['oyna']] } },
+  { id: 'ikisi-yika', metin: 'İkiniz de banyoda bir kez yıkayın', emoji: '🛀', kosul: { tur: 'herkes', eylemler: ['yika'], adet: 1 } },
 ];
+
+export const GOREV_ODA_SINIR = 2; // daha çok odaya yayılan görev (genel bakım) oda düğmesi göstermez
+
+/** Görevin odaları (rol sırasıyla, tekil). Eylemleri GOREV_ODA_SINIR'dan çok odaya yayılıyorsa []. */
+export function gorevOdalari(gorev) {
+  const k = gorev?.kosul;
+  if (!k) return [];
+  const eylemler = (k.tur === 'ayri' ? k.roller : [k.eylemler]).flat();
+  const odalar = [...new Set(eylemler.map(eylemOdasi).filter(Boolean))];
+  return odalar.length <= GOREV_ODA_SINIR ? odalar : [];
+}
 
 const secici = (roomId) => soruSecici(GOREVLER, `yavrugorev:${roomId ?? ''}`);
 

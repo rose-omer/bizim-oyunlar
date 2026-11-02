@@ -104,22 +104,23 @@ const GOZYASI = '<g class="yvb-gozyasi"><path class="yvb-iz" d="M-27 9 Q-30 18 -
   + '<path class="yvb-damla yvb-dusen" d="M-28 12 Q-31.5 18 -28 20.4 Q-24.5 18 -28 12 Z"/>'
   + '<path class="yvb-damla yvb-dusen ikinci" d="M28 12 Q24.5 18 28 20.4 Q31.5 18 28 12 Z"/></g>';
 
-// ruh → yüz parçaları. emzik: küçük aşamada sakin ruhlarda ağız emziğin altında kalır.
+// ruh → yüz parçaları. emzik: ağız emziğin altında kalır (küçükte sakin ruhlarda; büyükte emzik takılıyken).
+// Ağlama ve kahkahada emzik verilmez (EMZIKSIZ_RUHLAR): ağız görünür.
 function yuzIc(k, ruh, emzik) {
   const ag = (tur) => agiz(emzik ? 'minik' : tur); // emzik ağzı örter
   switch (ruh) {
-    case 'mutlu': return kas('normal') + gozler(k) + yanak(k, true) + burun + agiz('acik');
+    case 'mutlu': return kas('normal') + gozler(k) + yanak(k, true) + burun + ag('acik');
     case 'kahkaha': return kas('kalkik') + gozCizgi('hilal') + yanak(k, true) + burun + agiz('kahkaha');
-    case 'ac': return kas('kalkik') + gozler(k, { buyukluk: 1.05 }) + yanak(k) + burun + agiz('o');
+    case 'ac': return kas('kalkik') + gozler(k, { buyukluk: 1.05 }) + yanak(k) + burun + ag('o');
     case 'kirli': return kas('egik') + gozler(k) + yanak(k) + burun + ag('dalga');
     case 'uykulu': return kas('sakin') + gozler(k, { kapak: true }) + yanak(k) + burun + ag('esneme');
-    case 'uzgun': return kas('egik') + gozler(k) + yanak(k) + burun + agiz('asik')
+    case 'uzgun': return kas('egik') + gozler(k) + yanak(k) + burun + ag('asik')
       + '<path class="yvb-damla" d="M-28 9 Q-31.5 15 -28 17.4 Q-24.5 15 -28 9 Z"/>';
     case 'uyuyor': return kas('sakin') + gozCizgi('kapali') + yanak(k) + burun + ag('minik');
     case 'aglama': return kas('egik') + gozCizgi('sikik') + yanak(k, true) + burun + agiz('aglama') + GOZYASI;
-    case 'sasirma': return kas('kalkik') + gozler(k, { buyukluk: 1.1 }) + yanak(k) + burun + agiz('o');
-    case 'huzur': return kas('sakin') + gozCizgi('hilal') + yanak(k, true) + burun + agiz('gulus');
-    case 'hapsu': return kas('kalkik') + gozCizgi('sikik') + yanak(k) + burun + agiz('esneme');
+    case 'sasirma': return kas('kalkik') + gozler(k, { buyukluk: 1.1 }) + yanak(k) + burun + ag('o');
+    case 'huzur': return kas('sakin') + gozCizgi('hilal') + yanak(k, true) + burun + ag('gulus');
+    case 'hapsu': return kas('kalkik') + gozCizgi('sikik') + yanak(k) + burun + ag('esneme');
     default: return kas('normal') + gozler(k) + yanak(k) + burun + ag('gulus');
   }
 }
@@ -148,15 +149,15 @@ function isaret(ruh, x, y, lekeler) {
 }
 
 // ---------- Ayak: taban izleyiciye dönük, beş parmak üst kenarda ----------
-// (x, y) taban merkezi; a: dönüş (derece); ic: başparmak yönü (-1 sol, +1 sağ).
-function ayak(k, x, y, a, ic) {
+// (x, y) taban merkezi; a: dönüş (derece); ic: başparmak yönü (-1 sol, +1 sağ); sade: parmaksız (küçük boy).
+function ayak(k, x, y, a, ic, sade = false) {
   const parmak = [[-0.64, 3.8], [-0.3, 3.1], [0.02, 2.8], [0.32, 2.5], [0.6, 2.2]].map(([u, r], i) => {
     const px = y1(u * 9.6 * ic);
     const py = y1(-12 + Math.abs(u) * 3.6 + (i === 0 ? -0.8 : 0));
     return `<circle class="yvb-ten" fill="url(#${k}-ten)" cx="${px}" cy="${py}" r="${r}"/>`;
   }).join('');
   return `<g class="yvb-ayak" transform="translate(${x} ${y}) rotate(${a})">`
-    + parmak
+    + (sade ? '' : parmak)
     + `<path class="yvb-ten" fill="url(#${k}-ten)" d="M0 -11 C7.5 -11 11 -5 10.5 2 C10 10 6 14 0 14 C-6 14 -10 10 -10.5 2 C-11 -5 -7.5 -11 0 -11 Z"/>`
     + '<ellipse class="yvb-taban" cx="0" cy="5" rx="5.5" ry="5"/>'
     + '</g>';
@@ -207,10 +208,123 @@ const ATKI = '<path class="yvb-g-atki" d="M115 118 C121 132 124 146 126 158 L111
   + '<path class="yvb-g-atki-cizgi" d="M79 116.5 L77.5 128 M121 116.5 L122.5 128"/>'
   + '<path class="yvb-g-atki-kat" d="M72 119 C86 125 114 125 128 119"/>';
 
+// Emzik (ağız yuvası; yerel 0,0 = ağız): küçük aşamadaki emziğin büyük boyu. .yvb-emzik konuşurken gizlenir.
+const EMZIK = '<g class="yvb-emzik"><ellipse class="yvb-emzik-kalkan" cx="0" cy="0.5" rx="13.5" ry="8"/>'
+  + '<circle class="yvb-emzik-dugme" cx="0" cy="1.2" r="4.3"/><circle class="yvb-emzik-halka" cx="0" cy="9.6" r="6.6"/>'
+  + '<ellipse class="yvb-g-isik-dolgu" cx="-6.5" cy="-2.6" rx="3.2" ry="1.5" transform="rotate(-12 -6.5 -2.6)"/></g>';
+
+// Battaniyecik (kucak yuvası; büyük aşama koordinatı): sol elde tutulur, bacağın yanından yere yumuşakça sarkar.
+// Saten kenar, kalpler; el kol katmanında önde kalır.
+const BATTANIYE = '<path class="yvb-g-battaniye" d="M64 150 C54 153 42 164 34 176 C30 182 30 187 35 188.5 Q42 191 48 188 Q55 192.5 62 189 Q69 191.5 72.5 186.5 C70 176 70 164 73 154 C71 150 67 149 64 150 Z"/>'
+  + '<path class="yvb-g-saten" d="M35 188.5 Q42 191 48 188 Q55 192.5 62 189 Q69 191.5 72.5 186.5"/>'
+  + '<path class="yvb-g-battaniye-kat" d="M60 156 C53 166 49 176 48 187 M67 157 C64 167 62 177 62 188"/>'
+  + '<path class="yvb-g-kalp" d="M42 180 c-2.4 -1.8 -2.6 -3.8 -1.3 -4.3 c0.7 -0.2 1.2 0.3 1.3 0.7 c0.1 -0.4 0.6 -0.9 1.3 -0.7 c1.3 0.5 1.1 2.5 -1.3 4.3 Z M57 174 c-2.4 -1.8 -2.6 -3.8 -1.3 -4.3 c0.7 -0.2 1.2 0.3 1.3 0.7 c0.1 -0.4 0.6 -0.9 1.3 -0.7 c1.3 0.5 1.1 2.5 -1.3 4.3 Z M55 186 c-2 -1.5 -2.2 -3.2 -1.1 -3.6 c0.6 -0.2 1 0.25 1.1 0.6 c0.1 -0.35 0.5 -0.8 1.1 -0.6 c1.1 0.4 0.9 2.1 -1.1 3.6 Z"/>';
+
+// ---------- Kıyafet (gövde yuvası; büyük aşama) ----------
+// Her kıyafet üç parça: govde (gövdenin üstü), bacak (bacakların üstü, ayakların altı), kol (kolların üstü).
+// Hepsi .yvb-kiyafet altında (banyoda gizlenir); renk --yv-govde (kumaş gradyanı). f: kumaş dolgusu özniteliği
+// (bebekte gradyan; mağaza kartında boş, sınıf boyar). Varsayılan tulum (govde yuvası boş) bugünkü çizimdir.
+const GOVDE_YOL = 'M100 107 C124 107 137 120 141 140 C145 159 137 175 100 177 C63 175 55 159 59 140 C63 120 76 107 100 107 Z';
+const PUF_KOL = ['M60 114 C51 118 47 130 51 137 C57 141 70 138 77 129 C79 120 71 110 60 114 Z',
+  'M140 114 C149 118 153 130 149 137 C143 141 130 138 123 129 C121 120 129 110 140 114 Z'];
+const motif = (kisilik, yer) => `<g class="yvb-motif" transform="${yer}">${MOTIFLER[kisilik] || MOTIFLER.kalp}</g>`;
+const kumas = (f, d, ek = '') => `<path class="yvb-kumas${ek}"${f} d="${d}"/>`;
+const yildiz = (x, y, r) => {
+  const n = [];
+  for (let i = 0; i < 10; i++) {
+    const a = (Math.PI / 5) * i - Math.PI / 2;
+    const u = i % 2 ? r * 0.45 : r;
+    n.push(`${y1(x + u * Math.cos(a))} ${y1(y + u * Math.sin(a))}`);
+  }
+  return `M${n.join(' L')} Z`;
+};
+
+// Fırfırlı etek katı: üst kenar (x1..x2, ust), yanlar dışa açılır, alt kenar n fistolu (alt).
+function etekKat(f, ek, x1, x2, ust, X1, X2, alt, n) {
+  const w = (X2 - X1) / n;
+  let fisto = '';
+  for (let i = n - 1; i >= 0; i--) fisto += ` Q${y1(X1 + (i + 0.5) * w)} ${y1(alt + 5.5)} ${y1(X1 + i * w)} ${alt}`;
+  const d = `M${x1} ${ust} Q100 ${ust + 4} ${x2} ${ust} C${y1(x2 + (X2 - x2) * 0.5)} ${y1(ust + (alt - ust) * 0.35)} ${X2 - 1} ${alt - 4} ${X2} ${alt}${fisto}`
+    + ` C${X1 + 1} ${alt - 4} ${y1(x1 - (x1 - X1) * 0.5)} ${y1(ust + (alt - ust) * 0.35)} ${x1} ${ust} Z`;
+  let dantel = '';
+  for (let i = 0; i < n; i++) dantel += `<circle cx="${y1(X1 + (i + 0.5) * w)}" cy="${y1(alt + 1.6)}" r="1.15"/>`;
+  return kumas(f, d, ek) + `<path class="yvb-etek-fisto" d="M${X2} ${alt}${fisto}"/>` + `<g class="yvb-etek-dantel">${dantel}</g>`;
+}
+
+const KIYAFETLER = {
+  // Varsayılan: benekli tulum (bugünkü çizim; değişmez).
+  tulum: (k, f, kisilik) => ({
+    govde: kumas(f, GOVDE_YOL)
+      + (k ? `<path fill="url(#${k}-benek)" d="${GOVDE_YOL}"/>` : '')
+      + '<path class="yvb-kumas-kat" d="M80 168 Q100 176 120 168"/>'
+      + '<path class="yvb-yaka" d="M84 111 Q92 121 100 117 Q108 121 116 111 Q108 114 100 113 Q92 114 84 111 Z"/>'
+      + motif(kisilik, 'translate(100 140)'),
+    bacak: '',
+    kol: kumas(f, PUF_KOL[0]) + kumas(f, PUF_KOL[1]),
+  }),
+  // Ayıcıklı bodi: düz kumaş, beyaz biyeli yaka, karında ayıcık aplike, altta çıtçıtlar.
+  ayicik: (k, f) => ({
+    govde: kumas(f, GOVDE_YOL)
+      + '<path class="yvb-biye" d="M85 111.5 Q100 124 115 111.5"/>'
+      + '<path class="yvb-kumas-kat" d="M80 168 Q100 176 120 168"/>'
+      + '<g class="yvb-ayi" transform="translate(100 144)">'
+      + '<circle class="yvb-ayi-yuz" cx="-10" cy="-10" r="5.2"/><circle class="yvb-ayi-yuz" cx="10" cy="-10" r="5.2"/>'
+      + '<circle class="yvb-ayi-ic" cx="-10" cy="-10" r="2.4"/><circle class="yvb-ayi-ic" cx="10" cy="-10" r="2.4"/>'
+      + '<ellipse class="yvb-ayi-yuz" cx="0" cy="0" rx="14" ry="12.5"/>'
+      + '<ellipse class="yvb-ayi-burun" cx="0" cy="4.2" rx="6" ry="4.6"/>'
+      + '<ellipse class="yvb-ayi-goz" cx="0" cy="2.4" rx="2.2" ry="1.6"/>'
+      + '<circle class="yvb-ayi-goz" cx="-5" cy="-2.6" r="1.5"/><circle class="yvb-ayi-goz" cx="5" cy="-2.6" r="1.5"/>'
+      + '<path class="yvb-ayi-agiz" d="M0 4 L0 6.4 M-2.4 7.2 Q0 8.6 2.4 7.2"/>'
+      + '<ellipse class="yvb-ayi-allik" cx="-8.4" cy="3.4" rx="2.4" ry="1.5"/><ellipse class="yvb-ayi-allik" cx="8.4" cy="3.4" rx="2.4" ry="1.5"/>'
+      + '</g>'
+      + '<circle class="yvb-cit" cx="91" cy="171" r="1.7"/><circle class="yvb-cit" cx="100" cy="173" r="1.7"/><circle class="yvb-cit" cx="109" cy="171" r="1.7"/>',
+    bacak: '',
+    kol: kumas(f, PUF_KOL[0]) + kumas(f, PUF_KOL[1])
+      + '<path class="yvb-biye" d="M52 136 C58 140 70 137 76 130 M148 136 C142 140 130 137 124 130"/>',
+  }),
+  // Pijama: yıldızlı, biyeli yaka, düğmeli pat; uzun kollu, uzun paçalı (ayaklar açıkta).
+  pijama: (k, f, kisilik) => {
+    const yildizlar = (liste) => `<path class="yvb-pijama-yildiz" d="${liste.map(([x, y, r]) => yildiz(x, y, r)).join(' ')}"/>`;
+    const kol = (d, cuf) => kumas(f, d) + `<path class="yvb-biye" d="${cuf}"/>`;
+    const paca = (d, cuf) => kumas(f, d) + `<path class="yvb-biye" d="${cuf}"/>`;
+    return {
+      govde: kumas(f, GOVDE_YOL)
+        + yildizlar([[76, 128, 3.4], [124, 124, 2.8], [70, 152, 2.6], [130, 150, 3.2], [88, 164, 2.4], [114, 166, 2.6]])
+        + '<path class="yvb-kumas-kat" d="M100 118 L100 172"/>'
+        + '<circle class="yvb-dugme" cx="104" cy="128" r="2"/><circle class="yvb-dugme" cx="104" cy="142" r="2"/><circle class="yvb-dugme" cx="104" cy="156" r="2"/>'
+        + '<path class="yvb-biye" d="M84 110 L94 121 L100 117 L106 121 L116 110"/>'
+        + motif(kisilik, 'translate(84 140) scale(0.8)'),
+      bacak: paca('M63 147 C52 155 50 172 59 180 C64 184 70 182 74 178 C80 170 84 164 86 158 C82 152 74 146 63 147 Z', 'M58 179 C64 183 70 181 74 177')
+        + paca('M137 147 C148 155 150 172 141 180 C136 184 130 182 126 178 C120 170 116 164 114 158 C118 152 126 146 137 147 Z', 'M142 179 C136 183 130 181 126 177')
+        + yildizlar([[64, 162, 2.6], [136, 162, 2.6], [74, 154, 2], [126, 154, 2]]),
+      kol: kol('M60 113 C50 117 46 130 48 142 C49 149 53 153 59 153 C66 153 71 150 73 145 C76 136 78 122 72 115 C69 113 64 112 60 113 Z', 'M50 147.5 C53 151.5 58 152.5 63 152 C68 151.5 71 149 72.5 146')
+        + kol('M140 113 C150 117 154 130 152 142 C151 149 147 153 141 153 C134 153 129 150 127 145 C124 136 122 122 128 115 C131 113 136 112 140 113 Z', 'M150 147.5 C147 151.5 142 152.5 137 152 C132 151.5 129 149 127.5 146')
+        + yildizlar([[58, 128, 2.4], [142, 128, 2.4]]),
+    };
+  },
+  // Fırfırlı elbise: kuşaklı, Peter Pan yakalı üst; üç kat fistolu etek (bacakları örter, ayaklar önde); fırfırlı kol.
+  elbise: (k, f, kisilik) => ({
+    govde: kumas(f, GOVDE_YOL)
+      + '<path class="yvb-yaka" d="M83 110 Q86 121 98 118 L100 114 L102 118 Q114 121 117 110 Q108 114 100 113 Q92 114 83 110 Z"/>'
+      + motif(kisilik, 'translate(100 127) scale(0.75)')
+      + '<path class="yvb-kusak" d="M63 133 Q100 143 137 133 L138.5 140 Q100 150 61.5 140 Z"/>'
+      + '<g transform="translate(100 141)"><path class="yvb-kusak" d="M-1.5 -0.5 C-6 -7 -15 -7 -14.5 -1 C-14 5 -6 4 -1.5 1 Z M1.5 -0.5 C6 -7 15 -7 14.5 -1 C14 5 6 4 1.5 1 Z"/>'
+      + '<ellipse class="yvb-kusak yvb-kusak-dugum" cx="0" cy="0" rx="3.6" ry="4"/></g>',
+    bacak: etekKat(f, '', 66, 134, 158, 38, 162, 185, 9)
+      + etekKat(f, ' yvb-etek-acik', 66, 134, 150, 46, 154, 172, 8)
+      + etekKat(f, '', 66, 134, 142, 54, 146, 160, 7),
+    kol: kumas(f, PUF_KOL[0]) + kumas(f, PUF_KOL[1])
+      + '<path class="yvb-etek-fisto" d="M51 137 Q54 141.5 57.5 139 Q61 143 65 139.5 Q69 142.5 72 137.5 Q75.5 136.5 77 129 M149 137 Q146 141.5 142.5 139 Q139 143 135 139.5 Q131 142.5 128 137.5 Q124.5 136.5 123 129"/>',
+  }),
+};
+
 const GIYIM_CIZIM = {
   bas: { tac: TAC, sapka: SAPKA, fiyonk: FIYONK },
   goz: { gozluk: GOZLUK },
   boyun: { atki: ATKI },
+  govde: { ayicik: '', pijama: '', elbise: '' }, // çizim KIYAFETLER'de (üç parça)
+  agiz: { emzik: EMZIK },
+  kucak: { battaniye: BATTANIYE },
 };
 /** Aşama → yuva → ürün → yerleşim (transform). Küçükte (kundak) yalnız baş yuvası: başlığın tepesinde küçük boy. */
 const GIYIM_YER = {
@@ -218,12 +332,16 @@ const GIYIM_YER = {
     bas: { tac: 'translate(102 31) rotate(6) scale(0.92)', sapka: 'translate(113 33) rotate(13) scale(0.8)', fiyonk: 'translate(100 25) scale(1.08)' },
     goz: { gozluk: 'translate(100 75)' },
     boyun: { atki: '' },
+    agiz: { emzik: 'translate(100 102)' },
+    kucak: { battaniye: '' },
   },
   kucuk: {
     bas: { tac: 'translate(100 54) rotate(3) scale(0.6)', sapka: 'translate(102 55) rotate(8) scale(0.56)', fiyonk: 'translate(100 52) scale(0.62)' },
   },
 };
-const GIYIM_BOS = Object.freeze({ bas: null, goz: null, boyun: null });
+const GIYIM_BOS = Object.freeze({ bas: null, goz: null, boyun: null, govde: null, agiz: null, kucak: null });
+// Büyükte emzik bu ruhlarda çıkar (ağız görünür). Konuşurken CSS gizler ([data-konusuyor] .yvb-emzik).
+const EMZIKSIZ_RUHLAR = ['aglama', 'kahkaha'];
 
 /** Bilinmeyen yuva ya da değer yok sayılır. -> { bas, goz, boyun } */
 function giyimGecerli(g) {
@@ -244,7 +362,11 @@ function giyimKatmani(giyim, yuva, asama) {
 }
 
 // Mağaza kartı için yalnız parça (yerel koordinatta, kırpılmış görünüm kutusu).
-const PARCA_KUTU = { tac: '-34 -38 68 48', sapka: '-36 -42 72 54', fiyonk: '-36 -22 72 48', gozluk: '-54 -20 108 40', atki: '58 100 84 70' };
+const KIYAFET_KUTU = '34 104 132 90';
+const PARCA_KUTU = {
+  tac: '-34 -38 68 48', sapka: '-36 -42 72 54', fiyonk: '-36 -22 72 48', gozluk: '-54 -20 108 40', atki: '58 100 84 70',
+  ayicik: KIYAFET_KUTU, pijama: KIYAFET_KUTU, elbise: KIYAFET_KUTU, emzik: '-18 -12 36 32', battaniye: '24 144 54 50',
+};
 
 /**
  * Tek aksesuarın SVG'si (mağaza kartı önizlemesi). urun: giyim yuvalarındaki id; renk: 1–6 (kıyafet rengi jetonu).
@@ -253,8 +375,13 @@ const PARCA_KUTU = { tac: '-34 -38 68 48', sapka: '-36 -42 72 54', fiyonk: '-36 
 export function giyimParcaSvg(urun, { renk = 1 } = {}) {
   const yuva = Object.keys(GIYIM_CIZIM).find((y) => Object.hasOwn(GIYIM_CIZIM[y], urun ?? ''));
   if (!yuva) return '';
+  let ic;
+  if (yuva === 'govde') {
+    const p = KIYAFETLER[urun](null, '', '');
+    ic = `<g class="yvb-kiyafet yvb-kiyafet-govde">${p.govde}${p.bacak}${p.kol}</g>`;
+  } else ic = `<g class="yvb-giyim yvb-giyim-${yuva}">${GIYIM_CIZIM[yuva][urun]}</g>`;
   return `<svg viewBox="${PARCA_KUTU[urun]}" class="yvb-svg yvb-parca" data-urun="${urun}" style="--yv-govde:var(--yv-r${renkGecerli(renk)})" aria-hidden="true" focusable="false">`
-    + `<g class="yvb-giyim yvb-giyim-${yuva}">${GIYIM_CIZIM[yuva][urun]}</g></svg>`;
+    + `${ic}</svg>`;
 }
 
 // ---------- Büyük: oturan bebek (viewBox 0 0 200 200, zemin y≈186) ----------
@@ -267,15 +394,21 @@ const MOTIFLER = {
   kalp: '<path class="yvb-motif-a" d="M0 6 C-7 1 -7.5 -4.5 -3.8 -5.6 C-1.8 -6.2 -0.4 -4.8 0 -3.6 C0.4 -4.8 1.8 -6.2 3.8 -5.6 C7.5 -4.5 7 1 0 6 Z"/>',
 };
 
-function buyuk(k, ruh, kisilik, giyim) {
+function buyuk(k, ruh, kisilik, giyim, kucukBoy) {
   // El: dizde duran bebek eli; avuç üstte, dört kısa parmak (orta uzun, aralıklı, hafif yelpaze) avucun altından
   // çıkar; başparmak iç yanda ayrı ve eğik. s: başparmak yönü.
+  // kucukBoy (≈64–96 px kart): parmaklar seçilmez; el tek yumuşak yuvarlak, ayak parmaksız.
   const parmak = (x, y, ry, a) => `<ellipse class="yvb-ten yvb-parmak" fill="url(#${k}-ten)" cx="${x}" cy="${y}" rx="2.5" ry="${ry}" transform="rotate(${a} ${x} ${y})"/>`;
   const el = (x, y, s) => `<g class="yvb-el" transform="translate(${x} ${y}) scale(${s} 1)">`
-    + parmak(-5.8, 6.6, 4.2, 20) + parmak(-2, 8.2, 5, 7) + parmak(1.9, 8.2, 4.8, -5) + parmak(5.6, 6.6, 4, -18)
-    + `<ellipse class="yvb-ten" fill="url(#${k}-ten)" cx="8.6" cy="-0.4" rx="3" ry="5" transform="rotate(-40 8.6 -0.4)"/>`
-    + `<path class="yvb-ten" fill="url(#${k}-ten)" d="M-8.4 -3 C-8.4 -9.4 7.6 -9.4 7.8 -3 C8 2 5.2 5.6 0 5.6 C-5.2 5.6 -8.4 2 -8.4 -3 Z"/>`
+    + (kucukBoy ? '' : parmak(-5.8, 6.6, 4.2, 20) + parmak(-2, 8.2, 5, 7) + parmak(1.9, 8.2, 4.8, -5) + parmak(5.6, 6.6, 4, -18))
+    + (kucukBoy
+      ? `<path class="yvb-ten" fill="url(#${k}-ten)" d="M-9 -3 C-9 -10 9 -10 9.4 -2 C9.8 5 6 11.5 0 11.5 C-6 11.5 -9.4 4 -9 -3 Z"/>`
+      : `<ellipse class="yvb-ten" fill="url(#${k}-ten)" cx="8.6" cy="-0.4" rx="3" ry="5" transform="rotate(-40 8.6 -0.4)"/>`
+      + `<path class="yvb-ten" fill="url(#${k}-ten)" d="M-8.4 -3 C-8.4 -9.4 7.6 -9.4 7.8 -3 C8 2 5.2 5.6 0 5.6 C-5.2 5.6 -8.4 2 -8.4 -3 Z"/>`)
     + '</g>';
+  const kiyafet = KIYAFETLER[giyim.govde || 'tulum'](k, ` fill="url(#${k}-kumas)"`, kisilik);
+  const urunVeri = giyim.govde ? ` data-urun="${giyim.govde}"` : '';
+  const emzik = giyim.agiz && !EMZIKSIZ_RUHLAR.includes(ruh);
   const KABUK_SAC_ARKA = 'M100 15 C138 15 161 41 161 72 C161 84 157 91 162 98 C167 104 161 110 154 107 C150 105 148 102 147 99 C140 78 60 78 53 99 C52 102 50 105 46 107 C39 110 33 104 38 98 C43 91 39 84 39 72 C39 41 62 15 100 15 Z';
   return '<ellipse class="yvb-zemin" cx="100" cy="187" rx="66" ry="6.5"/>'
     + '<g class="yvb-beden">'
@@ -283,20 +416,17 @@ function buyuk(k, ruh, kisilik, giyim) {
     + `<g class="yvb-sac yvb-sac-arka"><path fill="url(#${k}-sac)" d="${KABUK_SAC_ARKA}"/></g>`
     // Gövde (ten; kıyafet altında, giydirme için ayrı)
     + `<g class="yvb-govde">${ten(k, '<path class="yvb-ten" d="M100 108 C124 108 137 121 141 140 C145 159 137 175 100 177 C63 175 55 159 59 140 C63 121 76 108 100 108 Z"/>')}</g>`
-    // Kıyafet: tulum (renk jetonundan), benek, yaka, göğüste motif
-    + '<g class="yvb-kiyafet yvb-kiyafet-govde">'
-    + `<path class="yvb-kumas" fill="url(#${k}-kumas)" d="M100 107 C124 107 137 120 141 140 C145 159 137 175 100 177 C63 175 55 159 59 140 C63 120 76 107 100 107 Z"/>`
-    + `<path fill="url(#${k}-benek)" d="M100 107 C124 107 137 120 141 140 C145 159 137 175 100 177 C63 175 55 159 59 140 C63 120 76 107 100 107 Z"/>`
-    + '<path class="yvb-kumas-kat" d="M80 168 Q100 176 120 168"/>'
-    + '<path class="yvb-yaka" d="M84 111 Q92 121 100 117 Q108 121 116 111 Q108 114 100 113 Q92 114 84 111 Z"/>'
-    + `<g class="yvb-motif" transform="translate(100 140)">${MOTIFLER[kisilik] || MOTIFLER.kalp}</g>`
-    + '</g>'
-    // Bacaklar öne uzanmış, tabanlar izleyiciye dönük
+    // Kıyafet (gövde yuvası; boşsa benekli tulum): renk jetonundan
+    + `<g class="yvb-kiyafet yvb-kiyafet-govde"${urunVeri}>${kiyafet.govde}</g>`
+    // Bacaklar öne uzanmış, tabanlar izleyiciye dönük; paça ya da etek bacakların üstünde, ayakların altında
     + '<g class="yvb-bacak">'
     + ten(k, '<path class="yvb-ten" d="M63 148 C52 156 50 174 61 182 C71 189 87 187 92 179 C96 171 90 161 80 154 C74 150 68 146 63 148 Z"/>')
     + ten(k, '<path class="yvb-ten" d="M137 148 C148 156 150 174 139 182 C129 189 113 187 108 179 C104 171 110 161 120 154 C126 150 132 146 137 148 Z"/>')
-    + ayak(k, 86, 176, -10, 1) + ayak(k, 114, 176, 10, -1)
+    + (kiyafet.bacak ? `<g class="yvb-kiyafet yvb-kiyafet-bacak"${urunVeri}>${kiyafet.bacak}</g>` : '')
+    + ayak(k, 86, 176, -10, 1, kucukBoy) + ayak(k, 114, 176, 10, -1, kucukBoy)
     + '</g>'
+    // Battaniyecik sol elin altında (el önde kalır)
+    + giyimKatmani(giyim, 'kucak', 'buyuk')
     // Kollar: omuzdan dize; eller dizde
     + '<g class="yvb-kol">'
     + ten(k, '<path class="yvb-ten" d="M64 116 C53 122 48 138 51 150 C53 158 61 162 67 158 C73 153 76 136 76 124 Z"/>')
@@ -304,11 +434,8 @@ function buyuk(k, ruh, kisilik, giyim) {
     + el(67, 157, 1)
     + el(133, 157, -1)
     + '</g>'
-    // Kabarık kısa kollar (kıyafetin parçası; kolun üstünde)
-    + '<g class="yvb-kiyafet yvb-kiyafet-kol">'
-    + `<path class="yvb-kumas" fill="url(#${k}-kumas)" d="M60 114 C51 118 47 130 51 137 C57 141 70 138 77 129 C79 120 71 110 60 114 Z"/>`
-    + `<path class="yvb-kumas" fill="url(#${k}-kumas)" d="M140 114 C149 118 153 130 149 137 C143 141 130 138 123 129 C121 120 129 110 140 114 Z"/>`
-    + '</g>'
+    // Kollar (kıyafetin parçası; kolun üstünde): tulumda kabarık kısa kol
+    + `<g class="yvb-kiyafet yvb-kiyafet-kol"${urunVeri}>${kiyafet.kol}</g>`
     + giyimKatmani(giyim, 'boyun', 'buyuk')
     // Baş: kulaklar, yüz şekli (alt yanaklar tombul), çene gölgesi
     + '<g class="yvb-bas">'
@@ -317,7 +444,7 @@ function buyuk(k, ruh, kisilik, giyim) {
     + ten(k, '<ellipse class="yvb-ten" cx="152" cy="80" rx="9" ry="11"/>') + '<path class="yvb-kulak-ic" d="M153 74 Q157 80 153 86"/>'
     + ten(k, '<path class="yvb-ten" d="M100 22 C131 22 152 42 153 69 C154 95 138 117 100 117 C62 117 46 95 47 69 C48 42 69 22 100 22 Z"/>')
     + '</g>'
-    + yuz(k, ruh, 100, 75, 1)
+    + yuz(k, ruh, 100, 75, 1, emzik)
     // Ön saç: dalgalı kâkül, yanlarda kıvrım; ışık şeridi
     + '<g class="yvb-sac yvb-sac-on">'
     + `<path fill="url(#${k}-sac)" d="M47 72 C42 38 66 18 100 18 C134 18 158 38 153 72 C149 60 143 52 136 49 C134 55 128 58 122 55 C120 47 113 42 106 42 C103 50 93 54 84 51 C82 46 78 44 73 46 C69 53 62 57 55 58 C51 62 48 66 47 72 Z"/>`
@@ -325,6 +452,7 @@ function buyuk(k, ruh, kisilik, giyim) {
     + '<path class="yvb-sac-isik" d="M72 30 C84 23 104 22 118 26"/>'
     + '</g>'
     + giyimKatmani(giyim, 'goz', 'buyuk')
+    + (emzik ? giyimKatmani(giyim, 'agiz', 'buyuk') : '')
     // Aksesuar: baş yuvası boşsa varsayılan saç bandı + pembe fiyonk; doluysa giyilen (giyim katmanı)
     + (giyim.bas ? giyimKatmani(giyim, 'bas', 'buyuk') : '<g class="yvb-aksesuar">'
     + '<path class="yvb-bant" d="M64 38 C86 22 120 21 142 37 C148 42 152 50 154 58"/>'
@@ -389,13 +517,15 @@ function kucuk(k, ruh, giyim) {
 /**
  * Bebek SVG'si (metin). asama: 'kucuk'|'buyuk'; ruh: BEBEK_RUHLARI; renk: 1–6 (kıyafet/kundak);
  * kisilik: 'obur'|'uykucu'|'neseli'|'titiz' (büyükte göğüs motifi); etiket: erişilebilir ad;
- * kimlik: gradyan id öneki (verilmezse sayaçtan benzersiz); giyim: { bas?, goz?, boyun? } (giyim.js giyimOku;
- * baş boşsa varsayılan pembe fiyonk; küçükte yalnız baş, küçük boy). Bilinmeyen değer varsayılana düşer / yok sayılır.
+ * kimlik: gradyan id öneki (verilmezse sayaçtan benzersiz); giyim: { bas?, goz?, boyun?, govde?, agiz?, kucak? }
+ * (giyim.js giyimOku; baş boşsa varsayılan pembe fiyonk, gövde boşsa benekli tulum; küçükte yalnız baş, küçük boy);
+ * kucukBoy: true → ≈64–96 px gösterim (ana sayfa kartı) için sade el (parmaksız yuvarlak). Bilinmeyen değer varsayılana
+ * düşer / yok sayılır.
  */
 const renkGecerli = (renk) => (Number.isInteger(renk) && renk >= 1 && renk <= 6 ? renk : 1);
 const onek = (kimlik) => String(kimlik).replace(/[^a-zA-Z0-9_-]/g, '') || `yvb${++sayac}`;
 
-export function bebekSvg({ asama = 'buyuk', ruh = 'normal', renk = 1, kisilik = '', etiket = '', kimlik = '', giyim = null } = {}) {
+export function bebekSvg({ asama = 'buyuk', ruh = 'normal', renk = 1, kisilik = '', etiket = '', kimlik = '', giyim = null, kucukBoy = false } = {}) {
   const a = BEBEK_ASAMALARI.includes(asama) ? asama : 'buyuk';
   const g = giyimGecerli(giyim);
   const r = BEBEK_RUHLARI.includes(ruh) ? ruh : 'normal';
@@ -403,7 +533,7 @@ export function bebekSvg({ asama = 'buyuk', ruh = 'normal', renk = 1, kisilik = 
   const ki = KISILIKLER.includes(kisilik) ? kisilik : '';
   const k = onek(kimlik);
   const erisim = etiket ? `role="img" aria-label="${esc(etiket)}"` : 'aria-hidden="true"';
-  const ic = a === 'buyuk' ? buyuk(k, r, ki, g) : kucuk(k, r, g);
+  const ic = a === 'buyuk' ? buyuk(k, r, ki, g, kucukBoy === true) : kucuk(k, r, g);
   return `<svg viewBox="0 0 200 200" class="yvb-svg" data-asama="${a}" data-ruh="${r}"${ki ? ` data-kisilik="${ki}"` : ''}`
     + ` style="--yv-govde:var(--yv-r${c})" ${erisim} focusable="false">${tanimlar(k)}${ic}</svg>`;
 }
@@ -450,6 +580,8 @@ export const BEBEK_CSS = `
   --yvb-cerceve: #5B2D4E;
   --yvb-cam: #3B2F5C;
   --yvb-atki: #E86A5A;
+  --yvb-ayi: #C8946A;
+  --yvb-battaniye: #FBE3B0;
 }
 .yvb-svg {
   display: block; width: 100%; height: 100%; overflow: visible;
@@ -531,6 +663,25 @@ export const BEBEK_CSS = `
 .yvb-emzik-kalkan { fill: var(--yvb-fiyonk); stroke: color-mix(in oklab, var(--yvb-fiyonk) 60%, var(--yvb-murekkep)); stroke-width: 1.2; }
 .yvb-emzik-halka { fill: none; stroke: color-mix(in oklab, var(--yvb-fiyonk) 80%, var(--yvb-murekkep)); stroke-width: 2.2; }
 .yvb-emzik-dugme { fill: color-mix(in oklab, var(--yvb-fiyonk) 45%, var(--yvb-ak)); }
+/* Kıyafetler (gövde yuvası). Kumaş --yv-govde; süsler mürekkeple karışık; iki temada aynı. */
+.yvb-parca .yvb-kumas { fill: var(--yvb-kumas); }
+.yvb-biye { fill: none; stroke: var(--yvb-ak); stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+.yvb-cit, .yvb-dugme { fill: var(--yvb-ak); stroke: var(--yvb-kumas-koyu); stroke-width: 0.9; }
+.yvb-ayi-yuz { fill: var(--yvb-ayi); stroke: color-mix(in oklab, var(--yvb-ayi) 55%, var(--yvb-murekkep)); stroke-width: 1.2; }
+.yvb-ayi-ic, .yvb-ayi-burun { fill: color-mix(in oklab, var(--yvb-ayi) 45%, var(--yvb-ak)); }
+.yvb-ayi-goz { fill: var(--yvb-murekkep); }
+.yvb-ayi-agiz { fill: none; stroke: var(--yvb-murekkep); stroke-width: 1.1; stroke-linecap: round; }
+.yvb-ayi-allik { fill: var(--yvb-allik); opacity: 0.5; }
+.yvb-pijama-yildiz { fill: var(--yvb-ak); opacity: 0.9; }
+.yvb-kusak { fill: var(--yvb-fiyonk); stroke: color-mix(in oklab, var(--yvb-fiyonk) 60%, var(--yvb-murekkep)); stroke-width: 1.2; stroke-linejoin: round; }
+.yvb-kusak-dugum { fill: color-mix(in oklab, var(--yvb-fiyonk) 85%, var(--yvb-murekkep)); }
+.yvb-etek-acik { fill: color-mix(in oklab, var(--yv-govde) 70%, var(--yvb-ak)); }
+.yvb-etek-fisto { fill: none; stroke: var(--yvb-ak); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; opacity: 0.95; }
+.yvb-etek-dantel circle { fill: var(--yvb-kumas-koyu); opacity: 0.45; }
+.yvb-g-battaniye { fill: var(--yvb-battaniye); stroke: color-mix(in oklab, var(--yvb-battaniye) 50%, var(--yvb-murekkep)); stroke-width: 1.4; stroke-linejoin: round; }
+.yvb-g-battaniye-kat { fill: none; stroke: color-mix(in oklab, var(--yvb-battaniye) 50%, var(--yvb-murekkep)); stroke-width: 1.1; stroke-linecap: round; opacity: 0.45; }
+.yvb-g-saten { fill: none; stroke: color-mix(in oklab, var(--yvb-pembe) 45%, var(--yvb-ak)); stroke-width: 3.2; stroke-linecap: round; stroke-linejoin: round; }
+.yvb-g-kalp { fill: var(--yvb-pembe); opacity: 0.75; }
 /* Giyim katmanı (aksesuarlar). Kontur mürekkeple karışık; iki temada aynı (pastel bebek gibi). */
 .yvb-g-altin { fill: var(--yvb-altin); stroke: color-mix(in oklab, var(--yvb-altin-koyu) 70%, var(--yvb-murekkep)); stroke-width: 1.5; stroke-linejoin: round; }
 .yvb-g-altin-koyu { fill: var(--yvb-altin-koyu); stroke: color-mix(in oklab, var(--yvb-altin-koyu) 70%, var(--yvb-murekkep)); stroke-width: 1.2; stroke-linejoin: round; }

@@ -218,6 +218,19 @@ export function durumMetni(y, simdi, keyifsiz = false, tuvalet = null) {
   return DURUM[ruhHali(y, simdi)] || DURUM.normal;
 }
 
+/**
+ * Durum metniyle uyumlu yüz (bebek.js BEBEK_RUHLARI): durumMetni'nin önceliğini izler. Keyifsiz, kaza ve
+ * özledi → 'uzgun'; çişi var → 'sasirma'; uykuda ve yumurtada ruhHali. Kart ve sayfa paylaşır.
+ */
+export function kartRuhu(y, simdi, { keyifsiz = false, tuvalet = null } = {}) {
+  const ruh = ruhHali(y, simdi);
+  if (ruh === 'yumurta' || ruh === 'uyuyor') return ruh;
+  if (keyifsiz) return 'uzgun';
+  if (tuvalet?.cisVar) return 'sasirma';
+  if (tuvalet?.yeniKaza || ozledi(y, simdi)) return 'uzgun';
+  return ruh;
+}
+
 // ---------- Eylemler ----------
 
 /** Kişinin bu eylem için kalan beklemesi (ms; 0 = hazır). */

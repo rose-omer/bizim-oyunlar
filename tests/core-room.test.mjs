@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   joinRoom, openLocalRoom, pickPartner, samePartner, acceptEnvelope,
-  applyLocalPresence, expirePeers, backoffDelay, partnerGoruyor,
+  applyLocalPresence, expirePeers, backoffDelay, partnerGoruyor, alanAl, ALAN_MAX,
 } from '../js/core/room.js';
 
 const ROOM = 'test123456';
@@ -280,5 +280,44 @@ test('yerel arka uç: sekme gizlenince hemen gorunur:false yayınlanır', async 
     raw.close();
     a.leave();
     if (hadDoc) globalThis.document = oldDoc; else delete globalThis.document;
+  }
+});
+
+test('presence alanı: yalnız doluysa taşınır; eski istemci (alan yok) etkilenmez', () => {
+  assert.deepEqual(alanAl('banyo'), { alan: 'banyo' });
+  assert.deepEqual(alanAl('  '), {});
+  assert.deepEqual(alanAl(null), {});
+  assert.deepEqual(alanAl(42), {});
+  assert.equal(alanAl('x'.repeat(99)).alan.length, ALAN_MAX);
+  assert.deepEqual(pickPartner({ B: [{ clientId: 'B', name: 'Ayşe', page: 'yavru', alan: 'banyo' }] }, 'A'),
+    { clientId: 'B', name: 'Ayşe', page: 'yavru', host: null, gorunur: true, alan: 'banyo' });
+  assert.equal('alan' in pickPartner({ B: [{ clientId: 'B', name: 'Ayşe', page: 'yavru' }] }, 'A'), false);
+  const p = { clientId: 'B', name: 'Ayşe', page: 'yavru', host: null, gorunur: true };
+  assert.equal(samePartner(p, { ...p, alan: 'banyo' }), false);
+  assert.equal(samePartner({ ...p, alan: 'banyo' }, { ...p, alan: 'banyo' }), true);
+  assert.equal(samePartner({ ...p, alan: 'banyo' }, { ...p, alan: 'mutfak' }), false);
+  const peers = new Map();
+  const here = { _p: 'here', clientId: 'B', name: 'Ayşe', page: 'yavru', inst: 'i1' };
+  applyLocalPresence(peers, here, 'A', 1);
+  assert.deepEqual(applyLocalPresence(peers, { ...here, alan: 'yatak' }, 'A', 2), { changed: true, reply: false });
+  assert.equal(peers.get('B').alan, 'yatak');
+  assert.deepEqual(applyLocalPresence(peers, { ...here, alan: 'yatak' }, 'A', 3), { changed: false, reply: false });
+  assert.deepEqual(applyLocalPresence(peers, here, 'A', 4), { changed: true, reply: false });
+  assert.equal('alan' in peers.get('B'), false);
+});
+
+test('yerel arka uç: setAlan presence ile hemen yayılır, null siler', async () => {
+  const a = openLocalRoom({ roomId: ROOM + 'al', ns: 'yavru', me: { clientId: 'A', name: 'Ali' }, heartbeatMs: 60000 });
+  const b = openLocalRoom({ roomId: ROOM + 'al', ns: 'yavru', me: { clientId: 'B', name: 'Ayşe' }, heartbeatMs: 60000 });
+  try {
+    await until(() => b.partner());
+    assert.equal('alan' in b.partner(), false);
+    a.setAlan('banyo');
+    await until(() => b.partner()?.alan === 'banyo');
+    a.setAlan(null);
+    await until(() => b.partner() && !('alan' in b.partner()));
+  } finally {
+    a.leave();
+    b.leave();
   }
 });

@@ -5,6 +5,8 @@
 // Odalar (odalar.js saf, oda-cizim.js çizim): sekme + kaydırma; son oda cihaz başı (localStorage). Sürükle-bırak bakım
 // (yemek ağza, sabun köpüğü, lazımlık) sonunda var olan eylemTikla yolunu çağırır. Oyun odası: mini oyunlar
 // (oyunlar/cerceve.js oyunAc; jeton jeton.js jetonKazan) ve ses taklidi (taklit.js; ses cihazda işlenir, saklanmaz).
+// Bulunulan oda partnere presence alanıyla gider (room.setAlan; belgeye yazılmaz). Yatak odasında ninni (ninni.js).
+// Erken uyandırma ağlatır, sallama (düğme ya da sağ-sol hareket) susturur (dokunma.js; geçici, belgeye yazılmaz).
 // Veri: 'yavru' türünde tek belge 'bizim' (alan düzeyinde yama), bakım günlüğü 'yavrubakim' (son 50: günlük görev sayımı; liste son 10).
 import { bootPage } from '../../js/core/sayfa.js';
 import { openCollection } from '../../js/core/veri.js';
@@ -32,6 +34,7 @@ import { taklitBaslat, taklitDestegi, mikrofonAcikMi } from './taklit.js';
 import { giyimOku } from './giyim.js';
 import { magazaAc as magazaKatmani } from './magaza.js';
 import { buyumeSahnesi, buyumeSahnesiGerekli } from './buyume-sahne.js';
+import { ninniCal, ninniRuhu } from './ninni.js';
 
 const { room, roomId, me } = await bootPage({ ns: 'yavru', title: 'Yavrumuz', tab: 'daha' });
 const app = document.getElementById('app');
@@ -113,6 +116,7 @@ let kopuk = O.kopukBaslat(); // banyo: sabun köpüğü (geçici)
 let tikEngel = false; // sürükleme ya da kaydırma bitti: ardından gelen tık eylem saymasın
 let taklit = null; // ses taklidi denetimi (taklit.js) | null
 let taklitDurum = null;
+let ninni = null; // çalan ninni denetimi (ninni.js ninniCal) | null
 
 // ---------- İskelet ----------
 const cizimEl = h('span', { class: 'yv-cizim' });
@@ -131,9 +135,12 @@ const sabunEl = h('span', { class: 'yv-sabun', 'aria-hidden': 'true', html: SABU
 const dusBtn = h('button', { type: 'button', class: 'btn primary yv-dus', hidden: true, onclick: durula },
   h('span', { 'aria-hidden': 'true' }, '🚿'), 'Durula');
 const mikEl = h('span', { class: 'yv-mik', hidden: true }, 'Mikrofon açık');
+// Ağlarken: Salla (sağ-sol sallama hareketiyle aynı; klavyeyle erişilir).
+const sallaBtn = h('button', { type: 'button', class: 'btn primary small yv-salla', hidden: true, onclick: () => sakinlestir() },
+  h('span', { 'aria-hidden': 'true' }, '🤲'), 'Salla');
 const sahne = h('section', { class: 'yv-sahne', 'aria-label': 'Yavrumuz' },
   odaZeminEl, h('span', { class: 'yv-gok', 'aria-hidden': 'true' }), buradaEl, mikEl, lazimlikEl, dokunBtn, sabunEl, dusBtn,
-  kisayolEl, parcaEl, sozEl);
+  sallaBtn, kisayolEl, parcaEl, sozEl);
 
 // Oda sekmeleri: otomatik etkinleşen sekme listesi (oklar, Home, End); sekme paneli odanın eylem düğmeleri.
 const odaSekme = {};
@@ -219,8 +226,9 @@ function ekDugme(ad, emojiMetni, adMetni, onclick) {
 const oyunlarDugme = ekDugme('oyunlar', '🎮', 'Oyunlar', () => { oyunSecAcik = true; cizPanel(); oyunSecEl.querySelector('button')?.focus({ preventScroll: true }); });
 const konusDugme = ekDugme('konus', '🎤', 'Konuş', konusTikla);
 const magazaDugme = ekDugme('magaza', '🛍️', 'Mağaza', () => magazaAc());
+const ninniDugme = ekDugme('ninni', '🎵', 'Ninni çal', ninniTikla); // yatak odası
 const odaGrup = h('div', { class: 'yv-eylem-grup yv-oda-grup', id: 'yv-oda-panel', role: 'tabpanel' },
-  dugmeler.map((d) => d.btn), oyunlarDugme.btn, konusDugme.btn, magazaDugme.btn);
+  dugmeler.map((d) => d.btn), ninniDugme.btn, oyunlarDugme.btn, konusDugme.btn, magazaDugme.btn);
 const ipucuEl = h('p', { class: 'yv-oda-ipucu' });
 const OYUN_EMOJI = { balon: '🎈', top: '🧺', cee: '🙈', ninni: '⭐' };
 const oyunGeri = h('button', { type: 'button', class: 'btn ghost small yv-oyun-geri', onclick: () => { oyunSecAcik = false; cizPanel(); oyunlarDugme.btn.focus({ preventScroll: true }); } }, 'Geri');
@@ -250,43 +258,49 @@ const gorevSayi = h('span', { class: 'yv-gorev-sayi' });
 const gorevDolu = h('span', { class: 'yv-cubuk-dolu' });
 const gorevCubuk = h('span', { class: 'yv-cubuk', role: 'meter', 'aria-valuemin': '0', 'aria-labelledby': 'yv-gorev-baslik' }, gorevDolu);
 const gorevDurum = h('p', { class: 'yv-gorev-durum' });
+const gorevOdaEl = h('div', { class: 'yv-gorev-odalar', hidden: true }); // "Banyoya git" (gorev.js gorevOdalari)
+let gorevOdaAnahtar = '';
 const gorevSec = h('section', { class: 'yv-gorev', 'aria-labelledby': 'yv-gorev-baslik', hidden: true },
   h('div', { class: 'yv-gorev-bas' }, gorevEmoji,
     h('div', { class: 'yv-gorev-govde' }, h('h2', { class: 'yv-gorev-baslik', id: 'yv-gorev-baslik' }, 'Günün görevi'), gorevMetin),
     gorevSayi),
-  gorevCubuk, gorevDurum);
+  gorevCubuk, gorevDurum, gorevOdaEl);
 
 const kok = h('div', { class: 'yv' }, odaSekmeEl, sahne, bilgi, ihtiyacEl, gorevSec, panel, bakimSec);
 app.replaceChildren(kok);
 
 // ---------- Çizim ----------
 function cizSahne() {
-  const gercekRuh = M.ruhHali(y, simdi);
+  const keyifsiz = S.keyifsizMi(y, simdi);
+  const tuvalet = T.tuvaletDurumu(y, simdi);
+  // Yüz durum yazısıyla uyumlu: çişi var, kaza, keyifsiz, özledi (kart.js ile aynı kural).
+  const gercekRuh = M.kartRuhu(y, simdi, { keyifsiz, tuvalet });
   // Dokunma tepkisi yalnız uyanık bebekte ve süresince (yumurtada ruhHali 'yumurta').
   const uyanik = !['yumurta', 'uyuyor'].includes(gercekRuh);
   const tepkide = !!gecici && simdi < gecici.bitis && uyanik;
-  // Öncelik: dinlerken dikkat kesilir, yiyecek ağza yaklaşınca ağız açılır, sonra dokunma tepkisi.
+  // Öncelik: dinlerken dikkat kesilir, yiyecek ağza yaklaşınca ağız açılır, sonra dokunma tepkisi, sonra ninni uykusu.
   const dinliyor = uyanik && !!taklit && taklitDurum !== 'tekrar';
-  const ruh = dinliyor ? 'sasirma' : uyanik && agizAcik ? 'mutlu' : tepkide ? gecici.ruh : gercekRuh;
+  const ninniUykulu = !!ninni && ninniRuhu(y, simdi);
+  const ruh = dinliyor ? 'sasirma' : uyanik && agizAcik ? 'mutlu' : tepkide ? gecici.ruh : ninniUykulu || gercekRuh;
   const asama = y?.asama || 'yumurta';
   const renk = y?.renk || M.renkSec(roomId);
   const kisilik = y?.kisilik || '';
   const hazir = asama === 'yumurta' && !!y && M.catlamaHazir(y, simdi);
   const giyim = y ? giyimOku(y) : {};
-  const anahtar = `${asama}|${ruh}|${renk}|${hazir}|${kisilik}|${giyim.bas}|${giyim.goz}|${giyim.boyun}`;
+  const anahtar = `${asama}|${ruh}|${renk}|${hazir}|${kisilik}|${JSON.stringify(giyim)}`;
   if (anahtar !== svgAnahtar) {
     svgAnahtar = anahtar;
     cizimEl.innerHTML = yavruSvg({ asama, ruh, renk, hazir, kisilik, giyim });
   }
-  if (!tepkide) delete sahne.dataset.dokunma;
+  // Tepki bitince hareket kalkar (erken uyandırmada tepki yama gelmeden başlar: süre dolmadıysa dokunma).
+  if (!gecici || simdi >= gecici.bitis) delete sahne.dataset.dokunma;
+  sallaBtn.hidden = !(tepkide && gecici.ruh === 'aglama');
   cizKisayol(gercekRuh === 'yumurta' || gercekRuh === 'uyuyor' ? '' : asama);
   kok.style.setProperty('--yv-govde', `var(--yv-r${renk})`);
   sahne.dataset.asama = asama;
   const uyuyor = ruh === 'uyuyor';
   sahne.toggleAttribute('data-gece', uyuyor);
   dokunBtn.setAttribute('aria-label', asama === 'yumurta' ? 'Yumurtayı ısıt' : `${y?.ad || 'Yavrunuzu'} sev`);
-  const keyifsiz = S.keyifsizMi(y, simdi);
-  const tuvalet = T.tuvaletDurumu(y, simdi);
   let soz = (uyanik && odaSozu()) || (tepkide ? gecici.metin : M.durumMetni(y, simdi, keyifsiz, tuvalet));
   if (uyuyor) {
     const kalan = M.kalanMetni(Date.parse(y.uyku.bit) - simdi);
@@ -314,6 +328,7 @@ const TAKLIT_SOZ = { dinliyor: 'Dinliyorum… bir şey söyle 👂', konusuyor: 
 /** Odaya özgü geçici söz (ses taklidi, banyo köpüğü); yoksa ''. Köpük yüzdesi onluk adımla (ekran okuyucu boğulmasın). */
 function odaSozu() {
   if (taklit && TAKLIT_SOZ[taklitDurum]) return TAKLIT_SOZ[taklitDurum];
+  if (ninni) return ninniRuhu(y, simdi) ? 'Uykusu geldi, gözleri kapanıyor 😴' : 'Ninni çalıyor… 🎵';
   if (oda === 'banyo' && kopuk.yol > 0) {
     return O.kopukTamam(kopuk) ? 'Köpük tamam! Şimdi durulayalım 🚿' : `Köpürüyor… %${Math.floor(O.kopukOrani(kopuk) * 10) * 10}`;
   }
@@ -364,6 +379,7 @@ function odaSec(yeni, { odak = false } = {}) {
     oyunSecAcik = false;
     kopukSifirla();
     taklit?.durdur();
+    ninni?.durdur();
     delete sahne.dataset.gecis;
     void sahne.offsetWidth; // geçişi baştan başlat
     sahne.dataset.gecis = yon;
@@ -371,8 +387,15 @@ function odaSec(yeni, { odak = false } = {}) {
     cizOda();
     cizSahne();
     cizPanel();
+    cizGorev();
+    odaYay();
   }
   if (odak) odaSekme[oda].btn.focus({ preventScroll: true });
+}
+
+/** Bulunduğum oda partnere presence alanıyla gider (belgeye yazılmaz). Yumurtada oda yok: alan silinir. */
+function odaYay() {
+  room.setAlan?.(y && y.asama !== 'yumurta' ? oda : null);
 }
 
 function sekmeTus(e) {
@@ -523,6 +546,12 @@ function cizPanel() {
   const oyunOdasi = oda === 'oyun';
   for (const d of [oyunlarDugme, konusDugme, magazaDugme]) d.btn.hidden = !oyunOdasi;
   if (oyunOdasi) sutun += 3;
+  ninniDugme.btn.hidden = oda !== 'yatak';
+  if (oda === 'yatak') sutun++;
+  ninniDugme.emoji.textContent = ninni ? '⏹️' : '🎵';
+  ninniDugme.ad.textContent = ninni ? 'Durdur' : 'Ninni çal';
+  ninniDugme.btn.setAttribute('aria-pressed', String(!!ninni));
+  ninniDugme.btn.setAttribute('aria-label', ninni ? 'Ninniyi durdur' : 'Ninni çal');
   for (const d of [oyunlarDugme, konusDugme]) {
     if (uyuyor) {
       d.btn.dataset.durum = 'uyku';
@@ -601,7 +630,26 @@ function cizGorev() {
     };
     gorevDurum.replaceChildren(kisi(me.clientId), ' · ', kisi(pid));
   }
+  cizGorevOdalari(bitti ? [] : G.gorevOdalari(gorev).filter((o) => o !== oda));
   if (tamam && !odullendi && pid && gorevOdulGun !== gun) gorevOdul(gun, pid, gorev.id);
+}
+
+/** Görev kartında ilgili odaya tek dokunuşla geçiş ("Banyoya git"). Bulunduğum oda listede yok. */
+function cizGorevOdalari(odalar) {
+  const anahtar = odalar.join(',');
+  if (anahtar === gorevOdaAnahtar) return;
+  gorevOdaAnahtar = anahtar;
+  gorevOdaEl.hidden = !odalar.length;
+  gorevOdaEl.replaceChildren(...odalar.map((id) => {
+    const o = O.odaTanimi(id);
+    return h('button', {
+      type: 'button', class: 'btn small yv-gorev-git', dataset: { oda: id },
+      onclick: () => {
+        odaSec(id, { odak: true });
+        sahne.scrollIntoView({ block: 'nearest', behavior: azHareket() ? 'auto' : 'smooth' });
+      },
+    }, h('span', { 'aria-hidden': 'true' }, o.emoji), `${o.yonelme} git`);
+  }));
 }
 
 /** Ödül yaması mutlak puanla yazılır: iki cihaz aynı anda yazsa da bonus bir kez (gorev.js odulYamasi). */
@@ -623,7 +671,11 @@ async function gorevOdul(gun, pid, gorevId) {
 function cizPartner() {
   const burada = partnerGoruyor(partner, 'yavru');
   buradaEl.hidden = !burada;
-  if (burada) buradaEl.replaceChildren(h('span', { class: 'dot on', 'aria-hidden': 'true' }), `${partnerAdi()} de burada`);
+  if (burada) {
+    // Partner hangi odada (presence alanı); eski istemci ya da yumurta: yalnız "burada".
+    const metin = O.partnerOdaMetni(partnerAdi(), partner.alan) || `${partnerAdi()} de burada`;
+    buradaEl.replaceChildren(h('span', { class: 'dot on', 'aria-hidden': 'true' }), metin);
+  }
 }
 
 function ciz() {
@@ -637,6 +689,7 @@ function ciz() {
     if (duzelt) col.patch(M.BELGE_ID, { dogum: duzelt }).catch(() => {});
   }
   if (taklit && y && M.uyuyorMu(y.uyku, simdi)) taklit.durdur(); // uyurken taklit yok
+  odaYay();
   cizOda();
   cizSahne();
   cizBilgi();
@@ -864,6 +917,14 @@ function eylemTikla(eylem) {
   tepki(eylem === 'ilac' ? 'dokun' : eylem);
   sfx(eylem === 'uyut' ? 'tick' : 'pop');
   titret(15);
+  // Uykunun ilk yarısında uyandırılırsa kısa ağlar (geçici; yama gelince yüzde görünür).
+  const erken = eylem === 'uyandir' ? D.uyandirmaTepkisi(y.uyku, t) : null;
+  if (erken) {
+    dokunGecmis = [];
+    geciciBaslat(erken, t);
+    titret([25, 60, 25]);
+  }
+  if (eylem === 'uyut') ninni?.durdur();
   yaz(yama, r.kayit, eylem);
   if (r.mesaj) toast(r.mesaj);
 }
@@ -907,6 +968,12 @@ function dokun(bolge) {
     tepki('dokun');
     return;
   }
+  geciciBaslat(r, t);
+  if (!(r.sev && sevDene())) titret(r.ruh === 'aglama' ? [25, 60, 25] : 12);
+}
+
+/** Geçici ifade (dokunma.js tepkisi): süre dolunca kendiliğinden biter. */
+function geciciBaslat(r, t = Date.now()) {
   gecici = { ruh: r.ruh, metin: r.metin, animasyon: r.animasyon, bitis: t + r.sure };
   clearTimeout(geciciZaman);
   geciciZaman = setTimeout(() => {
@@ -919,7 +986,20 @@ function dokun(bolge) {
   sahne.dataset.dokunma = r.animasyon;
   simdi = t;
   cizSahne();
-  if (!(r.sev && sevDene())) titret(r.ruh === 'aglama' ? [25, 60, 25] : 12);
+}
+
+/** Ağlıyor mu (dokunma ya da erken uyandırma ağlaması; uyanık bebek)? */
+const agliyor = () => gecici?.ruh === 'aglama' && Date.now() < gecici.bitis && uyanikYavru();
+
+/** Sallayınca ağlama hemen biter: kısa huzur. Odak gizlenen Salla'dan bebeğe geçer. */
+function sakinlestir() {
+  if (!agliyor()) return;
+  const odakSallada = document.activeElement === sallaBtn;
+  dokunGecmis = [];
+  geciciBaslat(D.SAKIN);
+  sfx('tap');
+  titret(10);
+  if (odakSallada) dokunBtn.focus({ preventScroll: true });
 }
 
 async function adKaydet(e) {
@@ -955,13 +1035,38 @@ async function adKaydet(e) {
  * el üzerinde basılı tutup sürükleme. Eşik altı hareket dokunuştur (tık yolu aynen çalışır).
  * basla(x0, y0) false dönerse sürükleme olmaz; hareket(x, y, x0, y0); birak(x, y); iptal().
  * Sürükleme bitince ardından gelen tık yutulur (tikYut).
+ * dokunmatik (isteğe bağlı): { karar(dx, dy, basili) → 'surukle'|'kaydir'|null, basiliMs }. Verilirse dokunuşta
+ * yön kararı bekler ('kaydir' = tarayıcı sayfayı kaydırır; CSS touch-action: pan-y), basiliMs dolunca sürükleme başlar;
+ * sürüklerken touchmove engellenir (kaydırma başlamasın). Fare eski yolla (eşik) çalışır.
  */
-function surukle(el, { basla, hareket, birak, iptal = () => {} }) {
+function surukle(el, { basla, hareket, birak, iptal = () => {}, dokunmatik = null }) {
+  let surukluyor = false;
+  if (dokunmatik) {
+    el.addEventListener('touchmove', (ev) => { if (surukluyor && ev.cancelable) ev.preventDefault(); }, { passive: false });
+    el.addEventListener('contextmenu', (ev) => { if (surukluyor) ev.preventDefault(); });
+  }
   el.addEventListener('pointerdown', (e) => {
     if (!e.isPrimary || e.button > 0) return;
     const { pointerId: id, clientX: x0, clientY: y0 } = e;
+    const kararli = dokunmatik && e.pointerType !== 'mouse';
     let aktif = false;
+    let basili = false;
+    const baslat = () => {
+      if (basla(x0, y0) === false) { son(); return false; }
+      aktif = true;
+      surukluyor = true;
+      return true;
+    };
+    const tut = kararli && dokunmatik.basiliMs > 0 ? setTimeout(() => {
+      basili = true;
+      if (!aktif && baslat()) {
+        titret(10);
+        hareket(x0, y0, x0, y0);
+      }
+    }, dokunmatik.basiliMs) : 0;
     const son = () => {
+      clearTimeout(tut);
+      surukluyor = false;
       removeEventListener('pointermove', tasi);
       removeEventListener('pointerup', bitir);
       removeEventListener('pointercancel', vazgec);
@@ -969,9 +1074,15 @@ function surukle(el, { basla, hareket, birak, iptal = () => {} }) {
     function tasi(ev) {
       if (ev.pointerId !== id) return;
       if (!aktif) {
-        if (!O.surukleBasladi(ev.clientX - x0, ev.clientY - y0)) return;
-        if (basla(x0, y0) === false) { son(); return; }
-        aktif = true;
+        const dx = ev.clientX - x0;
+        const dy = ev.clientY - y0;
+        if (kararli) {
+          const k = dokunmatik.karar(dx, dy, basili);
+          if (!k) return;
+          if (k === 'kaydir') { son(); return; } // dikey kaydırma tarayıcıda
+        } else if (!O.surukleBasladi(dx, dy)) return;
+        clearTimeout(tut);
+        if (!baslat()) return;
       }
       ev.preventDefault();
       hareket(ev.clientX, ev.clientY, x0, y0);
@@ -1051,6 +1162,8 @@ for (const d of dugmeler.filter((x) => YEMEK.includes(x.btn.dataset.eylem))) {
       temizle()?.remove();
       agizAyarla(false);
     },
+    // Düğme üstünden başlayan dikey kaydırma sayfaya kalsın: yatay, yukarı-çapraz ya da basılı tutma sürükler.
+    dokunmatik: { karar: O.yemekSurukleKarar, basiliMs: O.BASILI_TUT },
   });
 }
 
@@ -1152,14 +1265,32 @@ surukle(dokunBtn, {
 sahne.addEventListener('pointerdown', (e) => {
   if (!e.isPrimary || e.button > 0 || !y || y.asama === 'yumurta') return;
   if (e.target.closest('.yv-sabun, .yv-lazimlik, .yv-dus, .yv-kisayol') || (oda === 'tuvalet' && dokunBtn.contains(e.target))) return;
+  if (e.target.closest('.yv-salla')) return;
   const { pointerId: id, clientX: x0, clientY: y0 } = e;
+  // Ağlarken sağ-sol sallama (dokunma.js sallaIlerle) ağlamayı dindirir; bu hareket oda değiştirmez.
+  let salla = agliyor() ? D.sallaBaslat(x0) : null;
+  let sallandi = false;
   const son = () => {
     removeEventListener('pointerup', bitir);
     removeEventListener('pointercancel', son);
+    removeEventListener('pointermove', sallaTasi);
   };
+  function sallaTasi(ev) {
+    if (ev.pointerId !== id || !salla) return;
+    const r = D.sallaIlerle(salla, ev.clientX);
+    salla = r.s;
+    if (!r.tamam) return;
+    salla = null;
+    sallandi = true;
+    sakinlestir();
+  }
   function bitir(ev) {
     if (ev.pointerId !== id) return;
     son();
+    if (sallandi || salla?.n > 0) {
+      tikYut(); // sallama bebeğe dokunuş ya da oda kaydırması sayılmasın
+      return;
+    }
     const yon = O.kaydirmaYonu(ev.clientX - x0, ev.clientY - y0);
     if (!yon) return;
     tikYut(); // kaydırma bebeğe dokunuş sayılmasın
@@ -1168,7 +1299,38 @@ sahne.addEventListener('pointerdown', (e) => {
   }
   addEventListener('pointerup', bitir);
   addEventListener('pointercancel', son);
+  if (salla) addEventListener('pointermove', sallaTasi);
 });
+
+// ---------- Yatak odası: ninni ----------
+
+/** Ninni çal / durdur. Ses bağlamı dokunuşla açılır (ninniCal ilk iş). Bitince uyutma önerilir; kendisi uyutmaz. */
+function ninniTikla() {
+  if (ninni) {
+    ninni.durdur();
+    return;
+  }
+  if (!y || y.asama === 'yumurta') return;
+  ninni = ninniCal({
+    onOlcu: (i) => parcalar([h('span', {
+      class: 'yv-p yv-p-nota', style: { '--x': `${(i % 2 ? 62 : 32) + Math.round(rnd(-6, 6))}%` },
+    }, i % 3 ? '♪' : '♫')], 2600),
+    onBitti: (tamam) => {
+      ninni = null;
+      sahne.removeAttribute('data-ninni');
+      simdi = Date.now();
+      cizSahne();
+      cizPanel();
+      if (tamam && uyanikYavru()) {
+        toast(`${y.ad || 'Yavrumuz'} mışıl mışıl olmaya hazır 🌙`, { action: { label: 'Uyut', onClick: () => eylemTikla('uyut') } });
+      }
+    },
+  });
+  sahne.setAttribute('data-ninni', '');
+  simdi = Date.now();
+  cizSahne();
+  cizPanel();
+}
 
 // ---------- Oyun odası: mini oyunlar, ses taklidi, mağaza ----------
 

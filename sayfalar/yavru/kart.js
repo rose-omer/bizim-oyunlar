@@ -7,10 +7,11 @@ import { openCollection } from '../../js/core/veri.js';
 import { pageUrl } from '../../js/core/identity.js';
 import { h, icon } from '../../js/core/ui.js';
 import {
-  TUR, BELGE_ID, oku, ruhHali, ozledi, durumMetni, renkSec, catlamaHazir, DK, dogumGunuMu, DOGUM_GUNU_METNI,
+  TUR, BELGE_ID, oku, ruhHali, kartRuhu, ozledi, durumMetni, renkSec, catlamaHazir, DK, dogumGunuMu, DOGUM_GUNU_METNI,
 } from './mantik.js';
 import { keyifsizMi } from './saglik.js';
 import { tuvaletDurumu } from './tuvalet.js';
+import { giyimOku } from './giyim.js';
 import { yavruSvg, CIZIM_CSS } from './cizim.js';
 import { BEBEK_CSS } from './bebek.js';
 
@@ -65,20 +66,23 @@ export async function mountYavruKart(el, { room } = {}) {
     const y = doc ? oku(doc.data) : null;
     const asama = y?.asama || 'yumurta';
     const renk = y?.renk || renkSec(room.roomId);
-    const ruh = ruhHali(y, simdi);
     const hazir = asama === 'yumurta' && !!y && catlamaHazir(y, simdi);
     // Doğum gününde durum satırı kutlar (o gün ihtiyaç rengi yok; ihtiyaçlar sayfada görünür).
     const dogumGunu = dogumGunuMu(y, simdi);
     const keyifsiz = keyifsizMi(y, simdi);
     const tuvalet = tuvaletDurumu(y, simdi);
+    // Yüz durum satırıyla uyumlu (çişi varken mutlu görünmez); doğum gününde satır kutlar, yüz ruh hâlinden.
+    const ruh = dogumGunu ? ruhHali(y, simdi) : kartRuhu(y, simdi, { keyifsiz, tuvalet });
     const metin = dogumGunu ? DOGUM_GUNU_METNI : durumMetni(y, simdi, keyifsiz, tuvalet);
     const baslik = asama === 'yumurta' ? 'Yavrumuz' : y.ad || 'Yavrumuz';
     const kisilik = y?.kisilik || '';
-    const k = [asama, renk, ruh, hazir, metin, baslik, kisilik].join('|');
+    const giyim = giyimOku(y);
+    const k = [asama, renk, ruh, hazir, metin, baslik, kisilik, JSON.stringify(giyim)].join('|');
     if (k === anahtar) return;
     anahtar = k;
     kart.style.setProperty('--yv-govde', `var(--yv-r${renk})`);
-    gorsel.innerHTML = yavruSvg({ asama, ruh, renk, hazir, kisilik });
+    // Kart küçük: parmaksız sade el (kucukBoy).
+    gorsel.innerHTML = yavruSvg({ asama, ruh, renk, hazir, kisilik, giyim, kucukBoy: true });
     ad.textContent = baslik;
     durum.textContent = metin;
     kart.dataset.dogumgunu = String(dogumGunu);

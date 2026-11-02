@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   bolgeBul, bolgeler, tepki, cokDurtuldu, gecmisEkle, BOLGE_ADI, DURTME_PENCERE, DURTME_SINIR,
+  erkenUyanma, uyandirmaTepkisi, SAKIN, sallaBaslat, sallaIlerle, SALLA_GENLIK, SALLA_SALINIM,
 } from '../sayfalar/yavru/dokunma.js';
 import { BEBEK_RUHLARI } from '../sayfalar/yavru/bebek.js';
 
@@ -92,4 +93,52 @@ test('cokDurtuldu ve gecmisEkle: bozuk ve gelecekteki anlar sayılmaz; geçmiş 
   assert.ok(g.length <= DURTME_SINIR * 2);
   assert.equal(g.at(-1), T0 + 490);
   assert.deepEqual(gecmisEkle([T0 - 5000, T0 - 100], T0), [T0 - 100, T0]);
+});
+
+const SA = 3600_000;
+const uyku = (basSaat, sureSaat = 8) => ({ bas: new Date(T0 + basSaat * SA).toISOString(), bit: new Date(T0 + (basSaat + sureSaat) * SA).toISOString() });
+
+test('erkenUyanma: uyku süresinin ilk yarısı', () => {
+  assert.equal(erkenUyanma(uyku(0), T0 + 1 * SA), true);
+  assert.equal(erkenUyanma(uyku(0), T0 + 3.99 * SA), true);
+  assert.equal(erkenUyanma(uyku(0), T0 + 4 * SA), false, 'tam yarı: erken değil');
+  assert.equal(erkenUyanma(uyku(0), T0 + 7 * SA), false);
+  assert.equal(erkenUyanma(uyku(0), T0 + 9 * SA), false, 'uyku bitmiş');
+  assert.equal(erkenUyanma(uyku(1), T0), false, 'henüz başlamamış');
+  assert.equal(erkenUyanma(null, T0), false);
+  assert.equal(erkenUyanma({ bas: 'x', bit: 'y' }, T0), false);
+  assert.equal(erkenUyanma(uyku(0, 0), T0), false, 'boş aralık');
+});
+
+test('uyandirmaTepkisi: erken uyandırınca kısa ağlama, geç uyandırınca yok', () => {
+  const r = uyandirmaTepkisi(uyku(0), T0 + SA);
+  assert.equal(r.ruh, 'aglama');
+  assert.equal(r.sev, false);
+  assert.ok(r.sure >= 2000 && r.sure <= 8000);
+  assert.ok(r.metin.length > 0);
+  assert.equal(uyandirmaTepkisi(uyku(0), T0 + 6 * SA), null);
+  assert.ok(BEBEK_RUHLARI.includes(SAKIN.ruh));
+  assert.equal(SAKIN.ruh, 'huzur');
+});
+
+test('sallaIlerle: sağ-sol-sağ üç salınım tamamlar; küçük titreme sayılmaz', () => {
+  const G = SALLA_GENLIK;
+  let s = sallaBaslat(100);
+  const yol = (xs) => {
+    let t = false;
+    for (const x of xs) { const r = sallaIlerle(s, x); s = r.s; t = r.tamam; }
+    return t;
+  };
+  assert.equal(yol([105, 95, 108, 92]), false, 'titreme');
+  assert.equal(s.n, 0);
+  assert.equal(yol([100 + G]), false);
+  assert.equal(s.n, 1);
+  assert.equal(yol([100 + G + 20, 100]), false, 'sola dönüş: 2. salınım');
+  assert.equal(s.n, 2);
+  assert.equal(yol([100 - 30, 100 - 30 + G - 1]), false, 'genlik dolmadı');
+  assert.equal(yol([100 - 30 + G]), true, '3. salınım');
+  assert.equal(SALLA_SALINIM, 3);
+  const once = sallaBaslat(0);
+  assert.deepEqual(sallaIlerle(once, NaN), { s: once, tamam: false });
+  assert.deepEqual(sallaIlerle(null, 5), { s: null, tamam: false });
 });

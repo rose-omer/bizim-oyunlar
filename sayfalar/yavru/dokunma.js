@@ -1,6 +1,9 @@
 // Yavrumuz: bebeğe dokunma tepkileri (saf mantık, DOM yok, Node'da test edilir).
 // Tepki geçici görsel durumdur: belgeye yazılmaz. Yalnız baş okşama ve karın gıdıklama var olan 'sev'
 // eylemini dener (sev: true; bekleme ve günlük puan sınırı mantik.js eylemYap'ta). Yumurtada ve uykuda yok (app.js).
+// Ağlama iki yoldan gelir: çok dürtme (tepki) ve uyku süresinin ilk yarısında uyandırma (uyandirmaTepkisi).
+// Sallama (Salla kısayolu ya da sağ-sol sallama hareketi, sallaIlerle) ağlamayı hemen bitirir: kısa huzur (SAKIN).
+// Ağlama kendiliğinden de sure sonunda biter. Hepsi geçici; belgeye yazılmaz.
 // Koordinatlar bebek.js viewBox'ında (0 0 200 200): büyükte yüz merkezi (100, 75), küçükte (100, 98) × 0.72.
 
 export const DURTME_PENCERE = 3000; // bu süre içinde
@@ -79,4 +82,51 @@ export function gecmisEkle(gecmis, simdi) {
 export function tepki(bolge, gecmis, simdi) {
   if (!Object.hasOwn(TEPKILER, bolge ?? '')) return null;
   return { bolge, ...(cokDurtuldu(gecmis, simdi) ? AGLAMA : TEPKILER[bolge]) };
+}
+
+// ---------- Erken uyandırma ve sallama ----------
+
+const ERKEN_UYANMA = { ruh: 'aglama', sure: 5000, animasyon: 'agla', sev: false, metin: 'Erken uyandı, ağlıyor 😢 Sallayalım mı?' };
+export const SAKIN = Object.freeze({ ruh: 'huzur', sure: 2400, animasyon: 'sallan', sev: false, metin: 'Sallandı, huzur buldu ☺️' });
+
+/** Uyku sürüyor ve ilk yarısında mı? uyku: { bas, bit } (ISO). Geçersizse false. */
+export function erkenUyanma(uyku, simdi) {
+  const bas = Date.parse(uyku?.bas);
+  const bit = Date.parse(uyku?.bit);
+  if (!Number.isFinite(bas) || !Number.isFinite(bit) || bit <= bas || !Number.isFinite(simdi)) return false;
+  return simdi >= bas && simdi < bit && simdi - bas < (bit - bas) / 2;
+}
+
+/** 'uyandir' eyleminden önceki uyku ile: ilk yarıda uyandırılırsa kısa ağlama tepkisi, değilse null. */
+export function uyandirmaTepkisi(uyku, simdi) {
+  return erkenUyanma(uyku, simdi) ? { bolge: null, ...ERKEN_UYANMA } : null;
+}
+
+export const SALLA_GENLIK = 24; // px: bir salınım en az bu kadar yatay yol
+export const SALLA_SALINIM = 3; // sağ-sol-sağ: üç salınım ağlamayı dindirir
+
+export const sallaBaslat = (x) => ({ ref: x, uc: x, yon: 0, n: 0 });
+
+/**
+ * Yatay sallama hareketi (pointer x). Bir salınım: aynı yönde en az SALLA_GENLIK yol; yön dönüşü yeni salınım.
+ * -> { s (yeni durum), tamam (SALLA_SALINIM salınıma ulaştı) }. Bozuk girdi durumu değiştirmez.
+ */
+export function sallaIlerle(s, x, genlik = SALLA_GENLIK) {
+  if (!s || !Number.isFinite(x) || !Number.isFinite(s.ref)) return { s, tamam: false };
+  let { ref, uc, yon, n } = s;
+  if (yon === 0) {
+    if (Math.abs(x - ref) >= genlik) {
+      yon = Math.sign(x - ref);
+      uc = x;
+      n = 1;
+    }
+  } else if ((x - uc) * yon > 0) {
+    uc = x; // aynı yönde uzuyor
+  } else if (Math.abs(x - uc) >= genlik) {
+    ref = uc;
+    uc = x;
+    yon = -yon;
+    n++;
+  }
+  return { s: { ref, uc, yon, n }, tamam: n >= SALLA_SALINIM };
 }

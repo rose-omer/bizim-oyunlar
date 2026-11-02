@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   GOREVLER, GOREV_BONUS, GOREV_TUT, gununGorevi, gorevDurumu, odulYamasi, odullendiMi, gorevOzeti,
+  gorevOdalari, GOREV_ODA_SINIR,
 } from '../sayfalar/yavru/gorev.js';
 import { EYLEMLER, LAZIMLIK, oku } from '../sayfalar/yavru/mantik.js';
 import { applyPatch } from '../js/core/veri.js';
@@ -28,8 +29,8 @@ const kucukVeri = (ek = {}) => ({
   ihtiyac: {}, uyku: null, puan: { [A]: 10, [B]: 7 }, isitma: {}, son: {}, ...ek,
 });
 
-test('görev havuzu: 8–12 görev, tekil id, metin, emoji, geçerli koşul', () => {
-  assert.ok(GOREVLER.length >= 8 && GOREVLER.length <= 12, `${GOREVLER.length}`);
+test('görev havuzu: 8–16 görev, tekil id, metin, emoji, geçerli koşul', () => {
+  assert.ok(GOREVLER.length >= 8 && GOREVLER.length <= 16, `${GOREVLER.length}`);
   assert.equal(new Set(GOREVLER.map((g) => g.id)).size, GOREVLER.length);
   for (const g of GOREVLER) {
     assert.match(g.id, /^[a-z0-9-]+$/);
@@ -193,4 +194,30 @@ test('gorevOzeti: yumurtada görev yok; küçük/büyükte görev, durum ve öd�
   assert.deepEqual({ tamam: o.tamam, ilerleme: o.ilerleme, kisiBasi: o.kisiBasi }, durum(o.gorev.id, kayitlar));
   assert.equal(o.odullendi, false);
   assert.equal(ozet(kucukVeri({ asama: 'buyuk', gorev: { [GUN]: { id: o.gorev.id, at: an(GUN, 9) } } })).odullendi, true);
+});
+
+test('oda görevleri: var olan koşul türleriyle; ayri rollerde farklı kişiler', () => {
+  for (const id of ['yika-uyut', 'mutfak-2', 'lazimlik-oyna', 'ikisi-yika']) assert.ok(gorev(id), id);
+  let d = durum('yika-uyut', [k('yika', A), k('uyut', A)]);
+  assert.equal(d.tamam, false, 'tek kişi iki rolü yapamaz');
+  d = durum('yika-uyut', [k('yika', A), k('uyut', B)]);
+  assert.equal(d.tamam, true);
+  d = durum('lazimlik-oyna', [k('oyna', A), k('lazimlik', B)]);
+  assert.equal(d.tamam, true);
+  d = durum('mutfak-2', [k('mama', A), k('meyve', A), k('tatli', B)]);
+  assert.deepEqual(d.ilerleme, { n: 3, gerek: 4 });
+  d = durum('mutfak-2', [k('mama', A), k('meyve', A), k('tatli', B), k('mama', B)]);
+  assert.equal(d.tamam, true);
+  d = durum('ikisi-yika', [k('yika', A), k('yika', B)]);
+  assert.equal(d.tamam, true);
+});
+
+test('gorevOdalari: görevin odaları rol sırasıyla; genel bakımda oda yok', () => {
+  assert.deepEqual(gorevOdalari(gorev('yika-uyut')), ['banyo', 'yatak']);
+  assert.deepEqual(gorevOdalari(gorev('lazimlik-oyna')), ['tuvalet', 'oyun']);
+  assert.deepEqual(gorevOdalari(gorev('mutfak-2')), ['mutfak']);
+  assert.deepEqual(gorevOdalari(gorev('ikisi-sev')), ['oyun']);
+  assert.deepEqual(gorevOdalari(gorev('birlikte-3')), []);
+  assert.deepEqual(gorevOdalari(null), []);
+  for (const g of GOREVLER) assert.ok(gorevOdalari(g).length <= GOREV_ODA_SINIR, g.id);
 });

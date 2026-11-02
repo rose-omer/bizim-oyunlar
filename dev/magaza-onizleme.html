@@ -44,9 +44,9 @@
         </div>
       </div>
     </section>
-    <h2>Aksesuarlar · büyük</h2>
+    <h2>Kıyafet ve aksesuarlar · büyük</h2>
     <div class="izgara" id="izgara-buyuk"></div>
-    <h2>Aksesuarlar · küçük (kundak: yalnız baş)</h2>
+    <h2>Kıyafet ve aksesuarlar · küçük (kundak: yalnız baş)</h2>
     <div class="izgara" id="izgara-kucuk"></div>
     <h2>Birlikte · renk ve ifade</h2>
     <div class="izgara" id="izgara-birlikte"></div>
@@ -120,12 +120,13 @@
       d.innerHTML = `<div class="cizim">${svg}</div><span>${ad}</span>`;
       document.getElementById(kap).append(d);
     };
-    const tek = [['bas', 'fiyonk'], ['bas', 'tac'], ['bas', 'sapka'], ['goz', 'gozluk'], ['boyun', 'atki']];
+    const tek = [['bas', 'fiyonk'], ['bas', 'tac'], ['bas', 'sapka'], ['goz', 'gozluk'], ['boyun', 'atki'],
+      ['govde', 'pijama'], ['govde', 'ayicik'], ['govde', 'elbise'], ['agiz', 'emzik'], ['kucak', 'battaniye']];
     hucre('izgara-buyuk', bebekSvg({ asama: 'buyuk', renk: 3 }), 'varsayılan');
     for (const [yuva, id] of tek) hucre('izgara-buyuk', bebekSvg({ asama: 'buyuk', renk: 3, giyim: { [yuva]: id } }), URUNLER[id].ad);
     for (const [, id] of tek) hucre('izgara-buyuk', giyimParcaSvg(id, { renk: 3 }), `${URUNLER[id].ad} (kart)`);
     hucre('izgara-kucuk', bebekSvg({ asama: 'kucuk', renk: 2 }), 'varsayılan');
-    for (const id of ['fiyonk', 'tac', 'sapka']) hucre('izgara-kucuk', bebekSvg({ asama: 'kucuk', renk: 2, giyim: { bas: id, goz: 'gozluk', boyun: 'atki' } }), URUNLER[id].ad);
+    for (const id of ['fiyonk', 'tac', 'sapka']) hucre('izgara-kucuk', bebekSvg({ asama: 'kucuk', renk: 2, giyim: { bas: id, goz: 'gozluk', boyun: 'atki', govde: 'elbise', kucak: 'battaniye' } }), URUNLER[id].ad);
     const birlikte = [
       [{ bas: 'tac', goz: 'gozluk', boyun: 'atki' }, 1, 'normal', 'hepsi'],
       [{ bas: 'sapka', boyun: 'atki' }, 2, 'mutlu', 'şapka+atkı'],
@@ -133,6 +134,9 @@
       [{ goz: 'gozluk' }, 5, 'uyuyor', 'gözlük (uyku)'],
       [{ bas: 'tac', boyun: 'atki' }, 6, 'aglama', 'taç+atkı'],
       [{ bas: 'sapka', goz: 'gozluk' }, 3, 'uykulu', 'şapka+gözlük'],
+      [{ govde: 'elbise', kucak: 'battaniye', agiz: 'emzik' }, 1, 'normal', 'elbise+battaniye+emzik'],
+      [{ govde: 'pijama', agiz: 'emzik' }, 5, 'uyuyor', 'pijama+emzik (uyku)'],
+      [{ govde: 'ayicik', bas: 'tac' }, 6, 'kahkaha', 'ayıcık+taç'],
     ];
     for (const [giyim, renk, ruh, ad] of birlikte) hucre('izgara-birlikte', bebekSvg({ asama: 'buyuk', renk, ruh, kisilik: 'obur', giyim }), ad);
 

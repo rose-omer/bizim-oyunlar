@@ -28,6 +28,11 @@ export const URUNLER = Object.freeze({
   sapka: Object.freeze({ ad: 'Şapka', emoji: '🎩', tur: 'kiyafet', fiyat: 60 }),
   gozluk: Object.freeze({ ad: 'Gözlük', emoji: '🕶️', tur: 'kiyafet', fiyat: 80 }),
   tac: Object.freeze({ ad: 'Taç', emoji: '👑', tur: 'kiyafet', fiyat: 150 }),
+  emzik: Object.freeze({ ad: 'Emzik', emoji: '👶', tur: 'kiyafet', fiyat: 20 }),
+  battaniye: Object.freeze({ ad: 'Battaniyecik', emoji: '☁️', tur: 'kiyafet', fiyat: 35 }),
+  pijama: Object.freeze({ ad: 'Yıldızlı pijama', emoji: '🌙', tur: 'kiyafet', fiyat: 70 }),
+  ayicik: Object.freeze({ ad: 'Ayıcıklı bodi', emoji: '🧸', tur: 'kiyafet', fiyat: 90 }),
+  elbise: Object.freeze({ ad: 'Fırfırlı elbise', emoji: '👗', tur: 'kiyafet', fiyat: 110 }),
 });
 
 const iso = (ms) => new Date(ms).toISOString();

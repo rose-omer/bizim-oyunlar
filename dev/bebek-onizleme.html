@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bebek önizleme · Yavrumuz</title>
+  <!-- Geliştirici önizlemesi (yayına girmez; pages.yml dev/'i hariç tutar).
+       Adres seçenekleri: ?mod=acik|koyu  &sec=buyuk-mutlu  &tek=1 (yalnız büyük önizleme) -->
+  <link rel="stylesheet" href="../css/base.css">
+  <style>
+    body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font-body, system-ui); }
+    main { max-width: 1100px; margin: 0 auto; padding: 16px; }
+    header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; justify-content: space-between; margin-bottom: 12px; }
+    h1 { margin: 0; font-family: var(--font-display); font-size: 1.5rem; }
+    h2 { margin: 20px 0 8px; font-size: 1rem; color: var(--text-muted, var(--text)); font-weight: 700; }
+    button { min-height: 44px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--border, currentColor);
+      background: var(--surface); color: var(--text); font: inherit; cursor: pointer; }
+    button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+    .izgara { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 10px; }
+    .hucre { display: grid; gap: 4px; justify-items: center; padding: 8px 6px 6px; border-radius: 16px;
+      background: var(--surface); border: 2px solid transparent; }
+    .hucre[aria-pressed="true"] { border-color: var(--accent); }
+    .hucre .cizim { width: 100%; aspect-ratio: 1; }
+    .hucre span { font-size: 0.8rem; }
+    .buyuk-onizleme { display: grid; grid-template-columns: minmax(0, 420px) minmax(0, 420px); gap: 16px; justify-content: center; }
+    .buyuk-onizleme > div { aspect-ratio: 1; border-radius: 24px; padding: 18px; }
+    .zemin-acik { background: var(--surface); }
+    .zemin-koyu { background: var(--surface-2); }
+    @media (max-width: 700px) { .buyuk-onizleme { grid-template-columns: 1fr; } }
+    body.tek header, body.tek h2, body.tek .izgara { display: none; }
+    body.tek main { padding: 0; }
+    body.tek .buyuk-onizleme { grid-template-columns: 480px; gap: 0; }
+    body.tek .buyuk-onizleme > div { border-radius: 0; padding: 30px; }
+    body.tek .buyuk-onizleme > div + div { display: none; }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Bebek çizimi · önizleme</h1>
+      <button type="button" id="tema" aria-label="Temayı değiştir">Koyu tema</button>
+    </header>
+    <section class="buyuk-onizleme" aria-label="Büyük önizleme">
+      <div class="zemin-acik" id="buyuk-a"></div>
+      <div class="zemin-koyu" id="buyuk-b"></div>
+    </section>
+    <h2>Küçük (kundakta) · tüm ifadeler</h2>
+    <div class="izgara" id="izgara-kucuk"></div>
+    <h2>Büyük (oturan) · tüm ifadeler</h2>
+    <div class="izgara" id="izgara-buyuk"></div>
+    <h2>Renkler (1–6) · büyük ve küçük</h2>
+    <div class="izgara" id="izgara-renk"></div>
+    <h2>Kişilik motifleri</h2>
+    <div class="izgara" id="izgara-kisilik"></div>
+  </main>
+  <script type="module">
+    import { bebekSvg, BEBEK_CSS, BEBEK_RUHLARI } from '../sayfalar/yavru/bebek.js';
+    import { CIZIM_CSS } from '../sayfalar/yavru/cizim.js';
+
+    const stil = document.createElement('style');
+    stil.textContent = CIZIM_CSS + BEBEK_CSS;
+    document.head.append(stil);
+
+    const q = new URLSearchParams(location.search);
+    const kok = document.documentElement;
+    const temaDugme = document.getElementById('tema');
+    const temaYaz = (mod) => {
+      kok.dataset.mod = mod;
+      temaDugme.textContent = mod === 'koyu' ? 'Açık tema' : 'Koyu tema';
+    };
+    temaYaz(q.get('mod') === 'koyu' ? 'koyu' : 'acik');
+    temaDugme.addEventListener('click', () => temaYaz(kok.dataset.mod === 'koyu' ? 'acik' : 'koyu'));
+    if (q.get('tek')) document.body.classList.add('tek');
+
+    let secili = { asama: 'buyuk', ruh: 'normal', renk: 1, kisilik: '' };
+    const [sa, sr] = (q.get('sec') || '').split('-');
+    if (sa) secili = { ...secili, asama: sa, ruh: sr || 'normal' };
+
+    const hucreler = [];
+    function buyukCiz() {
+      for (const id of ['buyuk-a', 'buyuk-b']) {
+        document.getElementById(id).innerHTML = bebekSvg({ ...secili, etiket: `${secili.asama} ${secili.ruh}` });
+      }
+      for (const [h, o] of hucreler) h.setAttribute('aria-pressed', String(JSON.stringify(o) === JSON.stringify(secili)));
+    }
+    function hucre(kap, o, ad) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'hucre';
+      b.innerHTML = `<div class="cizim">${bebekSvg(o)}</div><span>${ad}</span>`;
+      b.addEventListener('click', () => { secili = o; buyukCiz(); });
+      hucreler.push([b, o]);
+      document.getElementById(kap).append(b);
+    }
+    for (const asama of ['kucuk', 'buyuk']) {
+      for (const ruh of BEBEK_RUHLARI) hucre(`izgara-${asama}`, { asama, ruh, renk: 1, kisilik: '' }, ruh);
+    }
+    for (let renk = 1; renk <= 6; renk++) hucre('izgara-renk', { asama: 'buyuk', ruh: 'mutlu', renk, kisilik: '' }, `renk ${renk}`);
+    for (let renk = 1; renk <= 6; renk++) hucre('izgara-renk', { asama: 'kucuk', ruh: 'normal', renk, kisilik: '' }, `küçük ${renk}`);
+    for (const [i, kisilik] of ['obur', 'uykucu', 'neseli', 'titiz'].entries()) {
+      hucre('izgara-kisilik', { asama: 'buyuk', ruh: 'normal', renk: i + 2, kisilik }, kisilik);
+    }
+    buyukCiz();
+  </script>
+</body>
+</html>

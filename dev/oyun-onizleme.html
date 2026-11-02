@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Yavru oyunları · önizleme</title>
+  <link rel="stylesheet" href="../css/base.css">
+  <link rel="stylesheet" href="../sayfalar/yavru/oyunlar/oyun.css" data-oy-stil>
+  <style>
+    .on { max-width: 560px; margin: 0 auto; padding: 20px 16px 40px; display: flex; flex-direction: column; gap: 18px; }
+    .on h1 { margin: 0; font-family: var(--font-display); font-weight: 600; font-size: 1.7rem; }
+    .on-ayar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .on-oyunlar { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .on-oyun {
+      display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-height: 96px; padding: 14px;
+      border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--text);
+      font: inherit; text-align: left; cursor: pointer; box-shadow: var(--shadow-sm);
+    }
+    .on-oyun b { font-family: var(--font-display); font-weight: 600; font-size: 1.1rem; }
+    .on-oyun span { color: var(--muted); font-size: 0.9rem; line-height: 1.3; }
+    .on-oyun:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+    .on-sonuc { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+    .on-sonuc li { display: flex; justify-content: space-between; padding: 10px 12px; border-radius: var(--radius); background: var(--surface-2); font-variant-numeric: tabular-nums; }
+    .on-katman { position: fixed; inset: 0; z-index: 50; background: var(--bg); padding-top: var(--safe-top); }
+  </style>
+</head>
+<body>
+  <main class="on">
+    <h1>Yavru oyunları</h1>
+    <p class="muted" style="margin:0">Geliştirme önizlemesi. Jeton yazılmaz; sonuç aşağıda görünür.</p>
+    <div class="on-ayar">
+      <div class="seg" role="group" aria-label="Tema">
+        <button type="button" data-mod="otomatik" aria-pressed="true">Otomatik</button>
+        <button type="button" data-mod="acik" aria-pressed="false">Açık</button>
+        <button type="button" data-mod="koyu" aria-pressed="false">Koyu</button>
+      </div>
+      <button type="button" class="btn small" id="ses" aria-pressed="false">Ses açık</button>
+      <button type="button" class="btn small" id="az" aria-pressed="false">Az hareket: kapalı</button>
+    </div>
+    <div class="on-oyunlar" id="oyunlar"></div>
+    <section aria-labelledby="sonuc-b" class="stack">
+      <h2 id="sonuc-b" style="margin:0;font-size:1.1rem">Sonuçlar <span class="muted" id="toplam"></span></h2>
+      <ul class="on-sonuc" id="sonuclar" aria-live="polite"><li class="muted">Henüz oyun yok. Birini seç.</li></ul>
+    </section>
+  </main>
+  <script type="module">
+    import { OYUNLAR, oyunAc } from '../sayfalar/yavru/oyunlar/cerceve.js';
+    import { setMuted, isMuted } from '../js/core/sound.js';
+
+    const $ = (s) => document.querySelector(s);
+    let az = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    let toplam = 0;
+    const sonuclar = [];
+
+    document.querySelectorAll('[data-mod]').forEach((b) => b.addEventListener('click', () => {
+      document.documentElement.dataset.mod = b.dataset.mod;
+      document.querySelectorAll('[data-mod]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+    }));
+    const sesYaz = () => { $('#ses').textContent = isMuted() ? 'Ses kapalı' : 'Ses açık'; $('#ses').setAttribute('aria-pressed', String(isMuted())); };
+    $('#ses').addEventListener('click', () => { setMuted(!isMuted()); sesYaz(); });
+    sesYaz();
+    const azYaz = () => { $('#az').textContent = `Az hareket: ${az ? 'açık' : 'kapalı'}`; $('#az').setAttribute('aria-pressed', String(az)); };
+    $('#az').addEventListener('click', () => { az = !az; azYaz(); });
+    azYaz();
+
+    for (const [id, o] of Object.entries(OYUNLAR)) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'on-oyun';
+      b.dataset.oyun = id;
+      b.innerHTML = '<b></b><span></span>';
+      b.querySelector('b').textContent = o.ad;
+      b.querySelector('span').textContent = o.ozet;
+      b.addEventListener('click', () => ac(id, b));
+      $('#oyunlar').append(b);
+    }
+
+    function ac(oyun, dugme) {
+      const katman = document.createElement('div');
+      katman.className = 'on-katman';
+      document.body.append(katman);
+      document.documentElement.style.overflow = 'hidden';
+      const kapat = () => { katman.remove(); document.documentElement.style.overflow = ''; dugme.focus(); };
+      oyunAc(katman, {
+        oyun,
+        azHareket: az,
+        onBitti: (r) => {
+          toplam += r.jeton;
+          sonuclar.unshift(r);
+          $('#sonuclar').replaceChildren(...sonuclar.map((x) => {
+            const li = document.createElement('li');
+            li.innerHTML = '<span></span><b></b>';
+            li.firstChild.textContent = `${OYUNLAR[x.oyun].ad} · ${x.skor} puan`;
+            li.lastChild.textContent = `+${x.jeton} jeton`;
+            return li;
+          }));
+          $('#toplam').textContent = `(toplam ${toplam} jeton)`;
+          window.__sonuclar = sonuclar; // tarayıcı testi okur
+        },
+        onCik: kapat,
+      });
+    }
+  </script>
+</body>
+</html>

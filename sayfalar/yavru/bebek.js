@@ -1,12 +1,14 @@
-// Yavrumuz: bebek çizimi PROTOTİPİ (henüz sayfaya bağlı değil). Kodla üretilen katmanlı SVG; dış görsel yok.
-// Saf metin üretir; DOM yok (Node'da test edilir). cizim.js'in yavruSvg imzasını izler.
+// Yavrumuz: bebek çizimi (küçük ve büyük aşama). Kodla üretilen katmanlı SVG; dış görsel yok.
+// Saf metin üretir; DOM yok (Node'da test edilir). cizim.js yavruSvg yumurta dışındaki aşamalar için bunu çağırır;
+// çatlama sahnesi (cizim.js catlamaSvg) küçük bebeği bebekCatlamaParcalari ile alır.
 // Katmanlar ayrı <g> ve sınıflı (yvb-*): sonraki işler canlandırır ve kıyafet değiştirir.
 // Renkler: kıyafet --yv-govde (= --yv-r1..6, CIZIM_CSS'te tanımlı), ten/saç/göz --yvb-* jetonları (iki temada aynı;
 // pastel bebek açık ve koyu zeminde aynı kalır). Dış kontur ten rengiyle var(--hero) karışımı; parıltı var(--hero-ink).
 // Gradyan id'leri her SVG'de benzersiz önek alır (aynı sayfada çok SVG olur); `kimlik` verilirse önek odur.
 
 export const BEBEK_ASAMALARI = ['kucuk', 'buyuk'];
-export const BEBEK_RUHLARI = ['normal', 'mutlu', 'ac', 'kirli', 'uykulu', 'uzgun', 'uyuyor', 'aglama', 'kahkaha', 'sasirma'];
+// huzur (okşanınca: gözler kapalı, gülümser) ve hapsu (hapşırma) dokunma tepkileri içindir (dokunma.js).
+export const BEBEK_RUHLARI = ['normal', 'mutlu', 'ac', 'kirli', 'uykulu', 'uzgun', 'uyuyor', 'aglama', 'kahkaha', 'sasirma', 'huzur', 'hapsu'];
 const KISILIKLER = ['obur', 'uykucu', 'neseli', 'titiz'];
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -115,6 +117,8 @@ function yuzIc(k, ruh, emzik) {
     case 'uyuyor': return kas('sakin') + gozCizgi('kapali') + yanak(k) + burun + ag('minik');
     case 'aglama': return kas('egik') + gozCizgi('sikik') + yanak(k, true) + burun + agiz('aglama') + GOZYASI;
     case 'sasirma': return kas('kalkik') + gozler(k, { buyukluk: 1.1 }) + yanak(k) + burun + agiz('o');
+    case 'huzur': return kas('sakin') + gozCizgi('hilal') + yanak(k, true) + burun + agiz('gulus');
+    case 'hapsu': return kas('kalkik') + gozCizgi('sikik') + yanak(k) + burun + agiz('esneme');
     default: return kas('normal') + gozler(k) + yanak(k) + burun + ag('gulus');
   }
 }
@@ -168,30 +172,33 @@ const MOTIFLER = {
 };
 
 function buyuk(k, ruh, kisilik) {
-  // El: üstten görünen tombul el; alt kenarda dört parmak, iç yanda başparmak. s: başparmak yönü.
+  // El: dizde duran bebek eli; avuç üstte, dört kısa parmak (orta uzun, aralıklı, hafif yelpaze) avucun altından
+  // çıkar; başparmak iç yanda ayrı ve eğik. s: başparmak yönü.
+  const parmak = (x, y, ry, a) => `<ellipse class="yvb-ten yvb-parmak" fill="url(#${k}-ten)" cx="${x}" cy="${y}" rx="2.5" ry="${ry}" transform="rotate(${a} ${x} ${y})"/>`;
   const el = (x, y, s) => `<g class="yvb-el" transform="translate(${x} ${y}) scale(${s} 1)">`
-    + `<ellipse class="yvb-ten" fill="url(#${k}-ten)" cx="7.6" cy="1.5" rx="3.4" ry="4.2" transform="rotate(-30 7.6 1.5)"/>`
-    + `<path class="yvb-ten" fill="url(#${k}-ten)" d="M-9.5 -2 C-9.5 -8.5 7.5 -8.5 7.5 -2 L7.5 3 C7.5 7.4 5.6 8.6 3.8 7.2 C3 9.2 -0.2 9.4 -0.6 7.4 C-1.6 9.4 -4.6 9.2 -5 7.2 C-7 9 -9.5 7.4 -9.5 3 Z"/>`
+    + parmak(-5.8, 6.6, 4.2, 20) + parmak(-2, 8.2, 5, 7) + parmak(1.9, 8.2, 4.8, -5) + parmak(5.6, 6.6, 4, -18)
+    + `<ellipse class="yvb-ten" fill="url(#${k}-ten)" cx="8.6" cy="-0.4" rx="3" ry="5" transform="rotate(-40 8.6 -0.4)"/>`
+    + `<path class="yvb-ten" fill="url(#${k}-ten)" d="M-8.4 -3 C-8.4 -9.4 7.6 -9.4 7.8 -3 C8 2 5.2 5.6 0 5.6 C-5.2 5.6 -8.4 2 -8.4 -3 Z"/>`
     + '</g>';
-  const KABUK_SAC_ARKA = 'M100 15 C138 15 161 41 161 72 C161 86 160 96 165 104 C159 109 150 106 147 99 C140 78 60 78 53 99 C50 106 41 109 35 104 C40 96 39 86 39 72 C39 41 62 15 100 15 Z';
+  const KABUK_SAC_ARKA = 'M100 15 C138 15 161 41 161 72 C161 84 157 91 162 98 C167 104 161 110 154 107 C150 105 148 102 147 99 C140 78 60 78 53 99 C52 102 50 105 46 107 C39 110 33 104 38 98 C43 91 39 84 39 72 C39 41 62 15 100 15 Z';
   return '<ellipse class="yvb-zemin" cx="100" cy="187" rx="66" ry="6.5"/>'
     + '<g class="yvb-beden">'
     // Saçın ense kısmı başın arkasında
     + `<g class="yvb-sac yvb-sac-arka"><path fill="url(#${k}-sac)" d="${KABUK_SAC_ARKA}"/></g>`
     // Gövde (ten; kıyafet altında, giydirme için ayrı)
-    + `<g class="yvb-govde">${ten(k, '<path class="yvb-ten" d="M100 108 C125 108 139 121 144 140 C149 160 141 177 100 179 C59 177 51 160 56 140 C61 121 75 108 100 108 Z"/>')}</g>`
+    + `<g class="yvb-govde">${ten(k, '<path class="yvb-ten" d="M100 108 C124 108 137 121 141 140 C145 159 137 175 100 177 C63 175 55 159 59 140 C63 121 76 108 100 108 Z"/>')}</g>`
     // Kıyafet: tulum (renk jetonundan), benek, yaka, göğüste motif
     + '<g class="yvb-kiyafet yvb-kiyafet-govde">'
-    + `<path class="yvb-kumas" fill="url(#${k}-kumas)" d="M100 107 C125 107 139 120 144 140 C149 160 141 177 100 179 C59 177 51 160 56 140 C61 120 75 107 100 107 Z"/>`
-    + `<path fill="url(#${k}-benek)" d="M100 107 C125 107 139 120 144 140 C149 160 141 177 100 179 C59 177 51 160 56 140 C61 120 75 107 100 107 Z"/>`
-    + '<path class="yvb-kumas-kat" d="M78 170 Q100 178 122 170"/>'
+    + `<path class="yvb-kumas" fill="url(#${k}-kumas)" d="M100 107 C124 107 137 120 141 140 C145 159 137 175 100 177 C63 175 55 159 59 140 C63 120 76 107 100 107 Z"/>`
+    + `<path fill="url(#${k}-benek)" d="M100 107 C124 107 137 120 141 140 C145 159 137 175 100 177 C63 175 55 159 59 140 C63 120 76 107 100 107 Z"/>`
+    + '<path class="yvb-kumas-kat" d="M80 168 Q100 176 120 168"/>'
     + '<path class="yvb-yaka" d="M84 111 Q92 121 100 117 Q108 121 116 111 Q108 114 100 113 Q92 114 84 111 Z"/>'
     + `<g class="yvb-motif" transform="translate(100 140)">${MOTIFLER[kisilik] || MOTIFLER.kalp}</g>`
     + '</g>'
     // Bacaklar öne uzanmış, tabanlar izleyiciye dönük
     + '<g class="yvb-bacak">'
-    + ten(k, '<path class="yvb-ten" d="M60 146 C46 154 44 176 58 184 C70 191 88 189 94 180 C99 172 92 160 80 152 C74 148 66 144 60 146 Z"/>')
-    + ten(k, '<path class="yvb-ten" d="M140 146 C154 154 156 176 142 184 C130 191 112 189 106 180 C101 172 108 160 120 152 C126 148 134 144 140 146 Z"/>')
+    + ten(k, '<path class="yvb-ten" d="M63 148 C52 156 50 174 61 182 C71 189 87 187 92 179 C96 171 90 161 80 154 C74 150 68 146 63 148 Z"/>')
+    + ten(k, '<path class="yvb-ten" d="M137 148 C148 156 150 174 139 182 C129 189 113 187 108 179 C104 171 110 161 120 154 C126 150 132 146 137 148 Z"/>')
     + ayak(k, 86, 176, -10, 1) + ayak(k, 114, 176, 10, -1)
     + '</g>'
     // Kollar: omuzdan dize; eller dizde
@@ -217,7 +224,7 @@ function buyuk(k, ruh, kisilik) {
     // Ön saç: dalgalı kâkül, yanlarda kıvrım; ışık şeridi
     + '<g class="yvb-sac yvb-sac-on">'
     + `<path fill="url(#${k}-sac)" d="M47 72 C42 38 66 18 100 18 C134 18 158 38 153 72 C149 60 143 52 136 49 C134 55 128 58 122 55 C120 47 113 42 106 42 C103 50 93 54 84 51 C82 46 78 44 73 46 C69 53 62 57 55 58 C51 62 48 66 47 72 Z"/>`
-    + '<path class="yvb-sac-cizgi" d="M106 42 C108 34 104 28 96 26 M84 51 C86 42 82 36 76 34 M122 55 C126 46 124 38 118 33 M136 49 C140 43 140 37 136 33"/>'
+    + '<path class="yvb-sac-cizgi" d="M106 42 C109 37 102 33 104 29 C105 26 101 24 97 25 M84 51 C87 45 80 42 82 37 C83 34 80 32 76 34 M122 55 C126 50 119 45 122 40 C124 37 121 34 118 33 M136 49 C140 45 135 41 138 37 M44 99 C40 97 41 92 45 92 M156 99 C160 97 159 92 155 92"/>'
     + '<path class="yvb-sac-isik" d="M72 30 C84 23 104 22 118 26"/>'
     + '</g>'
     // Aksesuar: saç bandı + fiyonk
@@ -240,11 +247,13 @@ function buyuk(k, ruh, kisilik) {
 const KUCUK_KABUK = '<path class="yvb-kabuk-dis" d="M54 154 L64 146 L74 155 L86 145 L100 156 L114 145 L126 155 L136 146 L146 154 C146 172 128 182 100 182 C72 182 54 172 54 154 Z"/>'
   + '<ellipse class="yvb-kabuk-benek" cx="76" cy="168" rx="6" ry="4"/><ellipse class="yvb-kabuk-benek" cx="124" cy="166" rx="7" ry="4.5"/>';
 const EMZIK_RUHLARI = ['normal', 'kirli', 'uykulu', 'uyuyor'];
+const KUCUK_ZEMIN = '<ellipse class="yvb-zemin" cx="100" cy="182" rx="48" ry="6.5"/>';
+const kucukIsaret = (ruh) => isaret(ruh, 140, 70, [[72, 146, 4], [128, 112, 3.4], [116, 150, 3.5]]);
 
-function kucuk(k, ruh) {
+/** Kabuktan çıkan kısım (kundak, baş, yüz, saç, emzik); kabuk ve işaret hariç. */
+function kucukGovde(k, ruh) {
   const emzik = EMZIK_RUHLARI.includes(ruh);
-  return '<ellipse class="yvb-zemin" cx="100" cy="182" rx="48" ry="6.5"/>'
-    + '<g class="yvb-beden">'
+  return ''
     // Kundak: başlık (yüzü çerçeveler) ve battaniye (renk jetonundan), çapraz kat, benek
     + '<g class="yvb-kiyafet yvb-kundak">'
     + `<path class="yvb-kumas" fill="url(#${k}-kumas)" d="M52 156 C42 110 62 46 100 44 C138 46 158 110 148 156 Z"/>`
@@ -270,10 +279,11 @@ function kucuk(k, ruh) {
     + (emzik
       ? '<g class="yvb-emzik"><ellipse class="yvb-emzik-kalkan" cx="100" cy="117.5" rx="10.5" ry="6.2"/>'
         + '<circle class="yvb-emzik-dugme" cx="100" cy="118" r="3.4"/><circle class="yvb-emzik-halka" cx="100" cy="124.5" r="5.4"/></g>'
-      : '')
-    + `<g class="yvb-kabuk">${KUCUK_KABUK}</g>`
-    + isaret(ruh, 140, 70, [[72, 146, 4], [128, 112, 3.4], [116, 150, 3.5]])
-    + '</g>';
+      : '');
+}
+
+function kucuk(k, ruh) {
+  return KUCUK_ZEMIN + '<g class="yvb-beden">' + kucukGovde(k, ruh) + `<g class="yvb-kabuk">${KUCUK_KABUK}</g>` + kucukIsaret(ruh) + '</g>';
 }
 
 /**
@@ -281,16 +291,29 @@ function kucuk(k, ruh) {
  * kisilik: 'obur'|'uykucu'|'neseli'|'titiz' (büyükte göğüs motifi); etiket: erişilebilir ad;
  * kimlik: gradyan id öneki (verilmezse sayaçtan benzersiz). Bilinmeyen değer varsayılana düşer.
  */
+const renkGecerli = (renk) => (Number.isInteger(renk) && renk >= 1 && renk <= 6 ? renk : 1);
+const onek = (kimlik) => String(kimlik).replace(/[^a-zA-Z0-9_-]/g, '') || `yvb${++sayac}`;
+
 export function bebekSvg({ asama = 'buyuk', ruh = 'normal', renk = 1, kisilik = '', etiket = '', kimlik = '' } = {}) {
   const a = BEBEK_ASAMALARI.includes(asama) ? asama : 'buyuk';
   const r = BEBEK_RUHLARI.includes(ruh) ? ruh : 'normal';
-  const c = Number.isInteger(renk) && renk >= 1 && renk <= 6 ? renk : 1;
+  const c = renkGecerli(renk);
   const ki = KISILIKLER.includes(kisilik) ? kisilik : '';
-  const k = String(kimlik).replace(/[^a-zA-Z0-9_-]/g, '') || `yvb${++sayac}`;
+  const k = onek(kimlik);
   const erisim = etiket ? `role="img" aria-label="${esc(etiket)}"` : 'aria-hidden="true"';
   const ic = a === 'buyuk' ? buyuk(k, r, ki) : kucuk(k, r);
   return `<svg viewBox="0 0 200 200" class="yvb-svg" data-asama="${a}" data-ruh="${r}"${ki ? ` data-kisilik="${ki}"` : ''}`
     + ` style="--yv-govde:var(--yv-r${c})" ${erisim} focusable="false">${tanimlar(k)}${ic}</svg>`;
+}
+
+/**
+ * Çatlama sahnesi için küçük bebeğin parçaları (cizim.js catlamaSvg). Son kare bebekSvg({ asama: 'kucuk' }) ile aynı:
+ * -> { tanim (<defs>), zemin, yavru (gövde + işaret), kabuk (alt yarı), renk (1–6) }. Sahne <svg>'si yvb-svg sınıfını taşır.
+ */
+export function bebekCatlamaParcalari({ ruh = 'mutlu', renk = 1, kimlik = '' } = {}) {
+  const r = BEBEK_RUHLARI.includes(ruh) ? ruh : 'mutlu';
+  const k = onek(kimlik);
+  return { tanim: tanimlar(k), zemin: KUCUK_ZEMIN, yavru: kucukGovde(k, r) + kucukIsaret(r), kabuk: KUCUK_KABUK, renk: renkGecerli(renk) };
 }
 
 /** Bebek stili. Renk jetonları (--yv-r1..6, --yv-damla) CIZIM_CSS'ten gelir; ikisi birlikte eklenir. */
@@ -316,6 +339,7 @@ export const BEBEK_CSS = `
   --yvb-allik: #F5768F;
   --yvb-pembe: #EE5F8C;
   --yvb-kabuk: #FFF6EA;
+  --yvb-zemin-koyu: #0E0612;
 }
 .yvb-svg {
   display: block; width: 100%; height: 100%; overflow: visible;
@@ -342,7 +366,11 @@ export const BEBEK_CSS = `
 .yvb-d-kumas3 { stop-color: color-mix(in oklab, var(--yvb-kumas) 78%, var(--yvb-kumas-koyu)); }
 .yvb-benek { fill: var(--yvb-ak); opacity: 0.75; }
 .yvb-zemin { fill: var(--hero); opacity: 0.14; }
+/* Koyu temada --hero zeminden açık: gölge koyu jetonla, daha belirgin. */
+@media (prefers-color-scheme: dark) { :root:not([data-mod="acik"]) .yvb-zemin { fill: var(--yvb-zemin-koyu); opacity: 0.42; } }
+:root[data-mod="koyu"] .yvb-zemin { fill: var(--yvb-zemin-koyu); opacity: 0.42; }
 .yvb-ten { stroke: var(--yvb-kontur); stroke-width: 1.6; stroke-linejoin: round; }
+.yvb-parmak { stroke-width: 1.2; }
 .yvb-kumas { stroke: var(--yvb-kumas-koyu); stroke-width: 1.6; stroke-linejoin: round; }
 .yvb-kundak-kenar { fill: none; stroke: color-mix(in oklab, var(--yv-govde) 55%, var(--yvb-ak)); stroke-width: 5; stroke-linecap: round; }
 .yvb-kumas-kat { fill: none; stroke: var(--yvb-kumas-koyu); stroke-width: 1.3; stroke-linecap: round; opacity: 0.55; }

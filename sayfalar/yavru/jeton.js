@@ -7,7 +7,7 @@
 // Yarış: 'jeton.<clientId>' anahtarını yalnız o kişi yazar; iki kişinin yazımı çakışmaz, jeton kaybolmaz/çoğalmaz.
 // Kıyafetin bedeli dolap kaydından sayılır; ikisi aynı anda alırsa tek kayıt kalır, bir kez ödenir.
 // Eşzamanlı harcamada bakiye kısa süre eksiye inebilir; eksik sonraki kazançtan düşer (satın alma engellenir).
-// y: mantik.js oku() sonucu + ham 'jeton', 'dolap', 'tuvalet' alanları (oku bunları taşımaz) ya da ham belge verisi.
+// y: mantik.js oku() sonucu (ham 'jeton', 'dolap', 'tuvalet' alanlarını taşır) ya da ham belge verisi.
 // Yazım alan düzeyinde yama: 'jeton.<clientId>', 'dolap.<urunId>', 'ihtiyac.<ad>', 'tuvalet'.
 import { toDay } from '../../js/core/gunler.js';
 import { ihtiyaclar, uyuyorMu } from './mantik.js';

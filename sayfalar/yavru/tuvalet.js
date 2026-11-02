@@ -8,9 +8,9 @@
 // geçer, aynı kaza bir daha hesaplanmaz. Kaza anından sonra yıkanmışsa (temizlik kaydı daha yeni) temizlik düşmez.
 // Uykuda kaza olmaz: kaza anı uykuya düşerse uyanıştan KAZA_SURE sonraya kayar.
 // Eski belgede alan yoksa { v: 0, t: null }: ilk yemek ya da lazımlık yazana dek artmaz. Yumurtada yok.
-// y: mantik.js oku() sonucu + ham 'tuvalet' alanı (oku bu alanı taşımaz) ya da ham belge verisi.
+// y: mantik.js oku() sonucu (ham 'tuvalet' alanını taşır) ya da ham belge verisi.
 // Yazım alan düzeyinde yama: 'tuvalet', 'ihtiyac.temizlik', 'son.<clientId>', 'puan.<clientId>'.
-import { DK, SAAT, ihtiyacDegeri, uyuyorMu } from './mantik.js';
+import { DK, SAAT, ihtiyacDegeri, uyuyorMu, LAZIMLIK, CIS_VAR, KAZA_METNI } from './mantik.js';
 
 export const TUVALET_ARTIS = 2; // saatlik (uykuda yarı)
 export const ESIK = 70; // bu ve üstü "Çişi var"
@@ -20,13 +20,8 @@ export const KAZA_GOSTER = 60 * DK; // "ufak bir kaza" mesajı bu kadar görün�
 export const KAZA_MAX = 10; // bir hesapta en çok bu kadar kaza (uzun yoklukta)
 /** Yiyecek eylemlerinin sıkışıklık artışı (jeton.js ürünleri kendi artışını taşır). */
 export const YEMEK_ARTIS = Object.freeze({ mama: 20, meyve: 15, tatli: 10 });
-export const CIS_VAR = 'Çişi var 🚽';
-export const KAZA_METNI = 'Ufak bir kaza oldu, olsun 💛';
-
-/** EYLEMLER biçiminde. fiil: [üçüncü kişi, "Sen" için]. */
-export const LAZIMLIK = {
-  ad: 'Lazımlık', emoji: '🚽', bekleme: 20 * DK, fiil: ['tuvalete götürdü', 'tuvalete götürdün'], tok: 'Şu an çişi yok 😊',
-};
+/** EYLEMLER biçiminde. fiil: [üçüncü kişi, "Sen" için]. Tanım ve metinler mantik.js'te (durum, bakım satırı, bildirim). */
+export { LAZIMLIK, CIS_VAR, KAZA_METNI };
 
 const zaman = (s) => {
   if (typeof s !== 'string' || !s) return NaN;

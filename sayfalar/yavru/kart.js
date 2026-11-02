@@ -1,5 +1,5 @@
 // Ana sayfa için küçük "Yavrumuz" kartı: küçük görsel + ad + en çok ihtiyaç duyulan şey + sayfaya bağlantı.
-// Sayfa stilinden bağımsız: CSS kartın içinde gelir (sınıf öneki yvk-, yalnız değişkenler; yavru çizimi cizim.js).
+// Sayfa stilinden bağımsız: CSS kartın içinde gelir (sınıf öneki yvk-, yalnız değişkenler; yavru çizimi cizim.js + bebek.js).
 //   const kapat = await mountYavruKart(el, { room });   // room = joinRoom sonucu
 //   kapat();  // abonelikleri bırakır
 // Kart belge yazmaz: yumurtayı ilk açan sayfa (sayfalar/yavru/) oluşturur.
@@ -10,7 +10,9 @@ import {
   TUR, BELGE_ID, oku, ruhHali, ozledi, durumMetni, renkSec, catlamaHazir, DK, dogumGunuMu, DOGUM_GUNU_METNI,
 } from './mantik.js';
 import { keyifsizMi } from './saglik.js';
+import { tuvaletDurumu } from './tuvalet.js';
 import { yavruSvg, CIZIM_CSS } from './cizim.js';
+import { BEBEK_CSS } from './bebek.js';
 
 const CSS = `
 .yvk { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 14px;
@@ -22,7 +24,7 @@ const CSS = `
 .yvk:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .yvk-gorsel { display: block; width: 72px; height: 72px; padding: 4px; border-radius: 22px;
   background: radial-gradient(90% 80% at 50% 100%, color-mix(in oklab, var(--yv-govde) 55%, var(--surface)), var(--surface-2)); }
-.yvk-gorsel .yv-svg { width: 100%; height: 100%; }
+.yvk-gorsel svg { width: 100%; height: 100%; }
 .yvk-govde { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .yvk-ad { margin: 0; overflow: hidden; font-family: var(--font-display); font-size: 1.1875rem; font-weight: 600;
   font-variation-settings: 'SOFT' 100; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
@@ -37,7 +39,7 @@ let stilEklendi = false;
 function stilEkle() {
   if (stilEklendi || document.getElementById('yv-cizim-stil')) return;
   stilEklendi = true;
-  document.head.append(h('style', { id: 'yv-cizim-stil' }, CIZIM_CSS));
+  document.head.append(h('style', { id: 'yv-cizim-stil' }, CIZIM_CSS + BEBEK_CSS));
 }
 
 /** el içine kartı kurar; belge değişince ve dakikada bir tazeler. -> kapat() */
@@ -68,17 +70,19 @@ export async function mountYavruKart(el, { room } = {}) {
     // Doğum gününde durum satırı kutlar (o gün ihtiyaç rengi yok; ihtiyaçlar sayfada görünür).
     const dogumGunu = dogumGunuMu(y, simdi);
     const keyifsiz = keyifsizMi(y, simdi);
-    const metin = dogumGunu ? DOGUM_GUNU_METNI : durumMetni(y, simdi, keyifsiz);
+    const tuvalet = tuvaletDurumu(y, simdi);
+    const metin = dogumGunu ? DOGUM_GUNU_METNI : durumMetni(y, simdi, keyifsiz, tuvalet);
     const baslik = asama === 'yumurta' ? 'Yavrumuz' : y.ad || 'Yavrumuz';
-    const k = [asama, renk, ruh, hazir, metin, baslik].join('|');
+    const kisilik = y?.kisilik || '';
+    const k = [asama, renk, ruh, hazir, metin, baslik, kisilik].join('|');
     if (k === anahtar) return;
     anahtar = k;
     kart.style.setProperty('--yv-govde', `var(--yv-r${renk})`);
-    gorsel.innerHTML = yavruSvg({ asama, ruh, renk, hazir });
+    gorsel.innerHTML = yavruSvg({ asama, ruh, renk, hazir, kisilik });
     ad.textContent = baslik;
     durum.textContent = metin;
     kart.dataset.dogumgunu = String(dogumGunu);
-    kart.dataset.ihtiyac = String(!dogumGunu && asama !== 'yumurta' && (keyifsiz || ozledi(y, simdi) || ['ac', 'kirli', 'uykulu', 'uzgun'].includes(ruh)));
+    kart.dataset.ihtiyac = String(!dogumGunu && asama !== 'yumurta' && (keyifsiz || tuvalet?.cisVar || tuvalet?.yeniKaza || ozledi(y, simdi) || ['ac', 'kirli', 'uykulu', 'uzgun'].includes(ruh)));
     kart.setAttribute('aria-label', `${baslik}: ${metin}`);
   };
   const off = col.on('change', ciz);

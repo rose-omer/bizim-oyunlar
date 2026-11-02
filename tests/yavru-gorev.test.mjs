@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {
   GOREVLER, GOREV_BONUS, GOREV_TUT, gununGorevi, gorevDurumu, odulYamasi, odullendiMi, gorevOzeti,
 } from '../sayfalar/yavru/gorev.js';
-import { EYLEMLER, oku } from '../sayfalar/yavru/mantik.js';
+import { EYLEMLER, LAZIMLIK, oku } from '../sayfalar/yavru/mantik.js';
 import { applyPatch } from '../js/core/veri.js';
 import { toDay, addDays } from '../js/core/gunler.js';
 
@@ -42,7 +42,7 @@ test('görev havuzu: 8–12 görev, tekil id, metin, emoji, geçerli koşul', ()
     else assert.ok(Number.isInteger(kosul.adet) && kosul.adet >= 1, g.id);
     for (const l of listeler) {
       assert.ok(l.length > 0, g.id);
-      for (const e of l) assert.ok(EYLEMLER[e], `${g.id}: ${e}`);
+      for (const e of l) assert.ok(EYLEMLER[e] || (e === 'lazimlik' && LAZIMLIK), `${g.id}: ${e}`);
       assert.ok(!l.includes('uyandir'), `${g.id}: uyandırmak bakım sayılmaz`);
     }
   }
@@ -91,6 +91,8 @@ test('gorevDurumu toplam: birlikte 3 bakım, ikisi de katkı vermeli', () => {
   assert.deepEqual(d.ilerleme, { n: 3, gerek: 3 });
   d = durum('birlikte-3', [k('mama', A), k('uyandir', B), k('isit', B), k('ad', B)]);
   assert.deepEqual(d.ilerleme, { n: 1, gerek: 3 }, 'uyandır, ısıt, ad bakım sayılmaz');
+  d = durum('birlikte-3', [k('mama', A), k('lazimlik', A), k('lazimlik', B), k('kaza', B), k('satinal', B)]);
+  assert.deepEqual(d.ilerleme, { n: 3, gerek: 3 }, 'lazımlık bakım sayılır; kaza ve satın alma sayılmaz');
 });
 
 test('gorevDurumu ayri: biri yıkasın biri oynasın (farklı kişiler)', () => {

@@ -148,8 +148,14 @@ function yenile(roomId) {
   location.reload();
 }
 
-function odadanCik() {
-  clearRoom(); // anahtar kalır: geri dönünce aynı cihaz kaydı kullanılır (çakışma olmaz)
+async function odadanCik() {
+  // Silinen odanın bu cihazdaki kopyası da gider. Diğer durumlarda anahtar kalır: geri dönünce aynı cihaz kaydı kullanılır.
+  if (aktif?.durum === 'silindi') {
+    const { cihazdanUnut } = await import('./kilit.js');
+    await cihazdanUnut(aktif.roomId);
+  } else {
+    clearRoom();
+  }
   location.replace(lobbyUrl());
 }
 

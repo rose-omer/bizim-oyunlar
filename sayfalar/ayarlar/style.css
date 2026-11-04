@@ -484,4 +484,4 @@ ol.ayar-adimlar {
 .ayar-parola .input { width: 100%; }
 .ayar-hata { color: var(--bad); font-size: 0.875rem; min-height: 1.2em; }
 .ayar-kullanim-metin { font-weight: 700; font-variant-numeric: tabular-nums; }
-.cop-eylem { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.cop-eylem { grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }

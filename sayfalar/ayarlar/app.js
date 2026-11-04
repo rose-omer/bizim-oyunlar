@@ -959,8 +959,9 @@ async function copKaliciSil(k) {
 const kullanimMetin = h('p', { class: 'ayar-kullanim-metin' });
 const kullanimCubuk = h('progress', { class: 'ayar-ilerleme', max: '1', value: '0', 'aria-label': 'Fotoğraf ve ses alanı' });
 const kullanimAlt = h('p', { class: 'ayar-yardim' });
-const kullanimKutu = h('div', { class: 'ayar-alan', hidden: true },
-  h('div', { class: 'ayar-alan-ust' }, h('h3', { class: 'ayar-etiket' }, 'Fotoğraf ve ses alanı')), kullanimMetin, kullanimCubuk, kullanimAlt);
+const kullanimKutu = kart(h('div', { class: 'ayar-alan' },
+  h('div', { class: 'ayar-alan-ust' }, h('h3', { class: 'ayar-etiket' }, 'Fotoğraf ve ses alanı')), kullanimMetin, kullanimCubuk, kullanimAlt));
+kullanimKutu.hidden = true;
 
 async function kullanimYukle() {
   let g = null;
@@ -1361,7 +1362,7 @@ async function odaSilCiz() {
   if (g === 'bos') {
     odaSilKutu.replaceChildren(
       h('p', { class: 'ayar-satir-aciklama' }, 'Odayı tamamen silmek ikinizin de onayını ister. Mesajlar, anılar, fotoğraflar ve sesler sunucudan kalıcı olarak silinir.'),
-      islem('Odayı tamamen sil', 'btn small ghost', 'Odayı tamamen sil', async () => {
+      islem('Odayı tamamen sil', 'btn small danger', 'Odayı tamamen sil', async () => {
         if (!(await confirmDialog('Silme isteği sevgiline gider. 48 saat içinde o da onaylarsa oda kalıcı olarak silinir. Önce tam yedek almanı öneririz.', { ok: 'İsteği gönder' }))) return;
         try {
           await odaSilIste(roomId);
@@ -1382,7 +1383,7 @@ async function odaSilCiz() {
         ? `Odada başka cihaz yok; silmeyi sen onaylarsın. İstek ${kalan} saat geçerli.`
         : `Sevgilin odayı tamamen silmek istiyor. İstek ${kalan} saat geçerli.`),
       h('div', { class: 'ayar-eylemler' },
-        islem('Onayla ve sil', 'btn small ghost', 'Onayla ve odayı kalıcı sil', odaSilOnayAkisi),
+        islem('Onayla ve sil', 'btn small danger', 'Onayla ve odayı kalıcı sil', odaSilOnayAkisi),
         islem('Vazgeç', 'btn small', 'Silme isteğinden vazgeç', vazgec)));
   }
 }
@@ -1436,7 +1437,7 @@ const veriBolumu = bolum('veri', 'Verilerimiz', kart(
   geriKutu,
   h('div', { class: 'ayar-ayrac' }),
   h('p', { class: 'ayar-yardim' }, 'Düz yedek yalnız kayıtları alır: fotoğrafların kendisi girmez ve dosya şifresizdir.'),
-  h('div', { class: 'ayar-eylemler' }, yedekBtn)), kart(kullanimKutu), copKart);
+  h('div', { class: 'ayar-eylemler' }, yedekBtn)), kullanimKutu, copKart);
 yedekSonCiz();
 const veriAcildi = () => { if (veriBolumu.open) { copYukle(); kullanimYukle(); } };
 // Son silinenler ve kullanım yalnız bölüm açılınca yüklenir (her türün tüm belgeleri okunur).

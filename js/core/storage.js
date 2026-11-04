@@ -11,6 +11,7 @@ const LOCAL_PREFIX = 'local:';
 export const KOVA_ONEK = 'kova:';
 const YOL_RE = /^[a-z2-9]{10}\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(jpg|webp|webm|m4a)$/;
 const K_IMZA = 'bizim.imza';
+const IMZA_BEKLE_MS = 10_000;
 const IDB_NAME = 'bizim-local';
 const IDB_STORE = 'photos';
 const SAFE_PATH_RE = /^[A-Za-z0-9._/-]+$/; // %, \, ?, # yok: kodlanmış '..' ile kovadan çıkılamaz
@@ -91,6 +92,7 @@ async function imzaIste(oda, yollar) {
     method: 'POST',
     headers: { ...anahtarBasliklari(), 'Content-Type': 'application/json' },
     body: JSON.stringify({ room: oda, cihaz: k.p_cihaz, anahtar: k.p_anahtar, yollar }),
+    signal: AbortSignal.timeout(IMZA_BEKLE_MS), // takılırsa fotoğraflar beklemesin: açık adrese düşülür
   });
   if (!res.ok) throw new Error(`imza ${res.status}`);
   return res.json();

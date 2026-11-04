@@ -46,6 +46,7 @@ npm test
    npx supabase functions deploy bildir hatirlat --no-verify-jwt --use-api --project-ref blgtlflryxknyalutugw
    ```
 4. Kontrol: `select jobname, schedule from cron.job;` → 2 satır.
+- **Medya geçişi:** `supabase/gecis/` (kova kapatma, temizlik zamanlaması, adres taşıma). `schema.sql` bunları yapmaz; her biri ayrı onay ister. Function: `npx supabase functions deploy medya --no-verify-jwt --use-api --project-ref blgtlflryxknyalutugw`.
 - **Yayın sırası** (şema değişince): (1) `schema.sql` tamamı, (2) `functions deploy`, (3) `git push`. Sıra bozulursa istemci
   "eski sunucu" moduna düşer, bozulmaz. Eski odalarda cihaz onayı (koruma) ilk girişten 3 gün sonra kendiliğinden başlar.
 - `js/config.js`'teki publishable anahtar ve VAPID genel anahtarı gizli değildir. Özel anahtarlar yalnız

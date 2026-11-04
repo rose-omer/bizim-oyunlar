@@ -99,9 +99,9 @@ room.leave()
 ## 7. js/core/storage.js ve js/core/db.js (Çekirdek)
 ```js
 // storage.js
-export async function uploadPhoto(blob, roomId) // -> url (string). Supabase: herkese açık 'photos' kovası,
-                                                //    yol `<roomId>/<uuid>.jpg`. Yerel: IndexedDB, 'local:<id>'.
+export async function uploadPhoto(blob, roomId) // -> başvuru (string; belgeye yazılır). Yol `<roomId>/<uuid>.<uzantı>`. Yerel: 'local:<id>'.
 export async function loadPhoto(url)            // -> Blob
+export async function medyaAdresi(url)          // -> <img>/<audio> kaynağı | null (imzalı adres; ayrıntı §28)
 // db.js  (oda kimliği = çift kimliği)
 export async function logGame(roomId, gameId, result) // sessizce dener; hata fırlatmaz. result küçük JSON.
 export async function roomStats(roomId)         // -> [{ game, played, last_at }]
@@ -238,7 +238,7 @@ Misafir `hash` farkı görürse (sürüklemiyor ve son 1 sn eylem yok) `need` yo
 ## 13. Supabase (Çekirdek: supabase/schema.sql)
 - Tablo `game_log(id, room, game, result jsonb, created_at)`; RLS açık, politika yok (doğrudan erişim kapalı).
 - RPC (security definer, `anon`'a execute): `log_game(p_room, p_game, p_result)`, `room_stats(p_room)`, `ping()`.
-- Depolama: herkese açık `photos` kovası; 5 MB sınır; yalnız jpeg/webp/png; `anon` yalnız INSERT (listeleme yok).
+- Depolama: `photos` kovası; 5 MB sınır; ayrıntı §28 (eski: herkese açık, `anon` INSERT).
 - Ücretsiz proje 7 gün hareketsiz kalırsa durur: `keepalive.yml` 3 günde bir `ping` çağırır.
 - `room_doc` silme veriyi korur: `doc_put` (`p_deleted`) yalnız `deleted`, `author`, `updated_at` yazar; `deleted = false` ile yazmak geri getirir.
 
@@ -465,6 +465,8 @@ v3 bölümleri v1 ve v2'nin üstüne gelir. Çatışmada v3 geçerli.
 - Davet linki: `inviteUrl(roomId, davet)` → `<kök>/#oda=<id>&davet=<kod>`.
 - Yeni telefon linki (kişiye bağlı davet): `davetOlustur(roomId, { kimlik })` + `buildTasimaUrl` → `#oda=&davet=&kim=&ad=` (anahtar yok). Yalnız o kimlik kullanır; çakışmayı çözer (anahtar yenilenir, kurtarma kodu kalır). Genel davet çakışmayı çözmez. Kimlik yalnız elle yapıştırınca uygulanır.
 - Sunucu: `supabase/schema.sql` 7. bölüm (`oda`, `oda_cihaz`, `oda_davet`, `oda_yetki`, `oda_katil`, `oda_durum`, `cihaz_*`, `davet_olustur`, `kurtarma_olustur`, `doc_ice_aktar`). Var olan RPC'ler sona `p_cihaz`, `p_anahtar` (`default null`) aldı.
+- Kimliksiz çağrı yalnız oda satırı olan ve koruması başlamamış odada geçer; satırı olmayan oda 42501 verir. Oda satırını ilk girişte `oda_katil` açar.
+- Durum ek: `silindi` (oda tamamen silindi; kapı ekranı, "Odadan çık" cihazdaki kopyayı siler).
 - Yedekten geri yükleme: Ayarlar › Verilerimiz. `doc_ice_aktar` 200'lük parçalar; yedekteki kopya daha yeniyse ya da mevcut kayıt silinmişse yazılır; yazılan `updated_at` = şimdi.
 
 ## 25. Otomatik güncelleme
@@ -499,6 +501,16 @@ v3 bölümleri v1 ve v2'nin üstüne gelir. Çatışmada v3 geçerli.
   `liste.liste = 'sarki'` + `baglanti?` (yalnız https YouTube/Spotify/Apple Music) + `bizim?` (tek "Bizim şarkımız").
 - Yeni tür `sayfalar/ayarlar/mantik.js` `YEDEK_TURLERI` sonuna eklenir.
 - Yavrumuz otomatik yazımları (kaza, çatlama, büyüme, görev ödülü) yalnız görünümdeki ilk başarılı tazelemeden sonra çalışır (`sayfalar/yavru/tazelik.js`); arka plandan dönünce önce tazelenir. Düğmeler beklemez.
+
+## 28. Medya, kalıcı silme, tam yedek
+- **Başvuru:** belgede duran değer adres değil konumdur: eski `https://<proje>/storage/v1/object/public/photos/<yol>` ya da `kova:<yol>`; `<yol>` = `<oda>/<uuid>.jpg|webp|webm|m4a`. İkisi de her zaman okunur. Yeni yazım `js/config.js` `MEDYA_KOVA_BICIMI` ile seçilir. İmzalı adres belgeye yazılmaz.
+- **Okuma:** `img.src = başvuru` YASAK. `fotoImg`, `fotoSrc`, `medyaAdresi`, `loadPhoto` kullan. Eşzamanlı gerekirse `medyaHazir` (hazır imza | null). İmza 1 saat; `medya-imza.js` toplu ister, sessionStorage `bizim.imza`da tutar. İmza alınamazsa açık adrese düşer (kova kapalıyken görüntü hatası).
+- **Edge Function `medya`** (`supabase/functions/_shared/medya.js`): `?islem=imzala`, `?islem=yukle` (foto 5 MB, ses 2 MB, içerik imzası denetlenir), `?islem=temizle` (pg_cron). Cihaz yetkisi ve sınır SQL'de (`schema.sql` 9. bölüm).
+- **Sınır:** oda 800 MB ve 5000 dosya, genel 950 MB, oda saatte 600 dosya (`medya_sinirlar`). Gösterge: Ayarlar › Verilerimiz (`medya_kullanim`).
+- **Silme:** `doc_kalici_sil` ve `cop_temizle` (30 gün) `data` = `{}` yapar, satır kalır; odada anılmayan dosya `medya_silinecek` kuyruğuna girer; `medya?islem=temizle` Storage API ile siler. Düzenlemeyle belgeden çıkarılan dosya silinmez.
+- **Oda silme:** `oda_sil_iste` (48 saat), `oda_sil_onayla` (başka cihaz; yalnız gerçek cihaz yoksa isteyen; `yedek-pc-*` sayılmaz), `oda_sil_vazgec`, `oda_sil_durum`. Kod `oda_silindi`'ye girer, bir daha açılmaz.
+- **Tam yedek** (`.bizyedek`, `js/core/yedek-sifre.js`, `sayfalar/ayarlar/yedek-tam.js`): PBKDF2-SHA256 600.000 tekrar, AES-256-GCM, 4 MB parça; sıra ve son parça ek veride. İlk kayıt `yedekVerisi`, sonra medya. Eski düz `.json` okunur. `crypto.subtle` https ister: http yerel ağda çalışmaz. Geri yüklemede bu odanın dosyası aynı yola yazılır; başka oda ya da `local:` yeni başvuru alır. Hatırlatma: `js/core/yedek-hatirlat.js` (30 gün, cihaz başına; `bizim.yedek.*`).
+- **Canlı geçiş:** `schema.sql` kovanın `public` değerine ve eski politikaya dokunmaz, temizliği zamanlamaz. Bu adımlar `supabase/gecis/` altında, ayrı onayla.
 
 ## 27. Yeni sayfalar, oyunlar ve ortak modüller
 - SAYFALAR: `ruh`, `skor`, `yilimiz`, `rozetler`, `gunfoto`, `haftalik`, `harcama`, `konum` (Daha › Biz; Ayarlar'daki eski Mesafe bölümünün yerine), `sohbetozet` (Sohbet Özetimiz, Daha › Biz, `yilimiz`'ın arkasında; `sayfalar/sohbet-ozeti/`). GAMES: `satranc`, `pisti`, `duello` (Kelime Düellosu), `sudoku`.

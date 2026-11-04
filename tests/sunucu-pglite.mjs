@@ -43,6 +43,8 @@ export async function kur({ once = '', gecis = false } = {}) {
       insert into cron.job (jobname, schedule, command) values (p_ad, p_zaman, p_komut)
       on conflict (jobname) do update set schedule = excluded.schedule, command = excluded.command
       returning jobid $$;
+    create function cron.unschedule(p_ad text) returns boolean language sql as $$
+      delete from cron.job where jobname = p_ad returning true $$;
     create schema net;
     create table net.istek (id serial primary key, url text, body jsonb, headers jsonb, zaman int);
     create function net.http_post(url text, body jsonb default '{}', params jsonb default '{}',

@@ -57,6 +57,8 @@ test('sonucCoz: sunucu yanıtını normalleştirir; bilinmeyen durum → null', 
     { durum: 'onayli', kanal: 'k'.repeat(32), zorunlu: '2026-10-01T10:00:00Z', ilk: true });
   assert.deepEqual(sonucCoz({ durum: 'bekliyor', kanal: 'x' }), { durum: 'bekliyor', kanal: null, zorunlu: null, ilk: false });
   assert.deepEqual(sonucCoz([{ durum: 'cakisma' }]), { durum: 'cakisma', kanal: null, zorunlu: null, ilk: false });
+  assert.equal(sonucCoz({ durum: 'silindi' }).durum, 'silindi');
+  assert.equal(girisAcikMi({ durum: 'silindi' }), false);
   assert.equal(sonucCoz({ durum: 'hack' }), null);
   assert.equal(sonucCoz(null), null);
 });

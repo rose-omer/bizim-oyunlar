@@ -97,7 +97,7 @@ test('satın alma: bilinmiyor, yetersiz', () => {
   const d = kazan(veri(), A, 30);
   assert.deepEqual(satinAl(yv(d), { kim: A, urun: 'roket', simdi: T0 }), { hata: 'bilinmiyor' });
   assert.deepEqual(satinAl(yv(d), { kim: A, urun: 'toString', simdi: T0 }), { hata: 'bilinmiyor' });
-  assert.deepEqual(satinAl(yv(d), { kim: A, urun: 'tac', simdi: T0 }), { hata: 'yetersiz', eksik: 120 });
+  assert.deepEqual(satinAl(yv(d), { kim: A, urun: 'pijama', simdi: T0 }), { hata: 'yetersiz', eksik: 40 });
 });
 
 test('kıyafet: dolaba kalıcı girer, bedeli bir kez sayılır, ikinci kez "zaten"', () => {

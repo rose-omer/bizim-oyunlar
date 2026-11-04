@@ -82,6 +82,7 @@ test('cikarYamasi: yuvayı boşaltır (null yama alanı siler)', () => {
 const K = 'omer-test-id';
 const T = Date.UTC(2026, 9, 30, 10, 0, 0);
 const belge = (kazanc, ek = {}) => ({
+  evre: { ay1: {}, ay3: {}, ay6: {}, yas1: {} },
   asama: 'buyuk', renk: 3, uyku: null, ihtiyac: {}, jeton: { [K]: { kazanc, harcama: 0, gun: null, bugun: 0 } }, dolap: {}, ...ek,
 });
 

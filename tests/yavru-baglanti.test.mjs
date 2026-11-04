@@ -8,7 +8,8 @@ import {
 } from '../sayfalar/yavru/mantik.js';
 import { KISILIKLER, FAVORI_BONUS, kisilikSec } from '../sayfalar/yavru/kisilik.js';
 import { ILAC as SAGLIK_ILAC, keyifsizMi, dusukBaslangic, puanArtisi } from '../sayfalar/yavru/saglik.js';
-import { gorevOzeti, odulYamasi, GOREV_BONUS } from '../sayfalar/yavru/gorev.js';
+import { gorevOzeti, odulYamasi } from '../sayfalar/yavru/gorev.js';
+import { GOREV_JETON } from '../sayfalar/yavru/seri.js';
 import { applyPatch } from '../js/core/veri.js';
 import { toDay } from '../js/core/gunler.js';
 
@@ -148,15 +149,15 @@ test('keyifsizMi ve dusukBaslangic kişilik çarpanını kullanır', () => {
   assert.equal(keyifsizMi(y, T0 + 2.5 * SAAT + 24 * SAAT), true);
 });
 
-test('görev: oku sonucu gorevOzeti ve odulYamasi ile çalışır; ödül iki kişiye', () => {
+test('görev: oku sonucu gorevOzeti ve odulYamasi ile çalışır; ödül jeton kaydı', () => {
   const gun = toDay(new Date(T0));
   const y = kucuk({}, { puan: { [A]: 4, [B]: 2 } });
   const oz = gorevOzeti(y, { roomId: 'testpaka23', gun, kayitlar: [], kisiler: [A, B] });
   assert.ok(oz && oz.gorev && oz.ilerleme.gerek > 0);
   assert.equal(oz.odullendi, false);
   const yama = odulYamasi(y, gun, [A, B], { gorevId: oz.gorev.id, simdi: T0 });
-  assert.equal(yama[`puan.${A}`], 4 + GOREV_BONUS);
-  assert.equal(yama[`puan.${B}`], 2 + GOREV_BONUS);
+  assert.equal(yama[`puan.${A}`], undefined);
+  assert.equal(yama[`gorev.${gun}`].jeton, GOREV_JETON);
   const sonra = uygula(y, yama);
   assert.equal(sonra.gorev[gun].id, oz.gorev.id);
   assert.equal(odulYamasi(sonra, gun, [A, B], { simdi: T0 }), null, 'bir kez');

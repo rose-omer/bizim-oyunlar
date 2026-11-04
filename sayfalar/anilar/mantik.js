@@ -229,6 +229,24 @@ export function formParametreleri(search, bugun) {
   };
 }
 
+/** Başka sayfanın hazırladığı anı taslağı (sessionStorage): { fotolar, not }. Adresten geçmez: fotoğraf adresi URL'e yazılmaz. */
+export const ANI_TASLAK_ANAHTARI = 'bizim.ani.taslak';
+
+/** Yalnız ?taslak=1 ile okunur. Bozuk kayıt null. -> { fotolar, not } | null */
+export function fotoTaslagi(search, metin) {
+  if (new URLSearchParams(search || '').get('taslak') !== '1' || !metin) return null;
+  try {
+    const v = JSON.parse(metin);
+    if (!Array.isArray(v?.fotolar)) return null;
+    return {
+      fotolar: v.fotolar.filter((u) => typeof u === 'string' && u).slice(0, MAX_FOTO),
+      not: typeof v.not === 'string' ? v.not : '',
+    };
+  } catch {
+    return null;
+  }
+}
+
 /** "Beğen" düğmesi görünsün mü: kendi eklediğin anıda yok; önceden beğendiysen geri alabilmen için var. */
 export function begenGoster(data, benId) {
   if (!data?.ekleyen || data.ekleyen !== benId) return true;

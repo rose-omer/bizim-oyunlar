@@ -4,6 +4,7 @@ import {
   parseDay, toDay, addDays, daysBetween, nextOccurrence, occurrenceIndex,
   upcoming, milestones, milestonesBetween, leftText,
 } from '../../js/core/gunler.js';
+import { buGunGecmisYillar } from '../anilar/mantik.js';
 
 export const TURLER = [
   { id: 'yildonumu', ad: 'Yıl dönümü', emoji: '💞' },
@@ -376,4 +377,10 @@ export function sureYazi({ years = 0, months = 0, days = 0 } = {}) {
   if (months) p.push(`${months} ay`);
   if (days) p.push(`${days} gün`);
   return p.join(', ');
+}
+
+/** Takvimde seçili günün anıları: o tarih ve geçmiş yılların aynı günü (en yakın önce). */
+export function gununAnilari(docs, gun) {
+  const buGun = (docs || []).filter((d) => d?.data?.tarih === gun);
+  return [...buGun, ...buGunGecmisYillar(docs, gun).map((x) => x.ani)];
 }

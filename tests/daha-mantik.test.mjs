@@ -1,7 +1,7 @@
 // Daha sayfası: gruplar ve davet satırı (saf mantık).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { DAHA_GRUPLARI, dahaGruplari, davetGoster } from '../sayfalar/daha/mantik.js';
+import { DAHA_GRUPLARI, dahaGruplari, davetGoster, dahaAra, sonOku, sonEkle, sonSayfalar, SON_EN_COK } from '../sayfalar/daha/mantik.js';
 import { SAYFALAR, SEKMELER } from '../js/core/games.js';
 
 const s = (id) => ({ id, title: id, icon: '•', path: `sayfalar/${id}/`, desc: '' });
@@ -47,4 +47,50 @@ test('davetGoster: yalnız sevgili henüz yokken', () => {
   assert.equal(davetGoster({ clientId: 'a', name: 'Gül' }, null), false);
   assert.equal(davetGoster(null, { clientId: 'a', ad: 'Gül' }), false);
   assert.equal(davetGoster({}, {}), true);
+});
+
+const adlar = (l) => l.map((x) => x.id);
+test('dahaAra: başlık başı, başlık içi, açıklama sırasıyla; biz ve daha çıkar, sekmeler ve Ayarlar bulunur', () => {
+  assert.deepEqual(adlar(dahaAra(SAYFALAR, 'mektup')), ['mektup']);
+  assert.deepEqual(adlar(dahaAra(SAYFALAR, 'ayar')), ['ayarlar']);
+  assert.ok(adlar(dahaAra(SAYFALAR, 'anı')).includes('anilar'));
+  assert.equal(adlar(dahaAra(SAYFALAR, 'tüm özellikler')).includes('daha'), false);
+  assert.equal(adlar(dahaAra(SAYFALAR, 'ana sayfa')).includes('biz'), false);
+  const l = [
+    { id: 'c', title: 'Xyz', path: 'c/', desc: 'foto burada' },
+    { id: 'b', title: 'Güzel foto', path: 'b/', desc: '' },
+    { id: 'a', title: 'Fotoğraf', path: 'a/', desc: '' },
+  ];
+  assert.deepEqual(adlar(dahaAra(l, 'foto')), ['a', 'b', 'c']);
+});
+
+test('dahaAra: Türkçe harfsiz yazım, büyük harf, çok kelime; boş sorgu boş döner', () => {
+  assert.deepEqual(adlar(dahaAra(SAYFALAR, 'gunun fotografi')), ['gunfoto']);
+  assert.deepEqual(adlar(dahaAra(SAYFALAR, 'GÜNÜN FOTOĞRAFI')), ['gunfoto']);
+  assert.equal(adlar(dahaAra(SAYFALAR, 'İZLE'))[0], 'izle');
+  assert.deepEqual(dahaAra(SAYFALAR, '   '), []);
+  assert.deepEqual(dahaAra(SAYFALAR, 'yokboylebirsey'), []);
+  assert.deepEqual(dahaAra(null, 'a'), []);
+});
+
+test('sonOku: bozuk kayıt boş liste; yalnız metin kimlikler', () => {
+  assert.deepEqual(sonOku(null), []);
+  assert.deepEqual(sonOku('{bozuk'), []);
+  assert.deepEqual(sonOku('{"a":1}'), []);
+  assert.deepEqual(sonOku('["a",1,null,"b"]'), ['a', 'b']);
+});
+
+test('sonEkle: en yeni başa, tekrar yok, sınır korunur', () => {
+  assert.deepEqual(sonEkle([], 'a'), ['a']);
+  assert.deepEqual(sonEkle(['a', 'b'], 'b'), ['b', 'a']);
+  let l = [];
+  for (const id of ['a', 'b', 'c', 'd', 'e', 'f']) l = sonEkle(l, id);
+  assert.equal(l.length, SON_EN_COK);
+  assert.equal(l[0], 'f');
+});
+
+test('sonSayfalar: yalnız Daha listesindekiler, kayıt sırasıyla; silinmiş sayfa düşer', () => {
+  const g = dahaGruplari(SAYFALAR, SEKMELER);
+  assert.deepEqual(adlar(sonSayfalar(['konum', 'yokartik', 'anilar', 'ayarlar', 'mektup'], g)), ['konum', 'mektup']);
+  assert.deepEqual(sonSayfalar([], g), []);
 });

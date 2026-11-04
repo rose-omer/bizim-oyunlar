@@ -87,6 +87,15 @@ export function arsiv(harita, { bugun, benId }) {
   return [...aylar.values()];
 }
 
+/**
+ * "Anı yap" taslağı: o gün görebildiğim fotoğraflar (benimki önce) ve notlar.
+ * Kilitli partner fotoğrafı girmez. g = gorunum(durum, gun, bugun). -> { fotolar, not }
+ */
+export function aniTaslagi(durum, g) {
+  const acik = [g.ben === 'acik' ? durum.ben : null, g.partner === 'acik' ? durum.partner : null].filter(Boolean);
+  return { fotolar: acik.map((f) => f.foto), not: acik.map((f) => f.not).filter(Boolean).join('\n') };
+}
+
 /** Gönderince partnere giden bildirim. */
 export function bildirimMetni({ benAd, partnerGonderdi }) {
   const ad = String(benAd || '').trim() || 'Sevgilin';

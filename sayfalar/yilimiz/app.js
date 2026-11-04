@@ -44,6 +44,9 @@ const kitapBtn = h('button', { type: 'button', class: 'card-row yl-kitap-ac', di
   h('span', { class: 'yl-yon-ok' }, icon('chevron')));
 const baglantilar = h('nav', { class: 'card card-list yl-baglantilar', 'aria-label': 'Daha fazlası' },
   kitapBtn,
+  yonlendir('sayfalar/gunfoto/', 'Günün Fotoğrafı', 'Her günün karesi, yan yana.', 'resim'),
+  yonlendir('sayfalar/mektup/', 'Mektuplar', 'Birbirinize yazdıklarınız ve kapsüller.', 'zarf'),
+  yonlendir('sayfalar/sohbet-ozeti/', 'Sohbet Özetimiz', 'WhatsApp sohbetinizin özeti.', 'balon'),
   yonlendir('sayfalar/rozetler/', 'Rozetlerimiz', 'Birlikte açtıklarınız ve sıradakiler.', 'madalya'),
   yonlendir('sayfalar/skor/', 'Skor Tablosu', 'Oyun oyun kim kaç kez kazandı.', 'kupa'));
 
@@ -52,16 +55,18 @@ app.replaceChildren(ana);
 
 // ---------- Veri ----------
 const bugun = toDay(new Date());
-const [profil, gsCol, aniCol, mesajCol, dokunusCol, skorHarita] = await Promise.all([
+const [profil, gsCol, aniCol, mesajCol, dokunusCol, skorHarita, fotoCol, mektupCol] = await Promise.all([
   openProfil(room).catch((e) => { console.warn('[yilimiz] profil', e); return null; }),
   openCollection(room, 'gs'),
   openCollection(room, 'ani'),
   openCollection(room, 'mesaj', { recent: 200 }),
   openCollection(room, 'dokunus', { recent: 200 }),
   skorlar(room),
+  openCollection(room, 'gunfoto'),
+  openCollection(room, 'mektup'),
 ]);
 let sonHata = 0;
-for (const c of [gsCol, aniCol, mesajCol, dokunusCol]) {
+for (const c of [gsCol, aniCol, mesajCol, dokunusCol, fotoCol, mektupCol]) {
   c.on('error', (e) => { if (Date.now() - sonHata > 15000) { sonHata = Date.now(); toast(e.message); } });
 }
 
@@ -139,7 +144,7 @@ async function yukle(yil) {
   if (yil !== secili) return;
   const veri = {
     baslangic: baslangic(), mesajlar: m.docs, dokunuslar: d.docs, anilar: aniCol.all(), gs: gsCol.all(),
-    skor: skorHarita, mesajAsildi: m.asildi,
+    skor: skorHarita, mesajAsildi: m.asildi, gunfoto: fotoCol.all(), mektuplar: mektupCol.all(),
   };
   let k = kisiler(null);
   let ozet = yilOzeti(veri, { yil, bugun, ids: k.map((x) => x.id) });
@@ -156,7 +161,7 @@ async function yukle(yil) {
 // Kartın köşesindeki soluk motif (simgeler.js).
 const MOTIF = {
   kapak: 'kalp', mesaj: 'balon', tepki: 'isilti', gece: 'ay', ani: 'foto', soru: 'soru',
-  oyun: 'zar', dokunus: 'dokunus', taslar: 'bayrak', bos: 'tuy', paylas: 'paylas',
+  oyun: 'zar', dokunus: 'dokunus', taslar: 'bayrak', bos: 'tuy', paylas: 'paylas', gunfoto: 'resim', mektup: 'zarf',
 };
 
 function baslikEl(k) {
@@ -215,6 +220,7 @@ function kartEl(k, i, n, ozet, kisi) {
       h('span', { class: 'yl-tas-ad' }, x.sol), h('span', { class: 'yl-tas-tarih' }, x.sag)))));
   }
   if (k.not) govde.append(h('p', { class: 'yl-not' }, k.not));
+  if (k.eylem) govde.append(h('a', { class: 'btn small yl-kart-git', href: pageUrl(k.eylem.yol) }, k.eylem.metin));
   if (k.id === 'paylas') govde.append(paylasimParcasi(ozet, kisi));
   kart.append(govde, h('p', { class: 'yl-folyo', 'aria-hidden': 'true' },
     h('span', {}, String(ozet.yil)), h('span', {}, `${i + 1} / ${n}`)));

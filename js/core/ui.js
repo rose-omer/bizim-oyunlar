@@ -564,6 +564,7 @@ export function mountShell({ title = '', room = null } = {}) {
     subs.push(room.on('status', (s) => { status = s; paint(); }));
     subs.push(room.on('message', onMessage));
     subs.push(listenTouches(room));
+    subs.push(sohbetRozetiDinle(room));
   }
   paint();
   syncShellBack();
@@ -660,7 +661,7 @@ function tazeleBildirim() {
 }
 
 /** Bu cihaz odaya onaylıysa hemen, değilse onay gelince ('bizim:uyelik') bir kez çalıştırır. */
-function uyelikGecince(roomId, calistir, etiket) {
+export function uyelikGecince(roomId, calistir, etiket) {
   import('./uyelik.js').then((u) => {
     if (u.girisAcikMi(u.sonDurum(roomId))) {
       calistir();
@@ -811,7 +812,17 @@ export function mountTabBar(active = null) {
     }, ic, h('span', { class: 'tab-label' }, TAB_LABELS[id] || s.title));
   }).filter(Boolean));
   syncShellBack();
+  import('./sohbet-rozet.js').then((m) => m.rozetKur(active)).catch((e) => console.warn('[rozet]', e));
   return nav;
+}
+
+/** Yeni mesaj gelince Sohbet sekmesinin rozetini tazeler. -> abonelikten çık */
+export function sohbetRozetiDinle(room) {
+  if (!room || typeof room.on !== 'function') return () => {};
+  return room.on('message', (msg) => {
+    if (msg?.t !== 'veri' || msg.kind !== 'mesaj') return;
+    import('./sohbet-rozet.js').then((m) => m.rozetTazele()).catch((e) => console.warn('[rozet]', e));
+  });
 }
 
 /** Sekme çubuğunu kaldırır (ana sayfada ilk açılış ekranları için). */

@@ -2,7 +2,7 @@
 // Ortak cüzdan: çiftin tek bakiyesi. Bakiye saklanmaz, hesaplanır:
 //   bakiye = Σ kişi kazancı − Σ kişi yiyecek harcaması − Σ dolaptaki kıyafet fiyatı
 // Belgede alanlar:
-//   jeton: { [clientId]: { kazanc, harcama, gun: 'YYYY-MM-DD', bugun } }  (sayaç; yalnız sahibi yazar)
+//   jeton: { [clientId]: { kazanc, harcama, gun: 'YYYY-MM-DD', bugun, gorevGun? } }  (sayaç; yalnız sahibi yazar; gorevGun: gorev.js)
 //   dolap: { [urunId]: { at, kim, fiyat } }                              (kalıcı kıyafet; fiyat bir kez sayılır)
 // Yarış: 'jeton.<clientId>' anahtarını yalnız o kişi yazar; iki kişinin yazımı çakışmaz, jeton kaybolmaz/çoğalmaz.
 // Kıyafetin bedeli dolap kaydından sayılır; ikisi aynı anda alırsa tek kayıt kalır, bir kez ödenir.
@@ -10,8 +10,9 @@
 // y: mantik.js oku() sonucu (ham 'jeton', 'dolap', 'tuvalet' alanlarını taşır) ya da ham belge verisi.
 // Yazım alan düzeyinde yama: 'jeton.<clientId>', 'dolap.<urunId>', 'ihtiyac.<ad>', 'tuvalet'.
 import { toDay } from '../../js/core/gunler.js';
-import { ihtiyaclar, uyuyorMu } from './mantik.js';
+import { ihtiyaclar, uyuyorMu, ozelGun } from './mantik.js';
 import { tuvaletYamasi } from './tuvalet.js';
+import { urunKilidi } from './evre.js';
 
 export const GUNLUK_SINIR = 200; // kişi başı, yerel gün
 export const KAYNAKLAR = Object.freeze(['oyun', 'gorev', 'bakim', 'hediye']);
@@ -42,7 +43,7 @@ const nesne = (x) => (x && typeof x === 'object' && !Array.isArray(x) ? x : {});
 const sayi = (x) => (Number.isFinite(x) && x > 0 ? x : 0);
 const kimGecerli = (kim) => typeof kim === 'string' && kim.length > 0;
 
-/** Kişinin sayacı (bozuk alanlar 0): { kazanc, harcama, gun, bugun }. */
+/** Kişinin sayacı (bozuk alanlar 0): { kazanc, harcama, gun, bugun, gorevGun? }. */
 export function jetonKaydi(y, kim) {
   const k = nesne(nesne(y?.jeton)[kim]);
   return {
@@ -50,6 +51,7 @@ export function jetonKaydi(y, kim) {
     harcama: sayi(k.harcama),
     gun: typeof k.gun === 'string' ? k.gun : null,
     bugun: sayi(k.bugun),
+    ...(typeof k.gorevGun === 'string' ? { gorevGun: k.gorevGun } : {}),
   };
 }
 
@@ -93,8 +95,14 @@ export function dolaptaMi(y, urun) {
   return Object.hasOwn(nesne(y?.dolap), urun);
 }
 
+/** Özel günde kişi başı bir pasta bedava. Hak son.<clientId>.pastaGun ile harcanır (yalnız sahibi yazar). */
+export function pastaBedavaMi(y, kim, simdi) {
+  const gun = toDay(new Date(simdi));
+  return !!ozelGun(y, gun) && nesne(nesne(y?.son)[kim]).pastaGun !== gun;
+}
+
 /**
- * Satın al. -> { hata: 'bilinmiyor'|'zaten'|'yumurta'|'uyuyor'|'yetersiz', eksik? }
+ * Satın al. -> { hata: 'bilinmiyor'|'zaten'|'kilitli'|'yumurta'|'uyuyor'|'yetersiz', eksik?, evre? }
  *            | { yama, kayit: { eylem: 'satinal', kim, at, deger: urunId } }
  * Kıyafet: 'dolap.<id>' = { at, kim, fiyat } (bedel buradan sayılır). Yiyecek: kişinin harcama sayacı artar,
  * etki şimdiki değere eklenir (puan ve bekleme yok), tuvalet artışı tuvalet.js ile. Yiyecek yumurtada ve uykuda verilmez.
@@ -103,12 +111,15 @@ export function satinAl(y, { kim, urun, simdi }) {
   const u = Object.hasOwn(URUNLER, urun) ? URUNLER[urun] : null;
   if (!u || !kimGecerli(kim)) return { hata: 'bilinmiyor' };
   if (u.tur === 'kiyafet' && dolaptaMi(y, urun)) return { hata: 'zaten' };
+  const evre = urunKilidi(y, urun);
+  if (evre) return { hata: 'kilitli', evre };
   if (u.tur === 'yiyecek') {
     if (!y || y.asama === 'yumurta') return { hata: 'yumurta' };
     if (uyuyorMu(y.uyku, simdi)) return { hata: 'uyuyor' };
   }
+  const bedava = urun === 'pasta' && pastaBedavaMi(y, kim, simdi);
   const bakiye = jetonBakiye(y);
-  if (bakiye < u.fiyat) return { hata: 'yetersiz', eksik: u.fiyat - bakiye };
+  if (!bedava && bakiye < u.fiyat) return { hata: 'yetersiz', eksik: u.fiyat - bakiye };
 
   const at = iso(simdi);
   const kayit = { eylem: 'satinal', kim, at, deger: urun };
@@ -116,7 +127,9 @@ export function satinAl(y, { kim, urun, simdi }) {
 
   const k = jetonKaydi(y, kim);
   const d = ihtiyaclar(y, simdi);
-  const yama = { [`jeton.${kim}`]: { ...k, harcama: k.harcama + u.fiyat } };
+  const yama = bedava
+    ? { [`son.${kim}`]: { ...nesne(nesne(y?.son)[kim]), pastaGun: toDay(new Date(simdi)) } }
+    : { [`jeton.${kim}`]: { ...k, harcama: k.harcama + u.fiyat } };
   for (const [ad, artis] of Object.entries(u.etki)) yama[`ihtiyac.${ad}`] = { v: yuvarla(kirp(d[ad] + artis)), t: at };
   Object.assign(yama, tuvaletYamasi(y, { simdi, artis: u.tuvalet }));
   return { yama, kayit };

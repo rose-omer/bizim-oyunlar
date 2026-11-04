@@ -1,7 +1,8 @@
 // Yavrumuz: mağaza (alt sayfa). Yiyecek al, kıyafet al (alınca hemen giyilir), giy ve çıkar; giyimde canlı önizleme.
 // Kural ve yama jeton.js (satinAl) ile giyim.js'ten gelir; yazımı çağıran yapar (yaz). Stil MAGAZA_CSS (ilk açılışta
 // <head>'e bir kez eklenir; bebek stili yoksa o da eklenir). Üst düzeyde DOM yok: saf yardımcılar Node'da test edilir.
-import { URUNLER, satinAl, jetonBakiye, dolaptaMi } from './jeton.js';
+import { URUNLER, satinAl, jetonBakiye, dolaptaMi, pastaBedavaMi } from './jeton.js';
+import { urunKilidi } from './evre.js';
 import { giyimOku, giyYamasi, cikarYamasi, yuvaBul, satinAlGiyYamasi } from './giyim.js';
 import { bebekSvg, giyimParcaSvg, BEBEK_CSS } from './bebek.js';
 import { CIZIM_CSS } from './cizim.js';
@@ -20,18 +21,20 @@ export function sekmeUrunleri(sekme) {
 
 /**
  * Kartın durumu. -> { durum, eksik? }
- * kıyafet: 'giyili' (Çıkar) | 'dolapta' (Giy) | 'al' | 'yetersiz';
- * yiyecek: 'al' | 'yetersiz' | 'yumurta' | 'uyuyor'.
+ * kıyafet: 'giyili' (Çıkar) | 'dolapta' (Giy) | 'kilitli' (evre gelince açılır) | 'al' | 'yetersiz';
+ * yiyecek: 'al' (bedava? özel gün pastası) | 'yetersiz' | 'yumurta' | 'uyuyor'.
  */
 export function urunDurumu(y, urun, { kim, simdi }) {
   const u = URUNLER[urun];
   if (u.tur === 'kiyafet') {
     if (dolaptaMi(y, urun)) return { durum: giyimOku(y)[yuvaBul(urun)] === urun ? 'giyili' : 'dolapta' };
+    const evre = urunKilidi(y, urun);
+    if (evre) return { durum: 'kilitli', evre };
     const eksik = u.fiyat - jetonBakiye(y);
     return eksik > 0 ? { durum: 'yetersiz', eksik } : { durum: 'al' };
   }
   const r = satinAl(y, { kim, urun, simdi });
-  if (!r.hata) return { durum: 'al' };
+  if (!r.hata) return urun === 'pasta' && pastaBedavaMi(y, kim, simdi) ? { durum: 'al', bedava: true } : { durum: 'al' };
   if (r.hata === 'yetersiz') return { durum: 'yetersiz', eksik: r.eksik };
   return { durum: r.hata === 'uyuyor' ? 'uyuyor' : 'yumurta' };
 }
@@ -41,11 +44,17 @@ export function hataMetni(r) {
   switch (r?.hata) {
     case 'yetersiz': return `${r.eksik} jeton eksik`;
     case 'zaten': return 'Bu zaten dolapta.';
+    case 'kilitli': return `${kilitMetni(r.evre)} kendiliğinden dolabınıza gelecek 🔒`;
     case 'yumurta': return 'Yumurtadan çıkınca yiyebilir 🥚';
     case 'uyuyor': return 'Şşş, uyuyor 🌙 Uyanınca yedirelim.';
     case 'dolapta-yok': return 'Önce satın alalım.';
     default: return 'Bu ürün şu an alınamıyor.';
   }
+}
+
+/** '3 aylıkken', '1 yaşında'. */
+export function kilitMetni(evre) {
+  return evre?.ay === 12 ? '1 yaşında' : `${evre?.ay} aylıkken`;
 }
 
 /** Yiyecek etkisi kısa metin: '+10 tokluk · +5 mutluluk'. */
@@ -199,7 +208,7 @@ export function magazaAc(kok, { veri, kim, simdi = () => Date.now(), yaz, bebekO
     boya();
   }
 
-  const ETIKET = { al: 'Al', yetersiz: 'Yetersiz', dolapta: 'Giy', giyili: 'Çıkar', yumurta: 'Al', uyuyor: 'Uyuyor' };
+  const ETIKET = { al: 'Al', yetersiz: 'Yetersiz', dolapta: 'Giy', giyili: 'Çıkar', yumurta: 'Al', uyuyor: 'Uyuyor', kilitli: 'Kilitli' };
 
   function boya() {
     const v = y();
@@ -214,12 +223,13 @@ export function magazaAc(kok, { veri, kim, simdi = () => Date.now(), yaz, bebekO
     for (const [id, k] of Object.entries(kartlar)) {
       const d = urunDurumu(v, id, { kim, simdi: t });
       k.kart.dataset.durum = d.durum;
-      k.eylem.textContent = ETIKET[d.durum];
+      k.eylem.textContent = d.bedava ? 'Ver' : ETIKET[d.durum];
       k.eylem.classList.toggle('primary', d.durum === 'al' || d.durum === 'dolapta');
-      const pasif = d.durum === 'yetersiz' || d.durum === 'yumurta' || d.durum === 'uyuyor';
+      const pasif = d.durum === 'yetersiz' || d.durum === 'yumurta' || d.durum === 'uyuyor' || d.durum === 'kilitli';
       if (pasif) k.eylem.setAttribute('aria-disabled', 'true'); else k.eylem.removeAttribute('aria-disabled');
       k.eylem.disabled = mesgul;
-      const rozet = d.durum === 'giyili' ? 'Üstünde' : d.durum === 'dolapta' ? 'Dolapta' : d.durum === 'yetersiz' ? `${d.eksik} eksik` : '';
+      const rozet = d.durum === 'giyili' ? 'Üstünde' : d.durum === 'dolapta' ? 'Dolapta' : d.durum === 'yetersiz' ? `${d.eksik} eksik`
+        : d.durum === 'kilitli' ? `${kilitMetni(d.evre)} 🔒` : d.bedava ? 'Bugün bedava 🎂' : '';
       k.rozet.textContent = rozet;
       k.rozet.hidden = !rozet;
       k.rozet.dataset.tur = d.durum;

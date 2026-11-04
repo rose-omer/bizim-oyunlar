@@ -33,7 +33,7 @@ const uygula = (data, yama) => applyPatch(data, yama);
 test('sabitler ve LAZIMLIK tanımı (EYLEMLER biçimi)', () => {
   assert.equal(TUVALET_ARTIS, 2);
   assert.equal(ESIK, 70);
-  assert.equal(KAZA_SURE, 2 * SAAT);
+  assert.equal(KAZA_SURE, 6 * SAAT);
   assert.equal(KAZA_TEMIZLIK, 20);
   assert.deepEqual({ ...YEMEK_ARTIS }, { mama: 20, meyve: 15, tatli: 10 });
   for (const e of Object.keys(YEMEK_ARTIS)) assert.ok(EYLEMLER[e], e);
@@ -116,8 +116,8 @@ test('kaza: süre dolunca temizlik düşer, sıkışıklık sıfırlanır, puan 
   const an = T0 + KAZA_SURE;
   assert.equal(k.kayitId, `kaza-${an}`);
   assert.deepEqual(k.kayit, { eylem: 'kaza', kim: A, at: iso(an) });
-  // temizlik 100 − 2 sa × 2 = 96 → 76 (kaza anında)
-  assert.deepEqual(k.yama['ihtiyac.temizlik'], { v: 96 - KAZA_TEMIZLIK, t: iso(an) });
+  // temizlik 100 − 6 sa × 2 = 88 → 68 (kaza anında)
+  assert.deepEqual(k.yama['ihtiyac.temizlik'], { v: 88 - KAZA_TEMIZLIK, t: iso(an) });
   assert.deepEqual(k.yama.tuvalet, { v: 0, t: iso(an), kaza: iso(an) });
   assert.ok(!Object.keys(k.yama).some((x) => x.startsWith('puan.')));
   const sonra1 = yv(uygula(d, k.yama));
@@ -154,9 +154,9 @@ test('kazadan sonra yıkanmışsa temizlik düşmez', () => {
 
 test('uzun yoklukta kazalar sırayla; temizlik 0 altına inmez', () => {
   const d = veri(kayit(ESIK), { ihtiyac: { ...veri().ihtiyac, temizlik: kayit(30) } });
-  // 1. kaza T0+2sa; sonra 0→70: 35 sa, +2 sa → 2. kaza T0+39sa
-  const k = kazaYamasi(yv(d), { kim: A, simdi: T0 + 40 * SAAT });
-  const ikinci = T0 + 39 * SAAT;
+  // 1. kaza T0+6sa; sonra 0→70: 35 sa, +6 sa → 2. kaza T0+47sa
+  const k = kazaYamasi(yv(d), { kim: A, simdi: T0 + 48 * SAAT });
+  const ikinci = T0 + 47 * SAAT;
   assert.equal(k.kayitId, `kaza-${ikinci}`);
   assert.deepEqual(k.yama.tuvalet, { v: 0, t: iso(ikinci), kaza: iso(ikinci) });
   assert.deepEqual(k.yama['ihtiyac.temizlik'], { v: 0, t: iso(ikinci) });
@@ -168,14 +168,15 @@ test('uykuda kaza olmaz: uyanıştan KAZA_SURE sonraya kayar', () => {
   const y = yv(d);
   assert.equal(kazaYamasi(y, { kim: A, simdi: sonra(8 * 60) }), null);
   assert.equal(tuvaletDurumu(y, sonra(8 * 60)).kazaAn, sonra(9 * 60) + KAZA_SURE);
-  assert.ok(kazaYamasi(y, { kim: A, simdi: sonra(11 * 60) }));
+  assert.equal(kazaYamasi(y, { kim: A, simdi: sonra(14 * 60) }), null);
+  assert.ok(kazaYamasi(y, { kim: A, simdi: sonra(15 * 60) }));
 });
 
 test('tuvaletYamasi olmuş kazayı içerir (kaza yazılmadan yemek verilse de kaybolmaz)', () => {
   const d = veri(kayit(ESIK));
   const simdi = T0 + KAZA_SURE + 60 * DK;
   const yama = tuvaletYamasi(yv(d), { simdi, artis: YEMEK_ARTIS.mama });
-  assert.equal(yama['ihtiyac.temizlik'].v, 96 - KAZA_TEMIZLIK);
+  assert.equal(yama['ihtiyac.temizlik'].v, 100 - 2 * (KAZA_SURE / SAAT) - KAZA_TEMIZLIK);
   assert.deepEqual(yama.tuvalet, { v: 22, t: iso(simdi), kaza: iso(T0 + KAZA_SURE) });
 });
 
@@ -220,6 +221,6 @@ test('lazımlık kaza süresi geçmişse: kaza da uygulanır, puan yok', () => {
   const d = veri(kayit(ESIK));
   const r = lazimlikEylemi(yv(d), { kim: A, simdi: T0 + KAZA_SURE + 10 * DK });
   assert.equal(r.puan, false);
-  assert.equal(r.yama['ihtiyac.temizlik'].v, 96 - KAZA_TEMIZLIK);
+  assert.equal(r.yama['ihtiyac.temizlik'].v, 88 - KAZA_TEMIZLIK);
   assert.equal(r.yama.tuvalet.kaza, iso(T0 + KAZA_SURE));
 });

@@ -187,6 +187,8 @@
 .gf-durum[data-ton='bekliyor'] { background: var(--accent-soft); color: var(--accent-strong); }
 .gf-durum[data-ton='acik'] { background: var(--good-soft); }
 .gf-form { display: flex; flex-direction: column; gap: 8px; }
+.gf-ani-yap { display: flex; justify-content: center; }
+.gf-ani-yap[hidden] { display: none; }
 .gf-etiket { font-weight: 750; }
 .gf-dugmeler { display: flex; justify-content: flex-end; gap: 10px; margin-top: 4px; }
 @media (max-width: 480px) { .gf-dugmeler .btn.primary { flex: 1 1 auto; } }

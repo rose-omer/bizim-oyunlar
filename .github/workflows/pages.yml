@@ -68,6 +68,8 @@ jobs:
           cp -a .nojekyll _site/
           test -f _site/index.html
           ls -la _site
+          # Eski ve yeni dosyalar karışmasın: js ve css adresleri bu yayının damgasını alır (APK'da service worker yok).
+          node dev/surum-damgala.mjs _site "${GITHUB_SHA::12}"
 
       - name: APK ve sürüm bilgisi (android-latest)
         env:

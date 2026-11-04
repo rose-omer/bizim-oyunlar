@@ -1,7 +1,7 @@
 // Yayınlanan her HTML aynı CSP ve referrer meta'sını taşır; satır içi betik ve olay özniteliği yoktur.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SUPABASE_URL } from '../js/config.js';
@@ -68,6 +68,27 @@ test('politika: güvenlik sınırları ve kullanılan dış kaynaklar', () => {
   assert.ok(yonerge('connect-src').includes(`wss://${host}`));
   assert.ok(yonerge('img-src').includes(`https://${host}`));
   assert.ok(yonerge('media-src').includes(`https://${host}`));
+});
+
+test('fontlar sitede: Google Fonts yok, @font-face yerel WOFF2 ve font-display: swap', () => {
+  const DIS = /fonts\.(googleapis|gstatic)\.com/;
+  assert.deepEqual(yonerge('font-src'), ["'self'"]);
+  assert.deepEqual(yonerge('style-src'), ["'self'", "'unsafe-inline'"]);
+  for (const { yol, s } of HTML) assert.doesNotMatch(s, DIS, yol);
+  const oku = (y) => readFileSync(join(KOK, y), 'utf8');
+  const base = oku('css/base.css');
+  assert.doesNotMatch(base, /@import/);
+  assert.doesNotMatch(base, DIS);
+  assert.doesNotMatch(oku('sw.js'), DIS);
+  const yuzler = base.match(/@font-face\s*{[^}]*}/g) || [];
+  assert.equal(yuzler.length, 3);
+  for (const y of yuzler) {
+    assert.match(y, /font-display: swap/);
+    const dosya = y.match(/url\('\.\.\/(assets\/fonts\/[a-z-]+\.woff2)'\)/)?.[1];
+    assert.ok(dosya, y);
+    assert.ok(statSync(join(KOK, dosya)).size > 10_000, dosya);
+  }
+  for (const y of ['assets/fonts/OFL-Fraunces.txt', 'assets/fonts/OFL-Nunito.txt']) assert.match(oku(y), /SIL OPEN FONT LICENSE/);
 });
 
 test('referrer: YouTube gömmesi ve OSM karoları kaynak bekler; no-referrer olmaz', () => {

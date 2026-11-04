@@ -5,13 +5,14 @@
 //     puan: { [clientId]: n }, isitma: { [clientId]: [ISO] (son 10) },
 //     son: { [clientId]: { [eylem]: ISO, sevGun?, sevPuan? } },
 //     kisilik?: kisilik.js adı (çatlarken bir kez), gorev?: { [gün]: { id, at } } (gorev.js),
-//     tuvalet?: { v, t, kaza? } (tuvalet.js), jeton?: { [clientId]: sayaç }, dolap?: { [ürün]: { at, kim, fiyat } } (jeton.js) }
+//     tuvalet?: { v, t, kaza? } (tuvalet.js), jeton?: { [clientId]: sayaç }, dolap?: { [ürün]: { at, kim, fiyat } } (jeton.js),
+//     gorevSeri?: { n, son, en, telafi? } (seri.js), evre?: { [evreId]: { at } } (evre.js) }
 // Değer saklanmaz, hesaplanır: şimdiki = v − düşüş × geçen saat (uyku aralığı ayrı), 0–100 kırpılır.
 // Yazım yalnız alan düzeyinde yama (veri.js patch; anahtar en çok iki düzey: 'ihtiyac.tokluk', 'son.<clientId>').
 // Bakım günlüğü: tür 'yavrubakim', id uuid, { eylem, kim, at, deger? }.
 // Keyifsizlik saglik.js'te, tuvalet tuvalet.js'te, jeton jeton.js'te; onlar bu modülü içe alır, döngü olmasın diye
 // burada import yok (gereken bilgi parametreyle gelir; ortak metin tanımları burada).
-import { toDay, addDays, parseDay, nextOccurrence } from '../../js/core/gunler.js';
+import { toDay, addDays, parseDay, nextOccurrence, occurrenceIndex, milestones } from '../../js/core/gunler.js';
 import { hashStr } from '../gunun-sorusu/mantik.js';
 import { kisilikSec, kisilikOku, kisilikCarpan, favoriBonus } from './kisilik.js';
 
@@ -129,6 +130,8 @@ export function oku(data) {
     jeton: nesne(d.jeton),
     dolap: nesne(d.dolap),
     giyim: nesne(d.giyim),
+    gorevSeri: nesne(d.gorevSeri),
+    evre: nesne(d.evre),
   };
 }
 
@@ -195,10 +198,18 @@ export function ruhHali(y, simdi) {
   return IHTIYACLAR.every((ad) => d[ad] > MUTLU) ? 'mutlu' : 'normal';
 }
 
-/** Son bakım (ihtiyaçların en yeni zamanı) 12 saatten eskiyse: "Sizi özledi". Uyurken değil. */
+/**
+ * Son bakım (ihtiyaçların en yeni zamanı) 12 saatten eskiyse: "Sizi özledi". Uyurken değil.
+ * Kaza temizlik kaydını kaza anına yazar (tuvalet.js); o an bakım sayılmaz.
+ */
 export function ozledi(y, simdi) {
   if (!y || y.asama === 'yumurta' || uyuyorMu(y.uyku, simdi)) return false;
-  const son = Math.max(...IHTIYACLAR.map((ad) => zaman(y.ihtiyac?.[ad]?.t)).filter(Number.isFinite));
+  const kaza = zaman(y.tuvalet?.kaza);
+  const bakim = (ad) => {
+    const t = zaman(y.ihtiyac?.[ad]?.t);
+    return ad === 'temizlik' && t === kaza ? NaN : t;
+  };
+  const son = Math.max(...IHTIYACLAR.map(bakim).filter(Number.isFinite));
   return Number.isFinite(son) && simdi - son >= OZLEDI_SURE;
 }
 
@@ -353,6 +364,31 @@ export function yumurtaDurumu(y, { benId, simdi }) {
   };
 }
 
+/**
+ * İlk gün rehberi (yumurta paneli). y null olabilir. partnerVar: sevgili bilinmiyorsa davet gösterilir.
+ * -> { davet, adimlar: [{ id, baslik, alt, durum: 'tamam'|'simdi'|'sonra' }] }
+ */
+export function yumurtaRehberi(y, { benId, simdi, partnerVar = false, partnerAd = 'Sevgilin' }) {
+  const d = yumurtaDurumu(y, { benId, simdi });
+  const ikisi = d.ben >= d.gerek && d.partner >= d.gerek;
+  let alt = `Isıtmalar arasında ${ISITMA_ARALIK / DK} dakika olsun. Yumurta ikiniz olmadan çatlamaz.`;
+  if (ikisi) alt = 'İkiniz de ısıttınız 💛';
+  else if (d.ben >= d.gerek) alt = `Sen tamamsın. Sıra sevgilinde: ${partnerAd}.`;
+  else if (d.partner >= d.gerek) alt = `${partnerAd} tamam. Sıra sende.`;
+  return {
+    davet: !partnerVar,
+    adimlar: [
+      { id: 'isit', baslik: `İkiniz de ${d.gerek} kez ısıtın`, alt, durum: ikisi ? 'tamam' : 'simdi' },
+      {
+        id: 'sure', baslik: '24 saat sıcak kalsın',
+        alt: d.kalan > 0 ? (ikisi ? `Çatlamasına ${saatKalanMetni(d.kalan)}` : saatKalanMetni(d.kalan)) : 'Süre doldu',
+        durum: d.kalan <= 0 ? 'tamam' : ikisi ? 'simdi' : 'sonra',
+      },
+      { id: 'ad', baslik: 'Çatlayınca ona ad koyun', alt: 'Adını birlikte seçersiniz.', durum: 'sonra' },
+    ],
+  };
+}
+
 /** Çatlama yaması: küçük aşama, başlangıç ihtiyaçları, renk (oda kimliğinden), kişilik (ısıtma geçmişinden; bir kez). */
 export function catlamaYamasi(y, { roomId, simdi }) {
   const at = iso(simdi);
@@ -414,6 +450,14 @@ export function adTemizle(s) {
   return { ad: [...temiz].slice(0, AD_MAX).join('').trim() };
 }
 
+const AD_ONERI = ['Pamuk', 'Fıstık', 'Boncuk', 'Minnoş', 'Bulut', 'Zeytin', 'Tarçın', 'Limon', 'Şeker', 'Papatya', 'Ceviz', 'Karamel'];
+
+/** Ad önerileri: odaya kararlı, tekil. */
+export function adOnerileri(roomId, n = 3) {
+  const bas = hashStr(`yavruad:${roomId ?? ''}`) % AD_ONERI.length;
+  return Array.from({ length: Math.min(n, AD_ONERI.length) }, (_, i) => AD_ONERI[(bas + i) % AD_ONERI.length]);
+}
+
 /** "5 saatlik", "3 günlük", "Yeni doğdu". */
 export function yasMetni(y, simdi) {
   if (y?.asama === 'yumurta') {
@@ -462,9 +506,27 @@ export function acikmaZamani(y, simdi) {
   return Math.round(t + ((x - DUSUK) / tokHiz) * SAAT);
 }
 
-/** Yerel hatırlatıcılar (mobil.js yerelHatirlaticilar, grup 'yavru'). */
+const SESSIZ_BIT = 8; // yerel 08:00
+const SESSIZ_BAS = 23;
+
+/** Yeni hatırlatıcılar gece çalmaz: 23:00–08:00 arası an, sabah 08:00'e kayar. */
+export function gunduzeKaydir(ms) {
+  const t = new Date(ms);
+  const saat = t.getHours();
+  if (saat >= SESSIZ_BIT && saat < SESSIZ_BAS) return ms;
+  return new Date(t.getFullYear(), t.getMonth(), t.getDate() + (saat >= SESSIZ_BAS ? 1 : 0), SESSIZ_BIT).getTime();
+}
+
+/** Yerel hatırlatıcılar (mobil.js yerelHatirlaticilar, grup 'yavru'). Yumurtada 24 saat dolunca: hazırsa çatlama, değilse ısıtma çağrısı. */
 export function hatirlaticiOlaylari(y, simdi) {
-  if (!y || y.asama === 'yumurta') return [];
+  if (y?.asama === 'yumurta') {
+    const dogum = zaman(y.dogum);
+    if (!Number.isFinite(dogum) || dogum + YUMURTA_SURE <= simdi) return [];
+    const hazir = isitanlar(y).filter((k) => k.n >= ISITMA_GEREK).length >= 2;
+    const metin = hazir ? 'Yumurtanız çatlamaya hazır 🐣 Hadi bakın!' : 'Yumurtanız sizi bekliyor 🥚 Isıtmayı tamamlayın.';
+    return [{ id: 'catlama', baslik: 'Yavrumuz', metin, zaman: iso(gunduzeKaydir(dogum + YUMURTA_SURE)) }];
+  }
+  if (!y) return [];
   const out = [];
   const ac = acikmaZamani(y, simdi);
   if (ac != null) out.push({ id: 'ac', baslik: 'Yavrumuz', metin: 'Yavrunuz acıktı 🍼', zaman: iso(ac) });
@@ -472,9 +534,9 @@ export function hatirlaticiOlaylari(y, simdi) {
   return out;
 }
 
-const ONEMLI = new Set(['catlama', 'buyume', 'ad']);
+export const ONEMLI = new Set(['catlama', 'buyume', 'ad', 'kaza', 'evre']);
 
-/** Partnere anlık bildirim: kişi başına 30 dk'da bir; çatlama, büyüme ve ad her zaman. son = ms | null. */
+/** Partnere anlık bildirim: kişi başına 30 dk'da bir; çatlama, büyüme, ad, kaza ve evre her zaman. son = ms | null. */
 export function bildirimGerekli({ son = null, simdi, eylem = null }) {
   if (ONEMLI.has(eylem)) return true;
   return !Number.isFinite(son) || simdi - son >= BILDIRIM_ARALIK;
@@ -495,6 +557,8 @@ export function bildirimMetni({ ad, eylem, deger = '', yavruAd = '', urun = null
     case 'ilac': return `${kim} yavrunuza ${ILAC.fiil[0]} ${ILAC.emoji}`;
     case 'lazimlik': return `${kim} yavrunuzu ${LAZIMLIK.fiil[0]} ${LAZIMLIK.emoji}`;
     case 'kaza': return `Yavrunuzun ufak bir kazası oldu, olsun 💛`;
+    case 'mum': return `${kim} mumunu üfledi 🎂 Sıra sende!`;
+    case 'evre': return `${String(yavruAd || '').trim() || 'Yavrunuz'} yeni bir evreye geçti: ${deger} ✨`;
     case 'satinal': return urun ? `${kim} yavrunuza ${urun.emoji} ${urun.ad} aldı` : `${kim} yavrunuza bir şey aldı 🛍️`;
     case 'catlama': return 'Yumurtanız çatladı! Yavrunuz dünyaya geldi 🐣';
     case 'buyume': return `${String(yavruAd || '').trim() || 'Yavrunuz'} büyüdü ✨`;
@@ -513,6 +577,8 @@ export function bakimSatiri({ eylem, ad, deger = '', urun = null }) {
   if (eylem === 'buyume') return 'Yavrumuz büyüdü ✨';
   if (eylem === 'ad') return `${ad} adını “${deger}” ${sen ? 'koydun' : 'koydu'}`;
   if (eylem === 'kaza') return KAZA_METNI;
+  if (eylem === 'mum') return `${ad} mumunu ${sen ? 'üfledin' : 'üfledi'} 🎂`;
+  if (eylem === 'evre') return `Yeni evre: ${deger} ✨`;
   if (eylem === 'satinal') return urun ? `${ad} ${urun.emoji} ${urun.ad} ${sen ? 'aldın' : 'aldı'}` : `${ad} bir şey ${sen ? 'aldın' : 'aldı'} 🛍️`;
   const e = eylem === 'isit' ? ISIT : eylem === 'ilac' ? ILAC : eylem === 'lazimlik' ? LAZIMLIK : EYLEMLER[eylem];
   if (!e) return '';
@@ -561,4 +627,39 @@ export function dogumGunuOlayi(y, simdi) {
   if (saat(gun) <= simdi) gun = nextOccurrence(g, 'yil', addDays(gun, 1));
   const n = parseDay(gun).y - parseDay(g).y;
   return { id: 'dogumgunu', baslik: 'Yavrumuz', metin: `Yavrumuz bugün ${n} yaşında 🎂`, zaman: iso(saat(gun)) };
+}
+
+// ---------- Özel gün: ay dönümü, doğum günü, gün sayıları (gunler.js milestones; başlangıç = çatlama günü) ----------
+
+/** O gün (YYYY-MM-DD) kutlanacak gün mü? -> { tur: 'ay'|'yil'|'gun', n } | null. Çatladığı gün sayılmaz. */
+export function ozelGun(y, gun) {
+  const g = dogumGunu(y);
+  if (!g || !parseDay(gun) || gun <= g) return null;
+  const m = milestones(g, { today: gun, limit: 3, monthly: true }).find((x) => x.daysLeft === 0);
+  return m ? { tur: m.tur, n: m.n } : null;
+}
+
+/** 'Pamuk 3 aylık oldu!', 'Pamuk 1 yaşında!'. */
+export function ozelGunMetni(o, ad = '') {
+  const a = String(ad ?? '').trim() || 'Yavrumuz';
+  if (o?.tur === 'yil') return `${a} ${o.n} yaşında!`;
+  return o?.tur === 'ay' ? `${a} ${o.n} aylık oldu!` : `${a} ${o?.n} günlük oldu!`;
+}
+
+/** Sıradaki ay dönümü hatırlatıcısı (10:00). Yıl dönümü dogumGunuOlayi'nin. -> olay | null */
+export function ozelGunOlayi(y, simdi) {
+  const g = dogumGunu(y);
+  if (!g) return null;
+  const bugun = toDay(new Date(simdi));
+  const saat = (gun) => {
+    const p = parseDay(gun);
+    return new Date(p.y, p.m - 1, p.d, DOGUM_GUNU_SAAT).getTime();
+  };
+  let gun = nextOccurrence(g, 'ay', saat(bugun) > simdi ? bugun : addDays(bugun, 1));
+  let n = occurrenceIndex(g, 'ay', gun);
+  if (n <= 0 || n % 12 === 0) {
+    gun = nextOccurrence(g, 'ay', addDays(gun, 1));
+    n = occurrenceIndex(g, 'ay', gun);
+  }
+  return { id: 'aydonumu', baslik: 'Yavrumuz', metin: `Yavrumuz bugün ${n} aylık 🎂`, zaman: iso(saat(gun)) };
 }

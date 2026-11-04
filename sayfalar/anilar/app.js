@@ -9,6 +9,7 @@ import { bildir } from '../../js/core/bildirim.js';
 import { partnerGoruyor } from '../../js/core/room.js';
 import { toDay, parseDay } from '../../js/core/gunler.js';
 import { fotoYukle } from '../../js/core/foto.js';
+import { readStore } from '../../js/core/identity.js';
 import * as M from './mantik.js';
 import { ikon } from './ikon.js';
 import { galeri, tamEkranAc } from './galeri.js';
@@ -22,7 +23,7 @@ const col = await openCollection(room, 'ani');
 const profil = await openProfil(room).catch(() => null);
 
 const GORUNUM_ANAHTARI = 'bizim.anilar.gorunum';
-const ROTA_ANAHTARLARI = ['id', 'yeni', 'duzenle', 'baslik', 'tarih'];
+const ROTA_ANAHTARLARI = ['id', 'yeni', 'duzenle', 'baslik', 'tarih', 'taslak'];
 const GORUNUMLER = ['cizelge', 'album', 'harita'];
 const durum = {
   gorunum: GORUNUMLER.includes(oku(GORUNUM_ANAHTARI)) ? oku(GORUNUM_ANAHTARI) : 'cizelge',
@@ -472,8 +473,9 @@ function formGorunumu(id) {
   }
   const prm = M.formParametreleri(location.search, toDay(new Date()));
   const v = mevcut?.data || {};
+  const taslak = mevcut ? null : M.fotoTaslagi(location.search, readStore('session', M.ANI_TASLAK_ANAHTARI));
   const st = {
-    fotolar: [...(v.fotolar || [])],
+    fotolar: [...(v.fotolar || taslak?.fotolar || [])],
     etiketler: [...(v.etiketler || [])],
     konum: HM.konumDogrula(v.konum),
     konumMesgul: false,
@@ -563,7 +565,7 @@ function formGorunumu(id) {
 
   const notSayac = h('span', { class: 'ani-sayac', 'aria-live': 'polite' });
   const not = alan('Not', h('textarea', { class: 'input', rows: '4', maxlength: String(M.MAX_NOT), placeholder: 'O gün aklında kalan…' }), { ipucu: notSayac });
-  not.girdi.value = v.not || '';
+  not.girdi.value = v.not || taslak?.not || '';
   const sayacBoya = () => {
     const n = [...not.girdi.value].length;
     notSayac.textContent = n > M.MAX_NOT * 0.8 ? `${n} / ${M.MAX_NOT}` : '';

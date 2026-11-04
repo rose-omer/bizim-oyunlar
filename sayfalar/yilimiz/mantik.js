@@ -4,6 +4,8 @@ import { skorTablosu } from '../../js/core/skor.js';
 import { gonderen, gunAnahtari } from '../sohbet/mantik.js';
 import { AY_ADLARI, aramaMetni, filtrele, tumEtiketler, gunYazi } from '../anilar/mantik.js';
 import { gunlereGore, ortakGunler, seri, gunNo, gunTarihi } from '../gunun-sorusu/mantik.js';
+import { gunlereGore as fotoGunleri, gunDurumu as fotoGunDurumu } from '../gunfoto/mantik.js';
+import { kilitliMi, yazan } from '../mektup/mantik.js';
 
 /** Bir yıl için en çok yüklenecek mesaj (ve dokunuş) sayısı. */
 export const MESAJ_SINIRI = 20000;
@@ -128,6 +130,32 @@ export function dokunusOzeti(docs, yil) {
   return { sayi, kisiler, enCok: t ? t[0] : null };
 }
 
+/** Günün Fotoğrafı: o yıl kare bırakılan günler; ortak = ikinizin de gönderdiği. */
+export function fotoGunOzeti(docs, yil, benId) {
+  let gun = 0;
+  let ortak = 0;
+  const harita = fotoGunleri(docs);
+  for (const g of harita.keys()) {
+    if (!g.startsWith(`${yil}-`)) continue;
+    gun++;
+    if (fotoGunDurumu(harita, g, benId).ikisi) ortak++;
+  }
+  return { gun, ortak };
+}
+
+/** Mektuplar: o yıl yazılanlar. Hâlâ kilitli kapsül sayılmaz; sürprizi ele vermesin. */
+export function mektupOzeti(docs, yil, simdi = Date.now()) {
+  const kisiler = {};
+  let sayi = 0;
+  for (const d of docs || []) {
+    if (yilOf(d?.created_at) !== yil || kilitliMi(d.data, simdi)) continue;
+    sayi++;
+    const kim = yazan(d);
+    if (kim) kisiler[kim] = (kisiler[kim] || 0) + 1;
+  }
+  return { sayi, kisiler };
+}
+
 /** Oyunlar: skor belgelerinin o yılki sayaçları. */
 export function oyunOzeti(skorHarita, ids, yil) {
   const t = skorTablosu(skorHarita, ids, { yil });
@@ -144,7 +172,7 @@ export function kilometreTaslari(baslangic, yil, bugun = new Date()) {
 }
 
 /**
- * Tüm özet. veri = { baslangic, mesajlar, dokunuslar, anilar, gs, skor, mesajAsildi }.
+ * Tüm özet. veri = { baslangic, mesajlar, dokunuslar, anilar, gs, skor, mesajAsildi, gunfoto?, mektuplar? }.
  * ids = [benId, partnerId] (oyun sayaçları bu sırayla).
  */
 export function yilOzeti(veri, { yil, bugun = new Date(), ids = [] }) {
@@ -160,6 +188,8 @@ export function yilOzeti(veri, { yil, bugun = new Date(), ids = [] }) {
     oyun: oyunOzeti(veri.skor, ids, yil),
     dokunus: dokunusOzeti(veri.dokunuslar, yil),
     taslar: kilometreTaslari(veri.baslangic, yil, t),
+    foto: fotoGunOzeti(veri.gunfoto, yil, ids[0]),
+    mektup: mektupOzeti(veri.mektuplar, yil),
   };
 }
 
@@ -169,7 +199,7 @@ const adOf = (kisiler, i) => kisiler?.[i]?.ad || (i === 0 ? 'Sen' : 'Sevgilin');
 const kisiSatiri = (sayac, kisiler) => `${(kisiler || []).map((k, i) => `${adOf(kisiler, i)} ${sayiYaz(sayac[k.id] || 0)}`).join(', ')}.`;
 
 /**
- * Kart dizisi: { id, ton, baslik, vurgu?, satirlar: [], liste?: [{ sol, sag }], not? }.
+ * Kart dizisi: { id, ton, baslik, vurgu?, satirlar: [], liste?: [{ sol, sag }], not?, eylem?: { yol, metin } }.
  * Verisi olmayan kart atlanır. ton: 'hero' | 'gece' | 1–6 (base.css --tint-N).
  */
 export function hikayeKartlari(ozet, { kisiler = [], oyunAdi = (id) => id, dokunusAdi = (t) => t } = {}) {
@@ -187,7 +217,7 @@ export function hikayeKartlari(ozet, { kisiler = [], oyunAdi = (id) => id, dokun
   });
 
   const m = o.mesaj;
-  const veriVar = m.sayi || o.ani.sayi || o.soru.gun || o.oyun.toplam || o.dokunus.sayi;
+  const veriVar = m.sayi || o.ani.sayi || o.soru.gun || o.oyun.toplam || o.dokunus.sayi || o.foto.ortak || o.mektup.sayi;
   if (m.sayi) {
     const k = {
       id: 'mesaj', ton: 1, baslik: `Birbirinize ${sayiYaz(m.sayi)} mesaj yazdınız.`, vurgu: sayiYaz(m.sayi),
@@ -218,6 +248,14 @@ export function hikayeKartlari(ozet, { kisiler = [], oyunAdi = (id) => id, dokun
         a.foto ? `Toplam ${sayiYaz(a.foto)} fotoğraf.` : null,
       ],
     });
+  }
+  if (o.foto.ortak) {
+    ekle({ id: 'gunfoto', ton: 1, baslik: `Günün Fotoğrafı'nda ${sayiYaz(o.foto.ortak)} gün buluştunuz.`, vurgu: sayiYaz(o.foto.ortak),
+      satirlar: ['İkiniz de o günün karesini gönderdiniz.'], eylem: { yol: 'sayfalar/gunfoto/', metin: 'Karelere bak' } });
+  }
+  if (o.mektup.sayi) {
+    ekle({ id: 'mektup', ton: 2, baslik: `Birbirinize ${sayiYaz(o.mektup.sayi)} mektup yazdınız.`, vurgu: sayiYaz(o.mektup.sayi),
+      satirlar: [kisiSatiri(o.mektup.kisiler, kisiler)], eylem: { yol: 'sayfalar/mektup/', metin: 'Mektupları aç' } });
   }
   if (o.soru.gun) {
     ekle({ id: 'soru', ton: 6, baslik: `Günün Sorusu'nu ${sayiYaz(o.soru.gun)} gün birlikte cevapladınız.`, vurgu: sayiYaz(o.soru.gun),

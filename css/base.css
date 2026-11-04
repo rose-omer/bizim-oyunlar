@@ -1861,7 +1861,25 @@ dialog.kirp::backdrop { background: var(--kirp-zemin); }
   line-height: 1;
   transition: background-color 0.2s var(--ease), transform 0.15s var(--ease);
 }
+#tabbar .tab-icon { position: relative; }
 #tabbar .tab-icon svg { width: 24px; height: 24px; }
+#tabbar .tab-rozet {
+  position: absolute;
+  top: -3px;
+  left: calc(50% + 4px);
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--surface);
+  color: var(--accent-ink);
+  font-size: 0.6875rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 18px;
+  text-align: center;
+}
 #tabbar .tab-icon .f { fill: transparent; transition: fill 0.2s ease; }
 #tabbar .tab-label { max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 #tabbar .tab[aria-current='page'] { color: var(--accent-strong); font-weight: 800; }

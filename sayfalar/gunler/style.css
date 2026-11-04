@@ -141,6 +141,12 @@
 }
 .gn-list.is-flat .gn-row { padding-inline: 4px; border-radius: var(--radius); }
 button.gn-row { transition: background-color 0.15s ease; }
+a.gn-row { text-decoration: none; }
+a.gn-row:focus-visible { outline-offset: -3px; }
+a.gn-row:active { background: var(--surface-2); }
+.gn-day-alt { margin-top: 10px; font-size: 1rem; }
+.gn-ani-ok { display: inline-flex; color: var(--muted); }
+.gn-ani-ok svg { width: 20px; height: 20px; }
 button.gn-row:focus-visible { outline-offset: -3px; }
 button.gn-row:active { background: var(--surface-2); }
 @media (hover: hover) { button.gn-row:hover { background: color-mix(in srgb, var(--surface-2) 65%, transparent); } }

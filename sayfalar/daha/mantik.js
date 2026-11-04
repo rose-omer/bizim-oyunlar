@@ -36,6 +36,53 @@ export function dahaGruplari(sayfalar, sekmeler = []) {
   return gruplar.filter((g) => g.sayfalar.length);
 }
 
+// ---------- Arama ----------
+const HARF_KATLA = { ı: 'i', ğ: 'g', ü: 'u', ş: 's', ö: 'o', ç: 'c' };
+/** Küçük harf, Türkçe harfler sade: telefonda "gunun fotografi" de bulsun. */
+const katla = (s) => String(s ?? '').toLocaleLowerCase('tr').replace(/[ığüşöç]/g, (c) => HARF_KATLA[c]);
+// Aramada yok: Biz ana sayfa, Daha bu sayfa. Sekmeler ve Ayarlar bulunur: kullanıcı onları da arar.
+const ARAMA_DISI = ['biz', 'daha'];
+
+/** Sayfa araması: tüm kelimeler başlık ya da açıklamada. Sıra: başlık başı, başlık içi, açıklama; eşitlikte kayıt sırası. */
+export function dahaAra(sayfalar, sorgu) {
+  const kelimeler = katla(sorgu).split(/\s+/).filter(Boolean);
+  if (!kelimeler.length) return [];
+  const puanli = [];
+  for (const s of sayfalar || []) {
+    if (!s?.id || !s.path || ARAMA_DISI.includes(s.id)) continue;
+    const baslik = katla(s.title);
+    const metin = `${baslik} ${katla(s.desc)}`;
+    if (!kelimeler.every((k) => metin.includes(k))) continue;
+    const yer = baslik.indexOf(kelimeler[0]);
+    puanli.push({ s, puan: yer === 0 ? 0 : yer > 0 ? 1 : 2 });
+  }
+  return puanli.sort((a, b) => a.puan - b.puan).map((x) => x.s);
+}
+
+// ---------- Son kullandıkların (yerel kayıt) ----------
+export const SON_EN_COK = 4;
+
+/** localStorage metni → kimlik listesi. Bozuk kayıt boş liste. */
+export function sonOku(metin) {
+  try {
+    const v = JSON.parse(metin);
+    return Array.isArray(v) ? v.filter((x) => typeof x === 'string' && x) : [];
+  } catch {
+    return [];
+  }
+}
+
+/** En yeni başa; tekrar yok; en çok SON_EN_COK. */
+export function sonEkle(liste, id) {
+  return [id, ...(liste || []).filter((x) => x !== id)].slice(0, SON_EN_COK);
+}
+
+/** Kimlikler → Daha listesindeki sayfalar, kayıt sırasıyla. Sekme, Ayarlar ve artık olmayan sayfa düşer. */
+export function sonSayfalar(ids, gruplar) {
+  const byId = new Map((gruplar || []).flatMap((g) => g.sayfalar).map((s) => [s.id, s]));
+  return (ids || []).map((id) => byId.get(id)).filter(Boolean);
+}
+
 /** "Sevgilini davet et" satırı: sevgili henüz hiç görünmediyse (knownPartner) ve profili yoksa. */
 export function davetGoster(bilinenPartner, profilPartner) {
   return !bilinenPartner?.clientId && !profilPartner?.clientId;

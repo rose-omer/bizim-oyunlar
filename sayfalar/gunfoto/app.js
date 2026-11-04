@@ -5,12 +5,14 @@ import { openProfil } from '../../js/core/profil.js';
 import { bildir } from '../../js/core/bildirim.js';
 import { partnerGoruyor } from '../../js/core/room.js';
 import { toDay } from '../../js/core/gunler.js';
+import { pageUrl, writeStore } from '../../js/core/identity.js';
 import { h, toast, initial, genitive, knownPartner } from '../../js/core/ui.js';
 import { sfx } from '../../js/core/sound.js';
 import { dosyaSec, fotoMu, fotoYukle, fotoImg } from '../../js/core/foto.js';
 import { ikon } from '../anilar/ikon.js';
+import { ANI_TASLAK_ANAHTARI } from '../anilar/mantik.js';
 import {
-  NOT_MAX, docId, gunlereGore, gunDurumu, gorunum, yeniKayit, arsiv, bildirimMetni,
+  NOT_MAX, docId, gunlereGore, gunDurumu, gorunum, yeniKayit, arsiv, bildirimMetni, aniTaslagi,
 } from './mantik.js';
 
 const { room, roomId, me } = await bootPage({ ns: 'gunfoto', title: 'Günün Fotoğrafı', tab: 'daha' });
@@ -49,6 +51,7 @@ const benKare = h('figure', { class: 'gf-kare', dataset: { kim: 'ben' } });
 const oKare = h('figure', { class: 'gf-kare', dataset: { kim: 'partner' } });
 const ikili = h('div', { class: 'gf-ikili' }, benKare, oKare);
 const durumEl = h('p', { class: 'gf-durum', role: 'status' });
+const aniYapEl = h('div', { class: 'gf-ani-yap', hidden: true });
 
 const notGirdi = h('input', {
   id: 'gf-not', class: 'input', type: 'text', maxlength: NOT_MAX, autocomplete: 'off', enterkeyhint: 'send',
@@ -66,9 +69,21 @@ const arsivEl = h('div', { class: 'gf-aylar' });
 app.replaceChildren(h('div', { class: 'gf' },
   h('section', { class: 'gf-bugun', 'aria-labelledby': 'gf-bugun-baslik' },
     h('header', { class: 'gf-bas' }, h('h2', { id: 'gf-bugun-baslik' }, 'Bugün'), tarihEl),
-    ikili, durumEl, formEl),
+    ikili, durumEl, aniYapEl, formEl),
   h('section', { class: 'gf-arsiv', 'aria-labelledby': 'gf-arsiv-baslik' },
     h('h2', { id: 'gf-arsiv-baslik' }, 'Arşivimiz'), arsivEl)));
+
+// ---------- Anı yap: görünen fotoğraflarla Anılar'da yeni anı formu açılır ----------
+function aniYap(gun) {
+  const d = gunDurumu(gunlereGore(col.all()), gun, me.clientId);
+  const taslak = aniTaslagi(d, gorunum(d, gun, bugun));
+  if (!taslak.fotolar.length) return;
+  writeStore('session', ANI_TASLAK_ANAHTARI, JSON.stringify(taslak));
+  location.href = pageUrl('sayfalar/anilar/', { yeni: 1, taslak: 1, tarih: gun, baslik: 'Günün fotoğrafımız' });
+}
+const aniYapBtn = (gun) => h('button', {
+  type: 'button', class: 'btn ghost small', dataset: { odak: `ani-yap:${gun}` }, onclick: () => aniYap(gun),
+}, ikon('kalp'), 'Anı yap');
 
 // ---------- Çizim: bugün ----------
 function fotoAlt(kim, ad, gun, not) {
@@ -221,6 +236,8 @@ function ciz() {
   cizOKare(d, g, pAd);
   cizDurum(d, g, pAd);
   formEl.hidden = !secim;
+  aniYapEl.hidden = !d.ikisi || !!secim;
+  aniYapEl.replaceChildren(...(aniYapEl.hidden ? [] : [aniYapBtn(bugun)]));
   cizArsiv(harita, pAd);
   gecisler(d);
   buyukTazele?.();
@@ -354,6 +371,7 @@ function buyukAc(baslangic) {
     const g = gorunum(d, gun, bugun);
     baslik.textContent = gun === bugun ? 'Bugün' : buyukHarf(tarihMetni(gun));
     govde.replaceChildren(tek('ben', 'Sen', d.ben, g.ben), tek('partner', partnerAdi(), d.partner, g.partner));
+    if (g.ben === 'acik' || g.partner === 'acik') govde.append(h('div', { class: 'gf-ani-yap' }, aniYapBtn(gun)));
     geri.disabled = i <= 0;
     ileri.disabled = i >= liste.length - 1;
     return liste;

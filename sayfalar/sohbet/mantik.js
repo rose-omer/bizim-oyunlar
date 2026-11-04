@@ -281,6 +281,32 @@ export function okunduHedefi(docs, benId, mevcutSon) {
 }
 
 /**
+ * Sohbet sekmesi rozeti. docs: son mesajlar, yeniden eskiye (pageDocs). okundu: benim 'okundu' belgem ya da null.
+ * Okunmamış = karşı tarafın, okundu işaretinden ve benim son mesajımdan sonraki mesajları.
+ * İşaret bu sayfada yoksa (silinmiş, çok eski) işaretin zamanına bakılır.
+ */
+export function okunmamisSayisi(docs, okundu, benId) {
+  const list = docs || [];
+  const son = okundu?.data?.son;
+  const isaretVar = !!son && list.some((d) => d.id === son);
+  const at = isaretVar ? NaN : Date.parse(okundu?.data?.at);
+  let n = 0;
+  for (const d of list) {
+    if (d.id === son || gonderen(d) === benId) break;
+    if (d.pending) continue;
+    if (Number.isFinite(at) && Date.parse(d.created_at) <= at) break;
+    n++;
+  }
+  return n;
+}
+
+/** Rozette görünen metin: 0 → boş, 10 ve üstü → 9+. */
+export function rozetMetni(n) {
+  if (!(n > 0)) return '';
+  return n > 9 ? '9+' : String(n);
+}
+
+/**
  * Son mesaj benimse durumu: 'gonderiliyor' | 'gonderildi' | 'goruldu'. Değilse null.
  * okunduDocs: 'okundu' belgeleri (id = clientId, data { son, at }). Karşı tarafınki = id'si benden farklı, en yeni 'at'.
  */

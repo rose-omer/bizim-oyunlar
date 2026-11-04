@@ -21,6 +21,35 @@
   letter-spacing: -0.01em;
 }
 
+/* ---------- Arama ---------- */
+.daha-ara { position: relative; margin-bottom: 24px; }
+.daha-ara-ikon { position: absolute; top: 0; bottom: 0; left: 14px; display: grid; place-items: center; pointer-events: none; }
+.daha-ara-girdi { width: 100%; min-height: 48px; padding-left: 44px; }
+.daha-ara-durum { padding: 0 4px; color: var(--muted); font-size: 0.9375rem; font-weight: 650; line-height: 1.45; }
+.daha [hidden] { display: none; }
+
+/* ---------- Son kullandıkların ---------- */
+.daha-son { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.daha-son-oge {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 56px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 750;
+  line-height: 1.25;
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 0.15s ease;
+}
+.daha-son-oge:active { background: var(--surface-2); }
+@media (hover: hover) { .daha-son-oge:hover { background: color-mix(in srgb, var(--surface-2) 60%, transparent); } }
+.daha-son-ad { min-width: 0; overflow-wrap: anywhere; font-size: 0.9375rem; }
+
 /* ---------- Satır listesi ---------- */
 .daha-liste {
   overflow: hidden;

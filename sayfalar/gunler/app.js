@@ -3,7 +3,7 @@
 import { bootPage } from '../../js/core/sayfa.js';
 import { openCollection } from '../../js/core/veri.js';
 import { openProfil } from '../../js/core/profil.js';
-import { readStore, writeStore } from '../../js/core/identity.js';
+import { readStore, writeStore, pageUrl } from '../../js/core/identity.js';
 import { h, icon, toast, confirmDialog, celebrate } from '../../js/core/ui.js';
 import { sfx } from '../../js/core/sound.js';
 import { bildir } from '../../js/core/bildirim.js';
@@ -11,6 +11,7 @@ import { partnerGoruyor } from '../../js/core/room.js';
 import { yerelHatirlaticilar } from '../../js/core/mobil.js';
 import { toDay, parseDay, daysBetween, daysTogether, durationParts, countdown, monthGrid } from '../../js/core/gunler.js';
 import * as M from './mantik.js';
+import { gunYazi } from '../anilar/mantik.js';
 import { takvimeEkleAlani, takvimeAktarCubugu } from './ics-arayuz.js'; // ics:
 
 // ---------- Simgeler (ui.js çizgisiyle aynı) ----------
@@ -36,7 +37,7 @@ const { room, roomId, me } = await bootPage({ ns: 'gunler', title: 'Özel Günle
 const app = document.getElementById('app');
 app.replaceChildren(h('div', { class: 'gn-wrap' }, h('p', { class: 'gn-loading', role: 'status' }, 'Günlerimiz yükleniyor…')));
 
-const [col, profil] = await Promise.all([openCollection(room, 'gun'), openProfil(room)]);
+const [col, profil, aniCol] = await Promise.all([openCollection(room, 'gun'), openProfil(room), openCollection(room, 'ani')]);
 
 let bugun = toDay();
 const buAy = () => { const p = parseDay(bugun); return { y: p.y, m: p.m }; };
@@ -583,7 +584,8 @@ function renderCal(force = false) {
   const grid = monthGrid(ay.y, ay.m);
   const v = veri();
   const olaylar = M.takvimOlaylari({ ...v, from: grid[0].day, to: grid[41].day, bugun });
-  const key = JSON.stringify([ay, secili, bugun, Object.entries(olaylar).map(([k, l]) => [k, l.map((o) => [o.key, o.baslik, o.emoji, o.tur, o.not])])]);
+  const anilar = M.gununAnilari(aniCol.all(), secili);
+  const key = JSON.stringify([ay, secili, bugun, anilar.map((d) => [d.id, d.data.baslik, d.data.tarih, d.data.yer]), Object.entries(olaylar).map(([k, l]) => [k, l.map((o) => [o.key, o.baslik, o.emoji, o.tur, o.not])])]);
   if (!force && key === calKey) return;
   calKey = key;
   ayBaslikEl.textContent = M.ayBasligi(ay.y, ay.m);
@@ -617,7 +619,15 @@ function renderCal(force = false) {
         h('button', { type: 'button', class: 'btn ghost small', dataset: { odak: 'gune-ekle' }, onclick: () => gunFormu({ tarih: secili }) }, svg('plus'), 'Bu güne ekle')),
       l.length
         ? h('ul', { class: 'gn-list is-flat' }, l.map((o) => satir(o)))
-        : h('p', { class: 'gn-hint' }, 'Bu gün boş. Bir şey planlayalım mı?'));
+        : h('p', { class: 'gn-hint' }, 'Bu gün boş. Bir şey planlayalım mı?'),
+      ...(!anilar.length ? [] : [h('h4', { class: 'gn-day-alt' }, 'O günün anıları'),
+        h('ul', { class: 'gn-list is-flat' }, anilar.map((d) => h('li', {},
+        h('a', { class: 'gn-row', href: pageUrl('sayfalar/anilar/', { id: d.id }) },
+          h('span', { class: 'gn-emo', dataset: { tur: 'ozel' }, 'aria-hidden': 'true' }, '📸'),
+          h('span', { class: 'gn-row-body' },
+            h('span', { class: 'gn-row-title' }, d.data.baslik),
+            h('span', { class: 'gn-row-meta' }, [gunYazi(d.data.tarih), d.data.yer].filter(Boolean).join(' · '))),
+          h('span', { class: 'gn-ani-ok', 'aria-hidden': 'true' }, icon('chevron'))))))]));
   });
 }
 
@@ -696,6 +706,7 @@ function renderAll(force = false) {
 }
 
 col.on('change', () => renderAll());
+aniCol.on('change', () => renderCal());
 profil.on('change', () => renderAll());
 let sonHata = 0;
 col.on('error', (e) => {

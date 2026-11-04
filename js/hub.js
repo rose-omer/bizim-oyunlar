@@ -18,7 +18,7 @@ import {
 } from './core/gunler.js';
 import {
   h, icon, ICONS, avatarEl, toast, celebrate, shareInvite, copyInvite, muteButton, pairEl, knownPartner, rememberPartner,
-  partnerWhere, locative, genitive, trackShellHeight, formatDay, startAppServices, mountTabBar, removeTabBar,
+  partnerWhere, locative, genitive, trackShellHeight, formatDay, startAppServices, mountTabBar, removeTabBar, sohbetRozetiDinle,
   listenTouches, TOUCHES, touchByTur, davetLinki, initial,
 } from './core/ui.js';
 import { sfx } from './core/sound.js';
@@ -415,10 +415,12 @@ async function ensureRoom(roomId) {
     room.on('message', onMessage),
     room.on('presence', onPresence),
     listenTouches(room),
+    sohbetRozetiDinle(room),
   ];
   openData(room);
   mountYavru(state.view);
   mountNot(state.view);
+  mountAni(state.view);
   paintAll();
   istekKontrol(true);
 }
@@ -940,7 +942,7 @@ function paintDate() {
 function bizScreen(roomId) {
   const view = {
     roomId, keys: {}, seenAt: Number(lsGet(seenKey(roomId))) || 0, cd: null, lastPlayed: null, picks: [],
-    yavruMounted: false, yavruCleanup: null, notMounted: false, notCleanup: null,
+    yavruMounted: false, yavruCleanup: null, notMounted: false, notCleanup: null, aniMounted: false, aniCleanup: null,
   };
   view.heading = h('h1', { class: 'sr-only', id: 'biz-h', tabindex: '-1' }, 'Biz');
   view.istekBox = h('div', { hidden: true });
@@ -950,6 +952,7 @@ function bizScreen(roomId) {
   view.upBox = h('div');
   view.yavruSec = h('section', { class: 'biz-sec', 'aria-label': 'Yavrumuz', hidden: true });
   view.notSec = h('section', { class: 'biz-sec', 'aria-label': 'Sevgilinin notu', hidden: true });
+  view.aniSec = h('section', { class: 'biz-block', 'aria-label': 'Geçmiş yıllarda bugün', hidden: true });
   view.gamesHint = h('p', { class: 'biz-sec-hint', hidden: true });
   view.picksBox = h('div', { class: 'card card-list biz-picks' });
   view.upSec = section('up-h', 'Yaklaşanlar', {
@@ -977,11 +980,12 @@ function block(id, title, { action = null } = {}, ...body) {
     ...body);
 }
 
-/** Bugün: ruh hâli → konum → (Yavrumuz kartı, yavru dalı) → dokunuş → Sıradaki. */
+/** Bugün: (geçmiş yılın anısı) → ruh hâli → konum → (Yavrumuz kartı, yavru dalı) → dokunuş → Sıradaki. */
 function todaySection(view) {
   view.todayDate = h('span', { class: 'biz-sec-date' });
   view.nextBox = h('div', { class: 'card biz-next' });
   return section('bugun-h', 'Bugün', { action: view.todayDate },
+    view.aniSec,
     moodBlock(view),
     konumBlock(view),
     view.yavruSec,
@@ -1203,6 +1207,22 @@ async function mountNot(view) {
     else view.notCleanup = off;
   } catch (e) {
     console.warn('[biz] Not kartı açılamadı', e);
+  }
+}
+
+// ---------- Bugün geçen yıl (sayfalar/anilar/kart.js; o güne anı yoksa bölüm gizli) ----------
+async function mountAni(view) {
+  if (!view || view.aniMounted || !state.room || state.view !== view) return;
+  view.aniMounted = true;
+  const room = state.room;
+  try {
+    const mod = await import('../sayfalar/anilar/kart.js');
+    if (state.view !== view || state.room !== room) return;
+    const off = await mod.mountBugunGecenKart(view.aniSec, { room });
+    if (state.view !== view) off?.();
+    else view.aniCleanup = off;
+  } catch (e) {
+    console.warn('[biz] Anı kartı açılamadı', e);
   }
 }
 
@@ -1844,6 +1864,7 @@ function cleanupView() {
   if (!v) return;
   try { v.yavruCleanup?.(); } catch { /* yok say */ }
   try { v.notCleanup?.(); } catch { /* yok say */ }
+  try { v.aniCleanup?.(); } catch { /* yok say */ }
   v.konum?.gozlem?.disconnect();
   try { v.konum?.map?.remove(); } catch { /* yok say */ }
   clearTimeout(v.coolTimer);
@@ -1883,6 +1904,7 @@ function render({ focus = false } = {}) {
   else removeTabBar();
   mountYavru(state.view);
   mountNot(state.view);
+  mountAni(state.view);
   paintAll();
   if (state.view) istekKontrol(true);
 

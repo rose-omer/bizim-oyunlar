@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   AY_ADLARI, gunYazi, aramaMetni, filtrele, zamanCizelgesi, buGunGecmisYillar, buGunBasligi,
   tumEtiketler, yillar, albumFotolari, etiketTemizle, etiketEkle, aniDogrula, aniVerisi,
-  fotoTasi, fotoKaldir, formParametreleri, begeniYamasi, aniYamasi, begeniSayisi, begenGoster, MAX_FOTO,
+  fotoTasi, fotoKaldir, formParametreleri, begeniYamasi, aniYamasi, begeniSayisi, begenGoster, MAX_FOTO, fotoTaslagi,
 } from '../sayfalar/anilar/mantik.js';
 
 let seq = 0;
@@ -181,4 +181,15 @@ test('onizlemeBoyu: kısa kenar ya da uzun kenar sınırına oranla küçültür
   assert.deepEqual(onizlemeBoyu(560, 420, { kisa: 480 }), { en: 560, boy: 420, kucult: false });
   assert.deepEqual(onizlemeBoyu(300, 200, { kisa: 480 }), { en: 300, boy: 200, kucult: false });
   assert.deepEqual(onizlemeBoyu(0, 0, { kisa: 480 }), { en: 0, boy: 0, kucult: false });
+});
+
+test('fotoTaslagi: yalnız ?taslak=1 ile; bozuk kayıt ve sınır aşımı güvenli', () => {
+  const kayit = JSON.stringify({ fotolar: ['a', 'b', 3, ''], not: 'kahve' });
+  assert.deepEqual(fotoTaslagi('?yeni=1&taslak=1', kayit), { fotolar: ['a', 'b'], not: 'kahve' });
+  assert.equal(fotoTaslagi('?yeni=1', kayit), null);
+  assert.equal(fotoTaslagi('?taslak=1', null), null);
+  assert.equal(fotoTaslagi('?taslak=1', '{bozuk'), null);
+  assert.equal(fotoTaslagi('?taslak=1', '{"fotolar":"a"}'), null);
+  const cok = JSON.stringify({ fotolar: Array.from({ length: MAX_FOTO + 3 }, (_, i) => String(i)) });
+  assert.equal(fotoTaslagi('?taslak=1', cok).fotolar.length, MAX_FOTO);
 });

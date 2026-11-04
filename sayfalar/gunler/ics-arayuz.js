@@ -2,7 +2,7 @@
 // .ics metni ./ics.js'ten (saf) gelir. app.js'e yalnız `// ics:` kancalarıyla bağlanır.
 import { h, toast } from '../../js/core/ui.js';
 import { sfx } from '../../js/core/sound.js';
-import { isNative } from '../../js/core/mobil.js';
+import { dosyaPaylas } from '../../js/core/dosya-paylas.js';
 import { parseDay, toDay } from '../../js/core/gunler.js';
 import { ICS_DOSYA, ICS_TUR, gunOlayi, icsOlaylari, icsMetni } from './ics.js';
 
@@ -17,61 +17,12 @@ function takvimSimgesi() {
 
 // ---------- Paylaşım ----------
 
-function tarayiciOrtami() {
-  return {
-    nav: globalThis.navigator,
-    doc: globalThis.document,
-    yerel: isNative(),
-    eklenti: (ad) => globalThis.Capacitor?.Plugins?.[ad] || null,
-    zamanla: (fn, ms) => setTimeout(fn, ms),
-  };
-}
-
-// Tarayıcı: AbortError. Capacitor Share eklentisi: "Share canceled".
-const iptalMi = (e) => e?.name === 'AbortError' || /cancel/i.test(e?.message || '');
-
 /**
- * .ics dosyasını paylaşır ya da indirir. Sıra:
- * 1. Web Share dosya kabul ediyorsa paylaş (Android Chrome .ics'i kabul etmez; indirmeye düşer).
- * 2. Uygulamada (Capacitor) WebView indirmesi çalışmaz: Filesystem + Share eklentisi varsa dosyayı paylaş, yoksa 'yok'.
- * 3. Tarayıcıda <a download>.
+ * .ics dosyasını paylaşır ya da indirir (js/core/dosya-paylas.js). Android Chrome Web Share'de .ics'i kabul etmez; indirmeye düşer.
  * -> 'paylasildi' | 'iptal' | 'indirildi' | 'yok' | 'hata'. Hata fırlatmaz.
  */
-export async function icsPaylas(metin, o = tarayiciOrtami()) {
-  try {
-    const dosya = typeof File === 'function' ? new File([metin], ICS_DOSYA, { type: ICS_TUR }) : null;
-    if (dosya && o.nav?.canShare?.({ files: [dosya] })) {
-      try {
-        await o.nav.share({ files: [dosya], title: 'Biz İkimiz' });
-        return 'paylasildi';
-      } catch (e) {
-        if (iptalMi(e)) return 'iptal';
-        // İzin ya da tür hatası: aşağıdaki yollara düş.
-      }
-    }
-    if (o.yerel) {
-      const fs = o.eklenti('Filesystem');
-      const share = o.eklenti('Share');
-      if (typeof fs?.writeFile !== 'function' || typeof share?.share !== 'function') return 'yok';
-      const { uri } = await fs.writeFile({ path: ICS_DOSYA, data: metin, directory: 'CACHE', encoding: 'utf8' });
-      await share.share({ title: 'Biz İkimiz', files: [uri], dialogTitle: 'Takvime ekle' });
-      return 'paylasildi';
-    }
-    const url = URL.createObjectURL(new Blob([metin], { type: ICS_TUR }));
-    const a = o.doc.createElement('a');
-    a.href = url;
-    a.download = ICS_DOSYA;
-    a.hidden = true;
-    o.doc.body.append(a);
-    a.click();
-    a.remove();
-    o.zamanla(() => URL.revokeObjectURL(url), 30000);
-    return 'indirildi';
-  } catch (e) {
-    if (iptalMi(e)) return 'iptal';
-    console.warn('[takvim] paylaşım', e);
-    return 'hata';
-  }
+export function icsPaylas(metin, o) {
+  return dosyaPaylas({ metin, ad: ICS_DOSYA, tur: ICS_TUR, dialogBaslik: 'Takvime ekle' }, o);
 }
 
 const SONUC_YAZI = {

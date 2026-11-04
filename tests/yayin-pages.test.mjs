@@ -34,6 +34,20 @@ test('pages.yml: yayın adımları sırayla; güncel ana sürümler', () => {
   assert.match(PAGES, /path: _site\n {10}include-hidden-files: true/);
 });
 
+test('pages.yml: yayından önce test işi; paket kurmaz; yayın ona bağlı', () => {
+  const bas = PAGES.indexOf('  test:\n');
+  const bit = PAGES.indexOf('  yayin:\n');
+  assert.ok(bas > 0 && bas < bit);
+  const is = PAGES.slice(bas, bit);
+  assert.match(is, /if: github\.event_name != 'workflow_run' \|\| github\.event\.workflow_run\.conclusion == 'success'/);
+  assert.match(is, /runs-on: ubuntu-latest/);
+  assert.match(is, /actions\/checkout@v7/);
+  assert.match(is, /actions\/setup-node@v7\n\s+with:\n\s+node-version: '25'/);
+  assert.match(is, /run: npm test\n/);
+  assert.doesNotMatch(PAGES, /npm (ci|install)/);
+  assert.match(PAGES, /  yayin:\n    needs: test\n/);
+});
+
 test('pages.yml: _site hariç tutulanlar ve .nojekyll', () => {
   assert.ok(PAGES.includes(`${HARIC.join('|')}|_site|README.md|SOZLESME.md|package.json|package-lock.json) continue ;;`), 'hariç listesi');
   assert.match(PAGES, /for f in \*; do/); // nokta dosyaları (.git, .github) "*" ile gelmez

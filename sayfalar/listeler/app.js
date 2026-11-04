@@ -348,6 +348,7 @@ function bildirGonder(data) {
   const l = L.listeById(data.liste);
   Promise.resolve(bildir(roomId, {
     tur: 'liste', baslik: 'Listeye eklendi', metin: `${l.emoji} ${l.ad}: ${data.metin}`, url: 'sayfalar/listeler/',
+    gizli: { metin: 'Listelerinizde yenilik var' },
   })).catch(() => {});
 }
 

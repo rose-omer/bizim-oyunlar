@@ -35,6 +35,7 @@ import { giyimOku } from './giyim.js';
 import { magazaAc as magazaKatmani } from './magaza.js';
 import { buyumeSahnesi, buyumeSahnesiGerekli } from './buyume-sahne.js';
 import { ninniCal, ninniRuhu } from './ninni.js';
+import { tazelikIzleyici, otoYazimIzinli, kazaKarari } from './tazelik.js';
 
 const { room, roomId, me } = await bootPage({ ns: 'yavru', title: 'Yavrumuz', tab: 'daha' });
 const app = document.getElementById('app');
@@ -117,6 +118,14 @@ let tikEngel = false; // sürükleme ya da kaydırma bitti: ardından gelen tık
 let taklit = null; // ses taklidi denetimi (taklit.js) | null
 let taklitDurum = null;
 let ninni = null; // çalan ninni denetimi (ninni.js ninniCal) | null
+
+// Otomatik yazımlar (kaza, çatlama, büyüme, görev ödülü) sunucudan tazelenmeden çalışmaz (tazelik.js). Ekran ve düğmeler beklemez.
+const tazelik = tazelikIzleyici({
+  tazele: async () => (await Promise.all([col.refresh(), bakim.refresh()])).every(Boolean),
+  tazelenince: () => ciz(),
+  gizli: document.visibilityState !== 'visible',
+});
+const otoIzin = () => otoYazimIzinli({ tazelendi: tazelik.taze(), cevrimici: navigator.onLine !== false });
 
 // ---------- İskelet ----------
 const cizimEl = h('span', { class: 'yv-cizim' });
@@ -631,7 +640,7 @@ function cizGorev() {
     gorevDurum.replaceChildren(kisi(me.clientId), ' · ', kisi(pid));
   }
   cizGorevOdalari(bitti ? [] : G.gorevOdalari(gorev).filter((o) => o !== oda));
-  if (tamam && !odullendi && pid && gorevOdulGun !== gun) gorevOdul(gun, pid, gorev.id);
+  if (otoIzin() && tamam && !odullendi && pid && gorevOdulGun !== gun) gorevOdul(gun, pid, gorev.id);
 }
 
 /** Görev kartında ilgili odaya tek dokunuşla geçiş ("Banyoya git"). Bulunduğum oda listede yok. */
@@ -702,6 +711,7 @@ function ciz() {
   hatirlaticiPlanla();
   zamanla();
   kazaYaz();
+  tazelik.dene();
 }
 
 /**
@@ -709,8 +719,7 @@ function ciz() {
  * aynı anda yazsa da kaza bir kez uygulanır, günlükte tek satır kalır. Sonda: iyimser yazım yeniden çizdirir.
  */
 function kazaYaz() {
-  if (!y || y.asama === 'yumurta') return;
-  const r = T.kazaYamasi(y, { kim: me.clientId, simdi });
+  const r = kazaKarari({ tazelendi: otoIzin(), y, kim: me.clientId, simdi });
   if (!r || r.kayitId === kazaYazilan) return;
   kazaYazilan = r.kayitId;
   col.patch(M.BELGE_ID, r.yama).catch((e) => {
@@ -754,8 +763,10 @@ function gecisler() {
     olay(y.asama === 'buyuk' ? 'buyudu' : 'dogdu', 1600);
     sfx('win');
   }
-  if (y?.asama === 'yumurta' && !catliyor && M.catlamaHazir(y, simdi)) catla();
-  if (y?.asama === 'kucuk' && !buyuyor && !sahneOynuyor && M.buyumeDurumu(y, simdi).hazir) buyu();
+  if (otoIzin()) {
+    if (y?.asama === 'yumurta' && !catliyor && M.catlamaHazir(y, simdi)) catla();
+    if (y?.asama === 'kucuk' && !buyuyor && !sahneOynuyor && M.buyumeDurumu(y, simdi).hazir) buyu();
+  }
 }
 
 function olay(ad, ms) {
@@ -1538,12 +1549,24 @@ const hataGoster = (err) => {
 };
 col.on('error', hataGoster);
 bakim.on('error', hataGoster);
+col.on('error', tazelik.koptu);
+bakim.on('error', tazelik.koptu);
 col.on('change', () => { ciz(); magaza?.guncelle(); });
 bakim.on('change', () => { yeniBakimlar(); cizBakimlar(); cizGorev(); });
 profil?.on('change', ciz);
 room.on('presence', (p) => { partner = p || null; cizPartner(); cizPanel(); cizGorev(); });
 adGirdi.addEventListener('input', () => adGirdi.removeAttribute('aria-invalid'));
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') ciz(); });
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    tazelik.gorundu();
+    ciz();
+  } else {
+    tazelik.gizlendi();
+  }
+});
+room.on('status', (st) => { if (st === 'online') tazelik.hemenDene(); });
+window.addEventListener('online', tazelik.hemenDene);
+window.addEventListener('offline', tazelik.koptu);
 
 /** Belge yoksa ilk açan yumurtayı oluşturur. Yükleme hatasında oluşturmaz (sunucudaki belgeyi ezmesin). */
 async function belgeHazirla() {

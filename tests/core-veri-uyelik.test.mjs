@@ -92,7 +92,7 @@ test('veri.js 42501: yazma giden kutusunda kalır, geri alınmaz; eşitleme duru
   assert.equal(sonDurum(R).durum, 'yok');
 
   const once = c.cagrilar.length;
-  await col.refresh();
+  assert.equal(await col.refresh(), false, 'yetki yokken tazeleme başarılı sayılmaz');
   await col.put({ metin: 'peynir' });
   assert.equal(c.cagrilar.length, once, 'yetki yokken sunucuya gidilmez');
 
@@ -207,6 +207,28 @@ test('bildirim.js: bildir gövdesinde anahtar; eski sunucuda yok', async (t) => 
   await sessiz(() => odaGiris(E));
   assert.equal(await bildir(E, { tur: 'mesaj' }), true);
   assert.equal('anahtar' in govdeler[1], false);
+});
+
+test('refresh sonucu: başarıda true; ağ hatasında false (fırlatmaz, error olayı gelir); kapalıyken false', async () => {
+  sunucuModu();
+  const R = 'tazesonuc2';
+  let bozuk = false;
+  sahte({
+    oda_katil: onayli,
+    doc_list: () => (bozuk ? { data: null, error: { message: 'ağ' } } : { data: [], error: null }),
+  });
+  await odaGiris(R);
+  const col = await openCollection(odaNesnesi(R), 'liste');
+  const hatalar = [];
+  col.on('error', (e) => hatalar.push(e));
+  assert.equal(await col.refresh(), true);
+  bozuk = true;
+  assert.equal(await col.refresh(), false);
+  assert.equal(hatalar.length, 1);
+  bozuk = false;
+  assert.equal(await col.refresh(), true);
+  col.close();
+  assert.equal(await col.refresh(), false);
 });
 
 test('geri yükleme sonrası: eski tarihli yedek kaydı artımlı tazelemede de gelir (updated_at = şimdi); önbellek temizlenir', async () => {

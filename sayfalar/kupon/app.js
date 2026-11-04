@@ -38,7 +38,7 @@ const durum = {
 
 function haberVer(olay, data, url = 'sayfalar/kupon/') {
   if (partnerGoruyor(room.partner?.(), 'kupon')) return; // Kuponlar'da ve sekmesi önde: zaten görüyor
-  bildir(roomId, { tur: 'mektup', ...K.bildirimMetni(olay, benAdi(), data), url })
+  bildir(roomId, { tur: 'mektup', ...K.bildirimMetni(olay, benAdi(), data), url, gizli: { metin: 'Kuponlarda yenilik var' } })
     .catch((err) => console.warn('[kupon] bildirim gönderilemedi', err));
 }
 

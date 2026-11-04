@@ -56,7 +56,7 @@ export function kumbaraKur({ room, roomId, myId, benAdi, partnerAdi }) {
 
   function haberVer(icerik) {
     if (partnerGoruyor(room.partner?.(), 'harcama')) return;
-    bildir(roomId, { tur: 'liste', ...icerik, url: BILDIRIM_URL })
+    bildir(roomId, { tur: 'liste', ...icerik, url: BILDIRIM_URL, gizli: { baslik: 'Kumbara 🐷', metin: 'Kumbarada yenilik var' } })
       .catch((err) => console.warn('[kumbara] bildirim gönderilemedi', err));
   }
 

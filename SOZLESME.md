@@ -291,7 +291,7 @@ await col.patch(id, kismi)// mevcut data ile birleştirip yazar
 await col.remove(id)
 col.on('change', (docs) => {})  // her değişimde silinmemiş belgelerin tamamı. -> abonelikten çık
 col.on('error', (err) => {})    // err.message Türkçe, kullanıcıya gösterilebilir (toast)
-await col.refresh(); await col.loadOlder(50); col.hasOlder(); col.close();
+await col.refresh(); await col.loadOlder(50); col.hasOlder(); col.close();  // refresh -> sunucudan okudu mu (true/false), fırlatmaz
 ```
 - Önbellek: açılışta localStorage'dan anında gelir; sonra sunucudan tamamlanır. Çevrimdışı yazma giden kutusunda bekler, bağlantı gelince gider.
 - Canlı: yazan taraf `room.sendAll({ t:'veri', kind, doc })` yayar; karşı tarafın aynı türdeki koleksiyonları güncellenir. Ayrıca 60 sn'de bir ve sekme öne gelince tazeler.
@@ -305,7 +305,7 @@ Tarih: gün `'YYYY-MM-DD'`, an ISO (`new Date().toISOString()`). `author` = yaza
 
 | Tür | id | data | Sahibi |
 |---|---|---|---|
-| `kisi` | clientId | `{ ad, foto?, dogum?: gün, renk? }` | profil.js |
+| `kisi` | clientId | `{ ad, foto?, dogum?: gün, renk?, bildirimGizli?: bool }` (`bildirimGizli`: alıcının ayarı; yalnız `false` iken bildirimde içerik gider, alan yoksa gizli) | profil.js |
 | `cift` | `'cift'` | `{ baslangic?: gün, bulusma?: ISO, bulusmaNotu?, kapak?: url, ad? }` | profil.js |
 | `gun` | uuid | `{ baslik, tarih: gün, tekrar: 'yil'/'ay'/'yok', tur: 'yildonumu'/'dogumgunu'/'ozel'/'plan', emoji, not?, hatirlat?: [0,1,7] }` | Günler |
 | `mesaj` | uuid | `{ metin?, foto?: url, yanit?: id, tepki?: { [clientId]: emoji }, duzenlendi?: ISO }` | Sohbet |
@@ -388,7 +388,8 @@ bildirimDestegi()            // 'var' | 'ana-ekran-gerek' | 'yok'
 await bildirimDurumu()       // 'acik' | 'kapali' | 'engelli' | 'yok'
 await bildirimAc(roomId)     // kullanıcı tıklamasıyla; -> boolean
 await bildirimKapat(roomId)
-await bildir(roomId, { tur, baslik, metin, url })  // partnerin cihazlarına push; hata fırlatmaz
+await bildir(roomId, { tur, baslik, metin, url, gizli? })  // partnerin cihazlarına push; hata fırlatmaz
+//   gizli: { metin, baslik? }: kullanıcı içeriği taşıyan her çağrıda zorunlu; partnerin kisi.bildirimGizli'si false değilse bunlar gider.
 //   tur: 'dokunus'|'mesaj'|'mektup'|'ani'|'gun'|'oyun'|'soru'|'liste'|'izle'. url site köküne göre göreli ('sayfalar/sohbet/').
 // js/core/pwa.js (Sunucu)
 registerPwa(); kurulumDurumu()  // { durum: 'kurulu'|'kurulabilir'|'ios-elle'|'yok', kur() }
@@ -396,6 +397,8 @@ registerPwa(); kurulumDurumu()  // { durum: 'kurulu'|'kurulabilir'|'ios-elle'|'y
 await kilitKontrol(); await kilitAyarla(pin | null); kilitVarMi()
 // js/core/mobil.js (Mobil)
 isNative(); titret(desen); await yerelHatirlaticilar([{ id, baslik, metin, zaman: ISO }])
+// js/core/dosya-paylas.js — metin dosyası: Web Share (isteğe bağlı) → uygulamada Filesystem + Share → <a download>
+await dosyaPaylas({ metin, ad, tur, baslik?, dialogBaslik?, webShare? }) // 'paylasildi'|'iptal'|'indirildi'|'yok'|'hata'
 // js/core/foto.js (Anılar) — fotoğraf seç, küçült, yükle
 await fotoSecVeYukle(roomId, { coklu }) // -> [url]; games/yapboz/image.js normalizeImage + storage.js uploadPhoto kullanır
 ```
@@ -437,7 +440,7 @@ await fotoSecVeYukle(roomId, { coklu }) // -> [url]; games/yapboz/image.js norma
 - kilit.js ekleri: `pinDogruMu(pin)`, `cihazdanUnut(roomId)`. mobil.js eki: `mobilBaslat()` (startAppServices çağırır).
 - ui.js ekleri: `avatarEl`, `genitive`, `fotoSrc`, `removeTabBar`, `startAppServices` (tema, kilit, PWA, mobil, bildirim tazeleme).
 - `js/core/erken.js`: her sayfanın `<head>`'inde klasik betik. Temayı ilk boyamadan uygular; PIN varsa `html.kilit-bekle` ile içeriği kilit kararına dek gizler.
-- Her HTML `<head>`'i: theme-color, favicon, manifest, apple-touch-icon, apple/mobile meta, erken.js.
+- Her HTML `<head>`'i: charset'in hemen arkasına birebir aynı CSP ve referrer meta'sı (`tests/guvenlik-baslik.test.mjs`; yeni dış kaynak CSP'ye de eklenir), theme-color, favicon, manifest, apple-touch-icon, apple/mobile meta, erken.js. Satır içi `<script>` ve `on*=` yasak.
 - `games/hafiza/sync.js`, `rng.js`, `ekran.js` artık ortak (Çiz, Dört Taş, Amiral, Dama, Tavla). API'leri sabit kalmalı.
 - Yerel duman testi: `iki.mjs` service worker'ı varsayılan engeller; PWA testi için `{ sw: true }`.
 
@@ -495,6 +498,7 @@ v3 bölümleri v1 ve v2'nin üstüne gelir. Çatışmada v3 geçerli.
   `mesaj.sabit = { at: ISO, kim: clientId }` (ikimiz için ortak; patch `sabit`, kaldırınca `null`; en çok 10; eski sabitler istemcide `bizim.sohbet.sabit.<oda>` önbelleğinde);
   `liste.liste = 'sarki'` + `baglanti?` (yalnız https YouTube/Spotify/Apple Music) + `bizim?` (tek "Bizim şarkımız").
 - Yeni tür `sayfalar/ayarlar/mantik.js` `YEDEK_TURLERI` sonuna eklenir.
+- Yavrumuz otomatik yazımları (kaza, çatlama, büyüme, görev ödülü) yalnız görünümdeki ilk başarılı tazelemeden sonra çalışır (`sayfalar/yavru/tazelik.js`); arka plandan dönünce önce tazelenir. Düğmeler beklemez.
 
 ## 27. Yeni sayfalar, oyunlar ve ortak modüller
 - SAYFALAR: `ruh`, `skor`, `yilimiz`, `rozetler`, `gunfoto`, `haftalik`, `harcama`, `konum` (Daha › Biz; Ayarlar'daki eski Mesafe bölümünün yerine), `sohbetozet` (Sohbet Özetimiz, Daha › Biz, `yilimiz`'ın arkasında; `sayfalar/sohbet-ozeti/`). GAMES: `satranc`, `pisti`, `duello` (Kelime Düellosu), `sudoku`.

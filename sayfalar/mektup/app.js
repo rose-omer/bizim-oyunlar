@@ -457,7 +457,7 @@ function yazGorunumu() {
     try {
       await col.put(data);
       if (!partnerGoruyor(room.partner(), 'mektup')) { // Mektuplar'da ve sekmesi önde: zaten görüyor
-        bildir(roomId, { tur: 'mektup', baslik: 'Sana bir mektup var 💌', metin: M.bildirimMetni(data), url: 'sayfalar/mektup/' }).catch(() => {});
+        bildir(roomId, { tur: 'mektup', baslik: 'Sana bir mektup var 💌', metin: M.bildirimMetni(data), url: 'sayfalar/mektup/', gizli: { metin: 'Yeni mektup' } }).catch(() => {});
       }
       clearTimeout(taslakZaman);
       yaz(TASLAK, null);

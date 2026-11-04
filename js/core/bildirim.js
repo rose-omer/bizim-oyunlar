@@ -8,11 +8,14 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, VAPID_PUBLIC_KEY } from '../config.js'
 import { me, isLocalMode, isValidRoomId } from './identity.js';
 import { getSupabase } from './room.js';
 import { kimlik } from './uyelik.js';
+import { listDocs } from './veri.js';
+import { pickPartnerDoc } from './profil.js';
 import { isNative, fcmVar, fcmIzin, fcmKayit, fcmAc, fcmKapat } from './mobil.js';
 import { KOK_URL, iosMu, standaloneMu, registerPwa } from './pwa.js';
 
 export const TURLER = ['dokunus', 'mesaj', 'mektup', 'ani', 'gun', 'oyun', 'soru', 'liste', 'izle'];
 const KISIT_MS = 10000; // aynı türden bildirim en çok 10 sn'de bir (ör. art arda mesajlar)
+const KISI_BEKLE_MS = 3000; // partnerin ayarı bu sürede okunamazsa gizli sayılır
 
 // ---------- Saf yardımcılar ----------
 
@@ -78,7 +81,36 @@ export function kisitla(son, tur, simdi, ms = KISIT_MS) {
   return true;
 }
 
+/** Kilit ekranı: alıcı açıkça izin vermedikçe (kisi.bildirimGizli === false) içerik gitmez. Profil bilinmiyorsa gizli. */
+export function bildirimGizliMi(kisi) {
+  return kisi?.bildirimGizli !== false;
+}
+
+/** Gizliyse { baslik?, metin } yerine geçer. */
+export function bildirimIcerigi({ baslik, metin }, kisi, gizli) {
+  if (!gizli || !bildirimGizliMi(kisi)) return { baslik, metin };
+  return { baslik: gizli.baslik ?? baslik, metin: gizli.metin };
+}
+
+/** 'kisi' belgelerinden partnerin verisi | null. */
+export function partnerKisisi(docs, myId) {
+  return pickPartnerDoc((docs || []).filter((d) => !d.deleted), myId)?.data || null;
+}
+
 // ---------- Tarayıcı ----------
+
+/** Partnerin güncel kisi verisi (önbellek eski kalabilir). Okunamazsa null: gizli sayılır. */
+async function partnerKisiOku(roomId, myId) {
+  let zaman = 0;
+  try {
+    const sure = new Promise((_, reddet) => { zaman = setTimeout(() => reddet(new Error('zaman aşımı')), KISI_BEKLE_MS); });
+    return partnerKisisi(await Promise.race([listDocs(roomId, 'kisi'), sure]), myId);
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(zaman);
+  }
+}
 
 function sunucuVar() {
   return !!(SUPABASE_URL && SUPABASE_ANON_KEY) && !isLocalMode();
@@ -192,12 +224,18 @@ const sonGonderim = new Map();
  * Partnerin cihazlarına bildirim. Hata fırlatmaz. -> gönderildi mi
  * tur: 'dokunus'|'mesaj'|'mektup'|'ani'|'gun'|'oyun'|'soru'|'liste'|'izle'. url site köküne göre göreli ('sayfalar/sohbet/').
  * Aynı tür 10 sn içinde ikinci kez gönderilmez (art arda mesajlar tek bildirim).
+ * gizli: { metin, baslik? }: içerik taşıyan bildirimde verilir; partner gizlilik istiyorsa bunlar gider (bildirimIcerigi).
  */
-export async function bildir(roomId, { tur, baslik, metin, url } = {}) {
+export async function bildir(roomId, { tur, baslik, metin, url, gizli } = {}) {
   try {
     if (!sunucuVar() || !isValidRoomId(roomId)) return false;
-    const govde = bildirGovdesi(roomId, me().clientId, { tur, baslik, metin, url });
+    const myId = me().clientId;
+    let govde = bildirGovdesi(roomId, myId, { tur, baslik, metin, url });
     if (!govde || !kisitla(sonGonderim, `${roomId}:${tur}`, Date.now())) return false;
+    if (gizli) {
+      const icerik = bildirimIcerigi({ baslik, metin }, await partnerKisiOku(roomId, myId), gizli);
+      govde = bildirGovdesi(roomId, myId, { tur, ...icerik, url });
+    }
     const { p_anahtar } = kimlik(roomId); // cihaz anahtarı (sunucu push_hedef'te doğrular)
     if (p_anahtar) govde.anahtar = p_anahtar;
     const res = await fetch(bildirAdresi(SUPABASE_URL), {

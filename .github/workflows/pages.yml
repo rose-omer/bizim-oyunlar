@@ -6,6 +6,7 @@
 # Sürüm bilgisi: _site/indir/surum.json { surum, kod, tarih, fcm } (js/core/mobil.js kabukGuncellemeKontrol okur).
 # android.yml onu sürüme ek dosya olarak koyar; yoksa sürüm notundan ("sürüm A.B.N") üretilir.
 # Tetik: main'e push, elle, Android APK iş akışı main'de başarıyla bitince (yeni APK yayına girer).
+# Önce test işi (npm test; paket gerekmez): kırılırsa yayın olmaz. PGlite'lı SQL testleri CI'da atlanır.
 name: Pages
 
 on:
@@ -28,7 +29,22 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  test:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '25'
+
+      - name: Testler
+        run: npm test
+
   yayin:
+    needs: test
     if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 15

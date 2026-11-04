@@ -271,7 +271,7 @@ async function kaydet(e) {
 
 function haberVer(icerik) {
   if (partnerGoruyor(room.partner?.(), 'harcama')) return;
-  bildir(roomId, { tur: 'liste', ...icerik, url: 'sayfalar/harcama/' })
+  bildir(roomId, { tur: 'liste', ...icerik, url: 'sayfalar/harcama/', gizli: { metin: 'Ortak harcamalarda yenilik var' } })
     .catch((err) => console.warn('[harcama] bildirim gönderilemedi', err));
 }
 

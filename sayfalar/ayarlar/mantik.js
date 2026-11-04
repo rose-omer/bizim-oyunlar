@@ -100,6 +100,15 @@ export function bildirimGorunum(destek, durum) {
 }
 
 // ---------- Yedek ----------
+/** dosyaPaylas sonucu → toast metni. iptal: mesaj yok. yok ve hata başarı demez. */
+export function yedekSonucMesaji(sonuc, { sayi, eksik = false }) {
+  if (sonuc === 'iptal') return null;
+  if (sonuc === 'indirildi') return eksik ? `Yedek indirildi (${sayi} kayıt). Bazı bölümler alınamadı.` : `Yedek indirildi: ${sayi} kayıt.`;
+  if (sonuc === 'paylasildi') return eksik ? `Yedek paylaşıldı (${sayi} kayıt). Bazı bölümler alınamadı.` : `Yedek paylaşıldı: ${sayi} kayıt.`;
+  if (sonuc === 'yok') return 'Yedek bu uygulama sürümünde kaydedilemiyor. Uygulamayı güncelle ya da siteyi tarayıcıda aç.';
+  return 'Yedek kaydedilemedi. Tekrar dener misin?';
+}
+
 export const YEDEK_TURLERI = [
   'kisi', 'cift', 'gun', 'mesaj', 'okundu', 'ani', 'mektup', 'liste',
   'randevu', 'gs', 'sevgidili', 'ruh', 'dokunus', 'konum', 'oyunkayit',

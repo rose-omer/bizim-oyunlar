@@ -166,7 +166,7 @@ async function silNot(doc) {
 
 function haberVer(data) {
   if (partnerGoruyor(room.partner?.(), 'not')) return; // sayfada ve önde: zaten görüyor
-  bildir(roomId, { tur: 'mesaj', ...N.bildirimMetni(data, benAdi()), url: 'sayfalar/not/' })
+  bildir(roomId, { tur: 'mesaj', ...N.bildirimMetni(data, benAdi()), url: 'sayfalar/not/', gizli: { metin: 'Yeni not' } })
     .catch((err) => console.warn('[not] bildirim gönderilemedi', err));
 }
 

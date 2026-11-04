@@ -607,7 +607,7 @@ async function duzenlemeKaydet(metin) {
 
 function bildirGerekirse(data) {
   if (partnerGoruyor(room.partner(), 'sohbet')) return; // sohbette ve sekmesi önde: mesajı zaten görüyor
-  Promise.resolve(bildir(roomId, { tur: 'mesaj', baslik: benimAdim() || 'Sevgilin', metin: M.ozet(data, 80), url: 'sayfalar/sohbet/' }))
+  Promise.resolve(bildir(roomId, { tur: 'mesaj', baslik: benimAdim() || 'Sevgilin', metin: M.ozet(data, 80), url: 'sayfalar/sohbet/', gizli: { metin: 'Yeni mesaj' } }))
     .catch(() => {});
 }
 

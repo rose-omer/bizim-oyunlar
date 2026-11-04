@@ -60,7 +60,7 @@ const benimAdim = () => profil.ben()?.ad || me.name || '';
 function haberVer(baslik, metin) {
   if (partnerGoruyor(room.partner(), 'gunler')) return; // Günler'de ve sekmesi önde: değişikliği zaten görüyor
   try {
-    Promise.resolve(bildir(roomId, { tur: 'gun', baslik, metin, url: 'sayfalar/gunler/' })).catch(() => {});
+    Promise.resolve(bildir(roomId, { tur: 'gun', baslik, metin, url: 'sayfalar/gunler/', gizli: { metin: 'Takviminizde yenilik var' } })).catch(() => {});
   } catch { /* bildirim isteğe bağlı */ }
 }
 

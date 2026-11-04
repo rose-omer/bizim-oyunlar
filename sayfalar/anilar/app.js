@@ -772,7 +772,7 @@ function formGorunumu(id) {
       sfx('pop');
       if (!id) {
         if (!partnerGoruyor(room.partner(), 'anilar')) {
-          bildir(roomId, { tur: 'ani', baslik: 'Yeni anı', metin: data.baslik, url: 'sayfalar/anilar/' }).catch(() => {});
+          bildir(roomId, { tur: 'ani', baslik: 'Yeni anı', metin: data.baslik, url: 'sayfalar/anilar/', gizli: { metin: 'Yeni bir anı var' } }).catch(() => {});
         }
         toast('Anı kaydedildi');
       } else {

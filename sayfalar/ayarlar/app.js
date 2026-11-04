@@ -17,7 +17,8 @@ import {
 import { uploadPhoto, loadPhoto, isAllowedPhotoUrl } from '../../js/core/storage.js';
 import { fotoKirp } from '../../js/core/kirp.js';
 import { isMuted, setMuted, sfx } from '../../js/core/sound.js';
-import { bildirimDestegi, bildirimDurumu, bildirimAc, bildirimKapat } from '../../js/core/bildirim.js';
+import { bildirimDestegi, bildirimDurumu, bildirimAc, bildirimKapat, bildirimGizliMi } from '../../js/core/bildirim.js';
+import { dosyaPaylas } from '../../js/core/dosya-paylas.js';
 import { kilitAyarla, kilitVarMi, pinHatasi, pinDogruMu, cihazdanUnut } from '../../js/core/kilit.js';
 import { daysTogether, toDay } from '../../js/core/gunler.js';
 import { isNative, paylas } from '../../js/core/mobil.js';
@@ -26,7 +27,7 @@ import { tarihYazi } from '../gunler/mantik.js';
 import {
   SURUM, K_TEMA, TEMA_RENKLERI, TEMA_MODLARI, KISI_RENKLERI, K_ACIK_BOLUMLER, acikBolumler, acikGuncelle,
   bulusmaMetni,
-  bildirimGorunum, YEDEK_TURLERI, yedekVerisi, yedekSayisi, yedekDosyaAdi, yedektenBelgeler, parcala, yedekOzeti,
+  bildirimGorunum, YEDEK_TURLERI, yedekVerisi, yedekSayisi, yedekDosyaAdi, yedekSonucMesaji, yedektenBelgeler, parcala, yedekOzeti,
 } from './mantik.js';
 import { konumOku, durumEtiketi } from '../konum/mantik.js';
 
@@ -426,8 +427,14 @@ async function bildirimCiz() {
       await bildirimCiz();
       document.getElementById('ayar-bildirim-sw')?.focus({ preventScroll: true });
     });
+    // Ayar alıcınındır: gönderen, partnerin kisi.bildirimGizli alanına bakar (bildirim.js bildir).
+    const gizliSw = anahtar('ayar-bildirim-gizli-sw', bildirimGizliMi(profil.ben()), async (ac, b) => {
+      if (await yaz(profil.setBen({ bildirimGizli: ac }))) b.setAttribute('aria-checked', String(ac));
+    });
     bildirimKutu.replaceChildren(anahtarSatiri('Anlık bildirimler',
-      'Sevgilin yazınca, dokununca ya da anı ekleyince bu cihaza haber veririz.', sw));
+      'Sevgilin yazınca, dokununca ya da anı ekleyince bu cihaza haber veririz.', sw),
+    anahtarSatiri('Bildirimde mesajı gizle',
+      'Açıkken kilit ekranında mesajın kendisi görünmez, yalnız "Yeni mesaj" yazar.', gizliSw));
   } else if (g === 'engelli') {
     bildirimKutu.replaceChildren(
       bilgi(isNative()
@@ -620,14 +627,12 @@ async function yedekIndir() {
     }
     const simdi = new Date();
     const yedek = yedekVerisi({ sonuclar, hatalar, simdi });
-    const url = URL.createObjectURL(new Blob([JSON.stringify(yedek, null, 2)], { type: 'application/json' }));
-    const a = h('a', { href: url, download: yedekDosyaAdi(simdi), hidden: true });
-    document.body.append(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 30_000);
-    const n = yedekSayisi(yedek).toLocaleString('tr-TR');
-    toast(yedek.eksik ? `Yedek indirildi (${n} kayıt). Bazı bölümler alınamadı.` : `Yedek indirildi: ${n} kayıt.`);
+    const cikti = await dosyaPaylas({
+      metin: JSON.stringify(yedek, null, 2), ad: yedekDosyaAdi(simdi), tur: 'application/json',
+      dialogBaslik: 'Yedeği kaydet', webShare: false,
+    });
+    const mesaj = yedekSonucMesaji(cikti, { sayi: yedekSayisi(yedek).toLocaleString('tr-TR'), eksik: !!yedek.eksik });
+    if (mesaj) toast(mesaj, cikti === 'yok' || cikti === 'hata' ? { ms: 5000 } : undefined);
   } finally {
     yedekBtn.disabled = false;
     yedekBtn.removeAttribute('aria-busy');

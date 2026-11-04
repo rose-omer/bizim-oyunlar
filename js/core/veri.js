@@ -537,13 +537,14 @@ export async function openCollection(room, kind, { recent = 0 } = {}) {
 
   /** tam: 'since' yok sayılır, hepsi çekilir (geri yüklenen eski tarihli belgeler için). */
   async function refresh(tam = false) {
-    if (closed || durdu.has(roomId)) return;
+    if (closed || durdu.has(roomId)) return false;
     try {
       const docs = await listDocs(roomId, kind, { since: tam ? null : overlapSince(since) });
       since = maxUpdated(docs, since);
       ilkHata = null;
       if (mergeDocs(map, docs)) changed();
       else saveCache();
+      return true;
     } catch (e) {
       fail(e);
       throw e;
@@ -614,8 +615,8 @@ export async function openCollection(room, kind, { recent = 0 } = {}) {
       if (type === 'error' && ilkHata) { const e = ilkHata; queueMicrotask(() => fn(e)); }
       return () => listeners[type]?.delete(fn);
     },
-    /** Sunucudan eksikleri çeker ({ tam: true } hepsini). Hata fırlatmaz (error olayı gelir). */
-    refresh: (o) => refresh(!!o?.tam).catch(() => {}),
+    /** Sunucudan eksikleri çeker ({ tam: true } hepsini). Hata fırlatmaz (error olayı gelir). -> sunucudan okudu mu */
+    refresh: (o) => refresh(!!o?.tam).catch(() => false),
     loadOlder,
     hasOlder: () => older,
     close() {

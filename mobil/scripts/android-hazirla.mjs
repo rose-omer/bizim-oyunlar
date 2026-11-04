@@ -10,6 +10,7 @@
 //   7. FCM: bildirim varsayılanları (ikon, renk, kanal) manifeste; android/app/google-services.json varsa
 //      paket adını denetler. Dosya varsa Capacitor şablonu google-services Gradle eklentisini kendisi uygular
 //      (app/build.gradle sonu; classpath kök build.gradle'da). Dosyayı CI yazar (GOOGLE_SERVICES_JSON_B64).
+//   8. android:allowBackup="false": cihaz anahtarı (WebView localStorage) bulut yedeğine girmesin.
 import { readFileSync, writeFileSync, cpSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -54,6 +55,9 @@ export function manifestYamala(xml) {
   if (!out.includes('xmlns:tools=')) {
     out = out.replace(/<manifest\b/, `<manifest xmlns:tools="${TOOLS_NS}"`);
   }
+  out = out.replace(/<application\b[^>]*>/, (etiket) => (etiket.includes('android:allowBackup=')
+    ? etiket.replace(/android:allowBackup="[^"]*"/, 'android:allowBackup="false"')
+    : etiket.replace('<application', '<application android:allowBackup="false"')));
   const meta = FCM_META
     .filter(([ad]) => !out.includes(`android:name="${ad}"`))
     .map(([ad, deger]) => `        <meta-data android:name="${ad}" ${deger} />${nl}`);

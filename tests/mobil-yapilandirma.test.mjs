@@ -104,6 +104,22 @@ test('manifestYamala: tools ad alanı ve kesin alarm izni kaldırma; tekrar zara
   assert.equal(manifestYamala(bir), bir);
 });
 
+test('manifestYamala: android:allowBackup her durumda false; tekrar zararsız', () => {
+  const say = (xml) => xml.match(/android:allowBackup=/g)?.length || 0;
+  const yok = manifestYamala(MANIFEST); // şablonda alan yok: eklenir
+  assert.match(yok, /<application android:allowBackup="false" android:label=/);
+  assert.equal(manifestYamala(yok), yok);
+  const acik = manifestYamala(MANIFEST.replace('<application ', '<application android:allowBackup="true" '));
+  assert.match(acik, /android:allowBackup="false"/);
+  assert.equal(say(acik), 1);
+  assert.equal(manifestYamala(acik), acik);
+  const cokSatir = manifestYamala('<manifest xmlns:android="x">\n    <application\n        android:allowBackup="true"\n        android:label="a">\n    </application>\n</manifest>\n');
+  assert.match(cokSatir, /<application\n\s+android:allowBackup="false"\n\s+android:label="a">/);
+  const baska = manifestYamala('<manifest xmlns:android="x"><meta-data android:allowBackup="true"/><application android:label="a"></application></manifest>');
+  assert.match(baska, /<application android:allowBackup="false" android:label="a">/, 'yalnız <application> etiketi');
+  assert.match(baska, /<meta-data android:allowBackup="true"\/>/);
+});
+
 test('manifestYamala: WebView mikrofon ve konum izinleri birer kez', () => {
   // Capacitor 8 BridgeWebChromeClient bunları çalışma anında ister (getUserMedia ses → RECORD_AUDIO +
   // MODIFY_AUDIO_SETTINGS; navigator.geolocation → COARSE + FINE). Manifest'te yoksa istek hemen reddedilir.

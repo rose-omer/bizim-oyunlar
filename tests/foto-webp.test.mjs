@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fotoUzantisi, isAllowedPhotoUrl } from '../js/core/storage.js';
+import { yolGecerli } from '../supabase/functions/_shared/medya.js';
 import { WEBP_KALITE, webpUygunMu } from '../js/core/foto.js';
 import { MAX_BYTES } from '../games/yapboz/image.js';
 
@@ -37,12 +38,9 @@ test('schema.sql §3: kova türleri ve yükleme yolu storage.js ile uyumlu', () 
   for (const tur of ['image/jpeg', 'image/webp', 'image/png', 'audio/webm', 'audio/mp4']) {
     assert.ok(bolum.includes(`'${tur}'`), `${tur} kovada izinli olmalı`);
   }
-  const m = bolum.match(/name ~ '([^']+)'/);
-  assert.ok(m, 'yol düzeni bulunamadı');
-  const re = new RegExp(m[1]);
   const uuid = '0f8e2a1c-1b2d-4c3e-8f9a-0123456789ab';
-  for (const uz of ['jpg', 'webp', 'webm', 'm4a']) assert.ok(re.test(`abcdefghij/${uuid}.${uz}`), uz);
+  for (const uz of ['jpg', 'webp', 'webm', 'm4a']) assert.ok(yolGecerli(`abcdefghij/${uuid}.${uz}`), uz);
   for (const kotu of [`abcdefghij/${uuid}.png`, `abcdefghij/${uuid}.webm.exe`, `x/${uuid}.jpg`, `abcdefghij/${uuid}.jpgx`]) {
-    assert.equal(re.test(kotu), false, kotu);
+    assert.equal(yolGecerli(kotu), false, kotu);
   }
 });

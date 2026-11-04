@@ -5,7 +5,7 @@
 import { bootPage } from '../../js/core/sayfa.js';
 import { openCollection, listDocs, patchDoc, maxUpdated, overlapSince } from '../../js/core/veri.js';
 import { openProfil } from '../../js/core/profil.js';
-import { uploadPhoto, uploadAudio, isAllowedPhotoUrl, SES_MAX_BAYT } from '../../js/core/storage.js';
+import { uploadPhoto, uploadAudio, isAllowedPhotoUrl, medyaAdresi, medyaHazir, SES_MAX_BAYT } from '../../js/core/storage.js';
 import { fotoKucult } from '../../js/core/foto.js';
 import { readStore, writeStore } from '../../js/core/identity.js';
 import { bildir } from '../../js/core/bildirim.js';
@@ -160,7 +160,14 @@ const oynatici = tekOynatici({
 function sesKaynak(url) {
   if (sesHazir.has(url)) return sesHazir.get(url);
   if (!isAllowedPhotoUrl(url)) return null;
-  return url.startsWith('local:') ? fotoSrc(url) : url; // Supabase adresi eşzamanlı: iPhone'da dokunma anında çalar
+  return medyaHazir(url) || medyaAdresi(url); // hazır imza eşzamanlı: iPhone'da dokunma anında çalar (bkz. sesOnHazirlik)
+}
+/** Görünen sesli mesajların imzası önceden alınır: iPhone çalmayı yalnız dokunma anında başlatır. */
+function sesOnHazirlik(satirlar) {
+  for (const d of satirlar.slice(-30)) {
+    const url = d?.data?.ses?.url;
+    if (url && !sesHazir.has(url)) medyaAdresi(url);
+  }
 }
 async function sesOynat(id) {
   const s = col.get(id)?.data?.ses;
@@ -271,6 +278,7 @@ function ciz() {
     istenen.push(e.el);
   }
   for (const k of [...elemanlar.keys()]) if (!anahtarlar.has(k)) elemanlar.delete(k);
+  sesOnHazirlik(satirlar.filter((r) => r.doc).map((r) => r.doc));
   esitle(liste, istenen);
   if (calanId) {
     if (col.get(calanId)) sesBoya(sesKutusuBul(calanId), oynatici.durum()); // yeniden kurulan satır

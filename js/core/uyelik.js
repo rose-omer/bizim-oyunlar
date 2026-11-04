@@ -199,7 +199,7 @@ export function yerelVeriYetkisi(roomId) {
 
 /**
  * oda_katil → { durum, kanal, zorunlu, ilk }.
- * durum: 'onayli' | 'bekliyor' | 'reddedildi' | 'cakisma' | 'eski-sunucu' | 'cevrimdisi'.
+ * durum: 'onayli' | 'bekliyor' | 'reddedildi' | 'cakisma' | 'silindi' | 'eski-sunucu' | 'cevrimdisi'.
  * 'cevrimdisi': ağ hatası; önbellekteki son durum `onceki`, kanal da ondan.
  */
 export async function odaGiris(roomId, { davet = null, kurtarma = null } = {}) {
@@ -365,6 +365,23 @@ export async function davetOlustur(roomId, { kimlik = null } = {}) {
     console.warn('[uyelik] davet_olustur:', e?.message || e);
     return null;
   }
+}
+
+// ---------- Medya kullanımı ve odayı silme (yalnız sunucuda; yerel modda null) ----------
+
+const sunucudaMi = (roomId) => uyelikModu(roomId) === 'sunucu';
+
+/** { bayt, dosya, ses_bayt, sinir } | null. Hata fırlatır. */
+export const medyaKullanim = async (roomId) => (sunucudaMi(roomId) ? cagir(roomId, 'medya_kullanim') : null);
+/** { bekliyor, son, ben, tek } | null. tek: odada başka gerçek cihaz yok, isteyen kendisi onaylar. */
+export const odaSilDurum = async (roomId) => (sunucudaMi(roomId) ? cagir(roomId, 'oda_sil_durum') : null);
+export const odaSilIste = (roomId) => cagir(roomId, 'oda_sil_iste');
+export const odaSilVazgec = (roomId) => cagir(roomId, 'oda_sil_vazgec');
+/** Onaylanırsa oda sunucudan tamamen silinir; bu cihazın durumu 'silindi' olur. */
+export async function odaSilOnayla(roomId) {
+  const ok = await cagir(roomId, 'oda_sil_onayla');
+  if (ok === true) kaydet(roomId, { durum: 'silindi', kanal: null, zorunlu: null, ilk: false });
+  return ok === true;
 }
 
 /** Kurtarma kodu 'ABCD-EFGH-JKLM-NPQR'. Eskisinin yerine geçer. Hata fırlatır. */

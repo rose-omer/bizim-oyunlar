@@ -3,7 +3,7 @@
 // Yükleme storage.js'tedir (Supabase 'photos' kovası ya da yerel modda IndexedDB); yol uzantısı türe göre (.webp / .jpg).
 // Node'da içe aktarılabilir: tarayıcı nesnelerine yalnız fonksiyon içinde erişilir.
 import { normalizeImage, decodeErrorText, isHeic, PhotoError, MAX_BYTES } from '../../games/yapboz/image.js';
-import { uploadPhoto, loadPhoto, isAllowedPhotoUrl } from './storage.js';
+import { uploadPhoto, isAllowedPhotoUrl, medyaAdresi, medyaHazir, medyaUnut } from './storage.js';
 
 export const EN_FAZLA = 10;
 export const WEBP_KALITE = 0.82;
@@ -174,19 +174,8 @@ export async function fotoSecVeYukle(roomId, { coklu = false, enFazla = EN_FAZLA
 
 // ---------- Gösterim ----------
 
-const yerelOnbellek = new Map(); // 'local:<id>' → Promise<objectURL>
-
-/** Fotoğraf adresi → <img src> için adres. Yerel modda IndexedDB'den object URL. İzin dışı adres: null. */
-export async function fotoAdresi(url) {
-  if (!isAllowedPhotoUrl(url)) return null;
-  if (!url.startsWith('local:')) return url;
-  if (!yerelOnbellek.has(url)) {
-    const p = loadPhoto(url).then((blob) => URL.createObjectURL(blob));
-    p.catch(() => yerelOnbellek.delete(url));
-    yerelOnbellek.set(url, p);
-  }
-  return yerelOnbellek.get(url);
-}
+/** Fotoğraf başvurusu → <img src> için adres (imzalı; yerel modda object URL). İzin dışı: null. */
+export const fotoAdresi = medyaAdresi;
 
 let gozcu = null;
 function yerelGozcu() {
@@ -208,8 +197,8 @@ function yerelYukle(img) {
 }
 
 /**
- * Tembel yüklenen <img>. Supabase adresi doğrudan (loading=lazy); yerel modda görününce IndexedDB'den.
- * İzin verilmeyen adres gösterilmez (data-hata="1").
+ * Tembel yüklenen <img>: adres görününce istenir (imza ya da IndexedDB). Hazır imza varsa hemen konur.
+ * Adres açılmazsa (imza süresi doldu) bir kez yenilenir. İzin verilmeyen adres gösterilmez (data-hata="1").
  */
 export function fotoImg(url, { alt = '', className = '', eager = false } = {}) {
   const img = document.createElement('img');
@@ -217,16 +206,25 @@ export function fotoImg(url, { alt = '', className = '', eager = false } = {}) {
   img.decoding = 'async';
   img.loading = eager ? 'eager' : 'lazy';
   if (className) img.className = className;
-  img.addEventListener('error', () => { img.dataset.hata = '1'; });
+  img.addEventListener('error', () => {
+    if (img.dataset.foto && !img.dataset.yinelendi && !url.startsWith('local:')) {
+      img.dataset.yinelendi = '1';
+      medyaUnut(url);
+      yerelYukle(img);
+      return;
+    }
+    img.dataset.hata = '1';
+  });
   if (!isAllowedPhotoUrl(url)) {
     img.dataset.hata = '1';
     return img;
   }
-  if (!url.startsWith('local:')) {
-    img.src = url;
+  img.dataset.foto = url;
+  const hazir = medyaHazir(url);
+  if (hazir) {
+    img.src = hazir;
     return img;
   }
-  img.dataset.foto = url;
   const g = eager ? null : yerelGozcu();
   if (g) g.observe(img);
   else yerelYukle(img);

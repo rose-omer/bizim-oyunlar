@@ -209,23 +209,12 @@ export function partnerWhere(p, ns = pageNs()) {
   return { kind: 'on', text: 'çevrimiçi' };
 }
 
-// Fotoğraf: yalnız bizim kova (isAllowedPhotoUrl) doğrudan; 'local:' (yerel mod, IndexedDB) blob adresine çevrilir.
-// Başka adres (dış site, izleme pikseli) yüklenmez.
-const photoCache = new Map();
+// Fotoğraf: yalnız bizim kova (imzalı adres) ya da 'local:' (yerel mod). Başka adres (dış site, izleme pikseli) yüklenmez.
+// Önbellek storage.js'te (imza süresini bilir).
 /** -> Promise<string|null> (img src) */
 export function fotoSrc(url) {
   if (typeof url !== 'string' || !url) return Promise.resolve(null);
-  if (!photoCache.has(url)) {
-    const p = import('./storage.js')
-      .then((m) => {
-        if (!m.isAllowedPhotoUrl(url)) return null;
-        if (!url.startsWith('local:')) return url;
-        return m.loadPhoto(url).then((blob) => URL.createObjectURL(blob));
-      })
-      .catch(() => null);
-    photoCache.set(url, p);
-  }
-  return photoCache.get(url);
+  return import('./storage.js').then((m) => m.medyaAdresi(url)).catch(() => null);
 }
 
 /**

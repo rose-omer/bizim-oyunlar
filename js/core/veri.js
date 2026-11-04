@@ -229,6 +229,14 @@ const localBackend = {
       .sort((x, y) => timeOf(y.created_at) - timeOf(x.created_at))
       .slice(0, limit);
   },
+  async kaliciSil(roomId, kind, id) {
+    yerelYetki(roomId);
+    const all = localRead(roomId, kind);
+    if (!all[id]?.deleted || !Object.keys(all[id].data || {}).length) return false;
+    all[id] = { ...all[id], data: {}, updated_at: localNow() };
+    writeStore('local', localKey(roomId, kind), JSON.stringify(all));
+    return true;
+  },
   async iceAktar(roomId, belgeler) {
     yerelYetki(roomId);
     const turler = new Map();
@@ -300,6 +308,13 @@ const supabaseBackend = {
     if (error) throw rpcError(error, roomId, !!k.p_cihaz);
     return data || [];
   },
+  async kaliciSil(roomId, kind, id) {
+    const client = await getSupabase();
+    const k = kimlik(roomId);
+    const { data, error } = await client.rpc('doc_kalici_sil', { p_room: roomId, p_kind: kind, p_id: id, ...k });
+    if (error) throw rpcError(error, roomId, !!k.p_cihaz);
+    return data === true;
+  },
   async iceAktar(roomId, belgeler) {
     const client = await getSupabase();
     const k = kimlik(roomId);
@@ -340,6 +355,12 @@ export async function patchDoc(roomId, kind, id, patch, author = null) {
 export async function removeDoc(roomId, kind, id, author = null) {
   checkArgs(roomId, kind, id);
   return normalizeDoc(await backend().put(roomId, kind, id, {}, author, true));
+}
+
+/** Çöpteki belgeyi geri dönüşsüz siler: veri boşalır, dosyaları sunucudan da silinir. -> iş yapıldı mı */
+export async function kaliciSil(roomId, kind, id) {
+  checkArgs(roomId, kind, id);
+  return backend().kaliciSil(roomId, kind, id);
 }
 
 /** 'since'ten sonra değişen belgeler (silinenler dahil), eskiden yeniye. Hepsini sayfalayarak getirir. */

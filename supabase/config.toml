@@ -7,3 +7,6 @@ verify_jwt = false
 
 [functions.hatirlat]
 verify_jwt = false
+
+[functions.medya]
+verify_jwt = false

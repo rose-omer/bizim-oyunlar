@@ -43,6 +43,12 @@ const ICERIK = {
     eylemler: ['yeniden', 'cik'],
     yokla: 0,
   },
+  silindi: {
+    baslik: 'Odanız silindi',
+    metin: 'Bu oda ve içindeki her şey kalıcı olarak silindi. Bu cihazda kalan kopya da "Odadan çık" ile silinir.',
+    eylemler: ['cik'],
+    yokla: 0,
+  },
   cevrimdisi: {
     baslik: 'Bağlanamadık',
     metin: 'Odanıza şu an ulaşamıyoruz. İnternet bağlantını kontrol et; bağlanınca kendiliğinden açılır.',
@@ -183,6 +189,7 @@ const SIMGE = {
   // iki cihaz ve aralarında kalp: onay bekleyen bağ
   bekliyor: `<svg viewBox="0 0 64 40" ${STROKE}><rect x="3" y="5" width="17" height="30" rx="4"/><path d="M9.5 30.5h4"/><rect x="44" y="5" width="17" height="30" rx="4"/><path d="M50.5 30.5h4"/><path class="kapi-kalp" d="M32 26.5c-.3 0-.5-.1-.7-.3-2.9-2.4-5.1-4.3-5.1-6.8 0-1.7 1.3-3.1 3-3.1 1.1 0 2.1.5 2.8 1.4.7-.9 1.7-1.4 2.8-1.4 1.7 0 3 1.4 3 3.1 0 2.5-2.2 4.4-5.1 6.8-.2.2-.4.3-.7.3z"/><path d="M23.5 20h1.5M39 20h1.5" stroke-dasharray="0.1 3.4"/></svg>`,
   reddedildi: `<svg viewBox="0 0 24 24" ${STROKE}><circle cx="12" cy="12" r="8.5"/><path d="m9 9 6 6m0-6-6 6"/></svg>`,
+  silindi: `<svg viewBox="0 0 24 24" ${STROKE}><circle cx="12" cy="12" r="8.5"/><path d="m9 9 6 6m0-6-6 6"/></svg>`,
   cakisma: `<svg viewBox="0 0 24 24" ${STROKE}><circle cx="8" cy="15" r="3.6"/><path d="m10.6 12.4 7.4-7.4M15.5 7.5l2.2 2.2M13.4 9.6l1.6 1.6"/></svg>`,
   yok: `<svg viewBox="0 0 24 24" ${STROKE}><path d="M14 4.5h3.5A1.5 1.5 0 0 1 19 6v12a1.5 1.5 0 0 1-1.5 1.5H14"/><path d="M10 8 6 12l4 4M6 12h9.5"/></svg>`,
   cevrimdisi: `<svg viewBox="0 0 24 24" ${STROKE}><path d="M7.5 18.5h9.2a3.8 3.8 0 0 0 .6-7.5 5.5 5.5 0 0 0-9.4-2.7"/><path d="M5.2 10.3A4.2 4.2 0 0 0 7.5 18.5M4 4l16 16"/></svg>`,

@@ -82,7 +82,7 @@ async function kucult(blob, url, secenek) {
     w.postMessage({ no, blob, kisa: secenek.kisa, uzun: secenek.uzun });
   });
   if (r.blob) return URL.createObjectURL(r.blob);
-  if (r.ayni) return url.startsWith('local:') ? URL.createObjectURL(blob) : url;
+  if (r.ayni) return URL.createObjectURL(blob); // indirilen dosya elde: imzalı adres süresi dolabilir
   return null;
 }
 

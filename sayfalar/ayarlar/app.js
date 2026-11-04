@@ -14,7 +14,7 @@ import {
 import {
   cihazlar, cihazOnayla, cihazReddet, cihazCikar, kurtarmaOlustur, odaGiris, uyelikModu, tasimaLinki, davetOlustur,
 } from '../../js/core/uyelik.js';
-import { uploadPhoto, loadPhoto, isAllowedPhotoUrl } from '../../js/core/storage.js';
+import { uploadPhoto, medyaAdresi } from '../../js/core/storage.js';
 import { fotoKirp } from '../../js/core/kirp.js';
 import { isMuted, setMuted, sfx } from '../../js/core/sound.js';
 import { bildirimDestegi, bildirimDurumu, bildirimAc, bildirimKapat, bildirimGizliMi } from '../../js/core/bildirim.js';
@@ -174,20 +174,10 @@ function renkGrubu(id, secenekler, onSec) {
 }
 
 // ---------- Fotoğraf ----------
-const yerelFoto = new Map();
-function fotoAdresi(url) {
-  if (!url) return Promise.resolve(null);
-  if (url.startsWith('local:')) {
-    if (!yerelFoto.has(url)) yerelFoto.set(url, loadPhoto(url).then((b) => URL.createObjectURL(b)).catch(() => null));
-    return yerelFoto.get(url);
-  }
-  return Promise.resolve(isAllowedPhotoUrl(url) ? url : null);
-}
-
 /** img'ye fotoğrafı koyar; yoksa gizler. -> fotoğraf var mı */
 async function fotoKoy(img, url) {
   img.dataset.url = url || '';
-  const src = await fotoAdresi(url);
+  const src = await medyaAdresi(url);
   if (img.dataset.url !== (url || '')) return; // bu arada değişti
   if (src) {
     if (img.getAttribute('src') !== src) img.src = src;

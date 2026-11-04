@@ -69,7 +69,7 @@ export function oturumGecerli(oturum, simdi, sure = ARKA_PLAN_MS) {
 }
 
 // Odaya bağlı ama adında oda kodu olmayan anahtarlar: oda kaydı, bildirim tazeleme işareti (session).
-const ODA_GENEL = new Set(['bizim.room', 'bizim.bildirim.tazelendi']);
+const ODA_GENEL = new Set(['bizim.room', 'bizim.bildirim.tazelendi', 'bizim.imza']);
 
 /**
  * "Bu cihazdan odayı unut" (localStorage ve sessionStorage için ayrı ayrı çağrılır):

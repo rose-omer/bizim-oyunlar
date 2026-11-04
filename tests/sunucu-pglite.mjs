@@ -25,8 +25,11 @@ export const ab = (n, host = 'fcm.googleapis.com/fcm/send') => ({
   keys: { p256dh: 'B' + 'x'.repeat(86), auth: 'y'.repeat(22) },
 });
 
-/** once: şemadan önce çalışacak SQL (ör. canlıdaki eski şema ya da eski fonksiyon imzaları). */
-export async function kur({ once = '' } = {}) {
+/**
+ * once: şemadan önce çalışacak SQL (ör. canlıdaki eski şema ya da eski fonksiyon imzaları).
+ * gecis: ODA ve ODA2 için koruması başlamamış oda satırı açar (kimliksiz RPC'leri sınayan testler).
+ */
+export async function kur({ once = '', gecis = false } = {}) {
   const { PGlite } = await import(pathToFileURL(PGLITE).href);
   const db = new PGlite();
   // Supabase gibi: roller ve public şemada varsayılan yetkiler (anon'a da execute/tablo yetkisi verir).
@@ -57,17 +60,24 @@ export async function kur({ once = '' } = {}) {
     create schema storage;
     create table storage.buckets (id text primary key, name text, public boolean, file_size_limit bigint,
       allowed_mime_types text[]);
-    create table storage.objects (id serial primary key, bucket_id text, name text);
+    create table storage.objects (id serial primary key, bucket_id text, name text, metadata jsonb);
     alter table storage.objects enable row level security;
   `);
   if (once) await db.exec(pgliteIcin(once));
   // İki kez: ilk kurulum ve tekrar çalıştırma (idempotent) aynı sonucu vermeli.
   await db.exec(SEMA);
   await db.exec(SEMA);
+  if (gecis) {
+    await db.query(`insert into public.oda (room, kanal, zorunlu) values ($1, 'k1', now() + interval '3 days'), ($2, 'k2', now() + interval '3 days'), ('yyyyyyyy22', 'k3', now() + interval '3 days')`, [ODA, ODA2]);
+  }
   const q = async (s, p) => (await db.query(s, p)).rows;
+  /** Koruması başlamamış oda satırı (oda_katil'in açtığı geçiş odası gibi). */
+  const gecisOda = (oda) => db.query(`insert into public.oda (room, kanal, zorunlu) values ($1, 'k', now() + interval '3 days')`, [oda]);
+  /** Oda satırından önce yazılmış belge (eski oda). */
+  const eskiBelge = (oda, kind, id, author = null, data = '{}') => db.query(`insert into public.room_doc (room, kind, id, data, author) values ($1, $2, $3, $4::jsonb, $5)`, [oda, kind, id, data, author]);
   const hata = async (s, p) => {
     try { await db.query(s, p); } catch (e) { return e; }
     assert.fail(`hata bekleniyordu: ${s}`);
   };
-  return { db, q, hata };
+  return { db, q, hata, gecisOda, eskiBelge };
 }

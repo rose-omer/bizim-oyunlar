@@ -355,13 +355,13 @@ test('kişiye bağlı davet: bağlı davet ve kurtarma kodu birlikte gelirse dav
 });
 
 test('eski oda geçişi: olusturma öncesi kisi onaylı (yalnız geçişte); yazarlık sayılmaz; sonradan eklenen bekler; 3 gün kimliksiz erişim, kanal = oda kodu', ATLA, async () => {
-  const { q, hata } = await kur();
+  const { q, hata, eskiBelge } = await kur();
   const u = uyelik(q);
   const put = (oda, kind, id, author) =>
     q('select * from public.doc_put($1, $2, $3, $4::jsonb, $5)', [oda, kind, id, '{"x":1}', author]);
-  await put(ODA, 'kisi', 'omer', 'omer');
-  await put(ODA, 'kisi', 'gec', 'gec');
-  await put(ODA, 'mesaj', 'm1', 'gul');
+  await eskiBelge(ODA, 'kisi', 'omer', 'omer');
+  await eskiBelge(ODA, 'kisi', 'gec', 'gec');
+  await eskiBelge(ODA, 'mesaj', 'm1', 'gul');
   await q(`update public.room_doc set created_at = now() - interval '1 day'`); // aynı milisaniye olmasın
 
   // Veri olan odada ilk gelen kurucu olmaz.
@@ -398,7 +398,7 @@ test('eski oda geçişi: olusturma öncesi kisi onaylı (yalnız geçişte); yaz
   assert.equal((await u.katil(ODA, cihaz('gec'))).durum, 'bekliyor');
 
   // Yalnız oyun kaydı olan v1 odası da eski sayılır; belge olmadığından ilk gelen kurucudur.
-  await q('select public.log_game($1, $2, $3::jsonb)', [ODA2, 'dama', '{}']);
+  await q(`insert into public.game_log (room, game) values ($1, 'dama')`, [ODA2]);
   const r3 = await u.katil(ODA2, cihaz('ilk'));
   assert.deepEqual([r3.durum, r3.ilk, r3.kanal], ['onayli', true, ODA2]);
 });
@@ -481,7 +481,7 @@ test('cihaz_onayla / cihaz_reddet / cihaz_listele: yalnız onaylı cihaz; durum 
 });
 
 test('cihaz_cikar: satır ve push aboneliği silinir, davetleri geçersiz, kanal yenilenir, koruma hemen; kendini çıkarabilir', ATLA, async () => {
-  const { q, hata } = await kur();
+  const { q, hata, gecisOda } = await kur();
   const u = uyelik(q);
   const omer = cihaz('omer');
   const gul = cihaz('gul');
@@ -490,6 +490,7 @@ test('cihaz_cikar: satır ve push aboneliği silinir, davetleri geçersiz, kanal
   const kaydet = (c, n) => q('select public.push_kaydet($1, $2, $3::jsonb, null, $4)', [ODA, c.id, JSON.stringify(ab(n)), c.k]);
   await kaydet(omer, 1);
   await kaydet(gul, 2);
+  await gecisOda(ODA2);
   await q('select public.push_kaydet($1, $2, $3::jsonb)', [ODA2, 'gul', JSON.stringify(ab(3))]); // başka oda
   const gulDaveti = await u.davet(ODA, gul);
   await q(`update public.oda set zorunlu = now() + interval '3 days'`); // geçişteki oda gibi
@@ -520,10 +521,10 @@ test('cihaz_cikar: satır ve push aboneliği silinir, davetleri geçersiz, kanal
 });
 
 test('çıkarılan cihaz geçiş yoluyla dönemez: eski kişi satırı ya da yedekle eklenen geçmiş tarihli kişi satırı', ATLA, async () => {
-  const { q } = await kur();
+  const { q, eskiBelge } = await kur();
   const u = uyelik(q);
   // Eski oda: L ve M'nin kişi satırları oda satırından önce; ikisi de geçişle onaylı.
-  for (const id of ['L', 'M']) await q(`select * from public.doc_put($1, 'kisi', $2, '{}'::jsonb, $2)`, [ODA, id]);
+  for (const id of ['L', 'M']) await eskiBelge(ODA, 'kisi', id, id);
   await q(`update public.room_doc set created_at = now() - interval '1 day'`);
   const L = cihaz('L');
   const M = cihaz('M');
@@ -543,8 +544,8 @@ test('çıkarılan cihaz geçiş yoluyla dönemez: eski kişi satırı ya da yed
   assert.equal((await u.katil(ODA2, cihaz('evil'))).durum, 'bekliyor');
 });
 
-test('oda_yetki: koruma öncesi kimliksiz geçer, sonrası 42501; geçersiz kimlik her zaman 42501; onaylı geçer', ATLA, async () => {
-  const { q, hata } = await kur();
+test('oda_yetki: satırsız oda ve koruma sonrası kimliksiz 42501; geçişte kimliksiz geçer; geçersiz kimlik her zaman 42501; onaylı geçer', ATLA, async () => {
+  const { q, hata, eskiBelge, gecisOda } = await kur();
   const u = uyelik(q);
   // push_kaydet'te cihaz = p_client; kimlik anahtarla başlar (anahtar yoksa kimliksiz).
   const cagrilar = {
@@ -567,13 +568,13 @@ test('oda_yetki: koruma öncesi kimliksiz geçer, sonrası 42501; geçersiz kiml
     }
   };
 
-  // Oda satırı yok: kimliksiz geçer, geçersiz kimlik yine reddedilir.
-  await gec(KIMLIKSIZ);
+  // Oda satırı yok: kimliksiz de geçersiz kimlik de reddedilir.
+  await red(KIMLIKSIZ, 'satırsız oda');
   const omer = cihaz('omer');
   await red(omer, 'kayıtlı olmayan cihaz');
 
   // Eski oda: omer geçişle onaylı, bek bekliyor; 3 gün kimliksiz erişim.
-  await q(`select * from public.doc_put($1, 'kisi', 'omer', '{}'::jsonb, 'omer')`, [ODA]);
+  await eskiBelge(ODA, 'kisi', 'omer', 'omer');
   await q(`update public.room_doc set created_at = now() - interval '1 day'`);
   assert.equal((await u.katil(ODA, omer)).durum, 'onayli');
   const bek = cihaz('bek');
@@ -592,6 +593,7 @@ test('oda_yetki: koruma öncesi kimliksiz geçer, sonrası 42501; geçersiz kiml
   await q(`update public.oda set zorunlu = now() - interval '1 second'`);
   await red(KIMLIKSIZ, 'koruma sonrası kimliksiz');
   await gec(omer);
+  await gecisOda(ODA2);
   await q('select * from public.doc_list($1, $2)', [ODA2, 'liste']);
 
   // son_gorulme en çok 10 dakikada bir yazılır.
@@ -760,17 +762,18 @@ test('oda_katil hız sınırı: oda başına saatte 30 deneme, genel saatte 1000
 });
 
 test('push: koruma altındaki odada yalnız onaylı cihazlar; push_hedef anahtarla; push_abonelikler ve hatirlat_belgeler süzülür', ATLA, async () => {
-  const { q, hata } = await kur();
+  const { db, q, hata, gecisOda } = await kur();
   const u = uyelik(q);
   const omer = cihaz('omer');
   const gul = cihaz('gul');
   const bek = cihaz('bek');
-  // ODA2: oda satırı yok (eski istemci), kimliksiz abonelik.
+  // ODA2: geçişteki oda (eski istemci), kimliksiz abonelik.
+  await gecisOda(ODA2);
   await q('select public.push_kaydet($1, $2, $3::jsonb)', [ODA2, 'eski', JSON.stringify(ab(9))]);
   await q('select * from public.doc_put($1, $2, $3, $4::jsonb, null)', [ODA2, 'gun', 'g', '{"baslik":"x"}']);
 
   // ODA: oda satırı yokken eski bir cihaz abone olmuş; sonra yeni istemciler katılır (yeni oda: koruma hemen).
-  await q('select public.push_kaydet($1, $2, $3::jsonb)', [ODA, 'eski-tel', JSON.stringify(ab(1))]);
+  await db.query(`insert into public.push_sub (endpoint, room, client, p256dh, auth) values ($1, $2, 'eski-tel', 'p', 'a')`, [ab(1).endpoint, ODA]);
   await u.katil(ODA, omer);
   await u.katil(ODA, gul, { davet: await u.davet(ODA, omer) });
   await u.katil(ODA, bek);
@@ -832,10 +835,10 @@ const ESKI_IMZALAR = `
 `;
 
 test('push: geçişte kimliksiz, başka cihaz adına kayıt koruma başlayınca sayılmaz; anahtarla kayıt sayılır', ATLA, async () => {
-  const { q } = await kur();
+  const { q, eskiBelge } = await kur();
   const u = uyelik(q);
   // Eski oda: L geçişle onaylı, M davetle.
-  await q(`select * from public.doc_put($1, 'kisi', 'L', '{}'::jsonb, 'L')`, [ODA]);
+  await eskiBelge(ODA, 'kisi', 'L', 'L');
   await q(`update public.room_doc set created_at = now() - interval '1 day'`);
   const L = cihaz('L');
   const M = cihaz('M');
@@ -880,17 +883,18 @@ test('oda_yetki: cihaz satırını paylaşımlı kilitler (çıkarma, süren ist
 const tk = (n) => `cTk${n}_Xy-9:APA91b${'Q'.repeat(140)}${n}`;
 
 test('fcm: koruma altındaki odada yalnız onaylı cihazın anahtarla kaydı; fcm_hedef gönderen kimliğini doğrular; fcm_abonelikler ve hatirlat_belgeler süzülür', ATLA, async () => {
-  const { q, hata } = await kur();
+  const { db, q, hata, gecisOda } = await kur();
   const u = uyelik(q);
   const omer = cihaz('omer');
   const gul = cihaz('gul');
   const bek = cihaz('bek');
-  // ODA2: oda satırı yok (eski istemci), kimliksiz belirteç.
+  // ODA2: geçişteki oda (eski istemci), kimliksiz belirteç.
+  await gecisOda(ODA2);
   await q('select public.fcm_kaydet($1, $2, $3)', [ODA2, 'eski', tk(9)]);
   await q('select * from public.doc_put($1, $2, $3, $4::jsonb, null)', [ODA2, 'gun', 'g', '{"baslik":"x"}']);
 
   // ODA: oda satırı yokken eski bir cihaz kaydolmuş; sonra yeni istemciler katılır (yeni oda: koruma hemen).
-  await q('select public.fcm_kaydet($1, $2, $3)', [ODA, 'eski-tel', tk(1)]);
+  await db.query(`insert into public.fcm_sub (token, room, client) values ($1, $2, 'eski-tel')`, [tk(1), ODA]);
   await u.katil(ODA, omer);
   await u.katil(ODA, gul, { davet: await u.davet(ODA, omer) });
   await u.katil(ODA, bek);
@@ -926,7 +930,7 @@ test('fcm: koruma altındaki odada yalnız onaylı cihazın anahtarla kaydı; fc
 });
 
 test('fcm: çıkarılan cihazın ve kurtarma koduyla çakışması çözülen eski anahtarın belirteçleri silinir', ATLA, async () => {
-  const { q, hata } = await kur();
+  const { q, hata, gecisOda } = await kur();
   const u = uyelik(q);
   const omer = cihaz('omer');
   const gul = cihaz('gul');
@@ -938,6 +942,7 @@ test('fcm: çıkarılan cihazın ve kurtarma koduyla çakışması çözülen es
   await kaydet(omer, 1);
   await kaydet(gul, 2);
   await kaydet(ali, 3);
+  await gecisOda(ODA2);
   await q('select public.fcm_kaydet($1, $2, $3)', [ODA2, 'gul', tk(4)]); // başka oda, aynı cihaz adı
   const belirtecler = async () => (await q('select room, client from public.fcm_sub order by room, client')).map((x) => `${x.room}/${x.client}`);
 
@@ -968,7 +973,7 @@ test('şema: canlıdaki ea70312 şemasının (verisiyle) üstüne iki kez kurulu
     select * from public.doc_put('${ODA}', 'kisi', 'eski-tel', '{}'::jsonb, 'eski-tel');
     select public.log_game('${ODA}', 'dama', '{}'::jsonb);
   `;
-  const { q } = await kur({ once: CANLI + eskiVeri });
+  const { q, hata } = await kur({ once: CANLI + eskiVeri });
   const cift = await q(`select p.proname, count(*)::int as n from pg_catalog.pg_proc as p
     join pg_catalog.pg_namespace as n on n.oid = p.pronamespace
     where n.nspname = 'public' group by p.proname having count(*) > 1`);
@@ -980,22 +985,24 @@ test('şema: canlıdaki ea70312 şemasının (verisiyle) üstüne iki kez kurulu
   assert.deepEqual(imzalar, ['fcm_hedef(text,text,text)', 'fcm_kaydet(text,text,text,text)', 'hatirlat_anahtar()',
     'push_hedef(text,text,text)', 'push_kaydet(text,text,jsonb,text,text)']);
 
-  // Eski kayıtlar kalır; oda satırı yokken kimliksiz istemci eskisi gibi çalışır.
+  // Eski kayıtlar kalır; oda satırı yokken kimliksiz istemci reddedilir (önce oda_katil).
   assert.deepEqual((await q('select client, dogrulandi from public.push_sub')).map((x) => [x.client, x.dogrulandi]), [['eski-tel', false]]);
-  assert.equal((await q('select * from public.doc_list($1, $2)', [ODA, 'kisi'])).length, 1);
-  assert.equal((await q(`select endpoint from public.push_hedef($1, 'baska')`, [ODA])).length, 1);
+  assert.equal((await hata('select * from public.doc_list($1, $2)', [ODA, 'kisi'])).code, '42501');
   // Eski cihaz yeni istemciyle girince geçiş yoluyla onaylanır; oda 3 gün korumasız kalır.
   const u = uyelik(q);
   const eski = cihaz('eski-tel');
   assert.equal((await u.katil(ODA, eski)).durum, 'onayli');
   const oda = await u.oda(ODA);
   assert.ok(Math.abs((oda.zorunlu - oda.olusturma) - 3 * 86_400_000) < 1000, 'eski oda: 3 gün geçiş');
+  assert.equal((await q('select * from public.doc_list($1, $2)', [ODA, 'kisi'])).length, 1, 'geçişte kimliksiz geçer');
+  assert.equal((await q(`select endpoint from public.push_hedef($1, 'baska')`, [ODA])).length, 1);
   await q('select public.fcm_kaydet($1, $2, $3, $4)', [ODA, eski.id, tk(1), eski.k]);
   assert.deepEqual((await q(`select token from public.fcm_hedef($1, 'baska')`, [ODA])).map((x) => x.token), [tk(1)]);
 });
 
 test('şema: eski şemanın üstüne kurulur; eski imzalar kalmaz; yetki fonksiyonları volatile ve tanımlayıcı yetkili; eski adlı argümanlar; anon yeni RPC\'leri çağırır', ATLA, async () => {
-  const { db, q } = await kur({ once: ESKI_IMZALAR });
+  const { db, q, gecisOda } = await kur({ once: ESKI_IMZALAR });
+  await gecisOda(ODA);
   const dil = await q(`select p.proname as ad, l.lanname as dil from pg_catalog.pg_proc as p
     join pg_catalog.pg_language as l on l.oid = p.prolang where p.proname in ('push_abonelikler', 'hatirlat_belgeler')`);
   assert.deepEqual(dil.map((x) => x.dil), ['plpgsql', 'plpgsql']);

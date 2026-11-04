@@ -7,15 +7,17 @@
 -- İçerik:
 --   1. game_log tablosu (RLS açık, politika yok: doğrudan erişim kapalı)
 --   2. RPC: log_game, room_stats, ping (security definer; anon çağırabilir)
---   3. Depolama: herkese açık 'photos' kovası; anon yalnız yükleyebilir (listeleme yok)
+--   3. Depolama: 'photos' kovası (yeni kurulum özel; var olanın public değeri değişmez, bkz. supabase/gecis/)
 --   4. Çift verisi: room_doc tablosu + RPC doc_put, doc_patch, doc_list, doc_page (js/core/veri.js)
 --   5. Anlık bildirim: push_sub + RPC push_kaydet, push_sil (Edge Function'lar için sunucu RPC'leri)
 --   6. Zamanlanmış hatırlatmalar: pg_cron + pg_net → functions/hatirlat
 --   7. Cihaz üyeliği ve yetki: oda, oda_cihaz, oda_davet + RPC oda_katil, oda_durum, cihaz_*, davet_olustur,
 --      kurtarma_olustur, doc_ice_aktar. 2., 4., 5. ve 8. bölümdeki RPC'ler yetkiyi oda_yetki ile denetler.
 --   8. Anlık bildirim (FCM, Android uygulaması): fcm_sub + RPC fcm_kaydet, fcm_sil (Edge Function'lar için sunucu RPC'leri)
+--   9. Medya: yetki, sınır, kullanım, kalıcı silme kuyruğu, çöp temizliği, odayı tamamen silme, adres taşıma
 --
 -- Canlıya geçiş sırası: (1) bu dosya, (2) bildir Edge Function'ı yeniden yüklenir, (3) istemci yayınlanır.
+-- Medya geçişi ve temizlik zamanlaması: supabase/gecis/ ve kişisel geçiş planı (bu dosya onları çalıştırmaz).
 
 -- ---------------------------------------------------------------------------
 -- 1. Oyun kaydı
@@ -110,22 +112,16 @@ grant execute on function public.ping() to anon, authenticated;
 -- ---------------------------------------------------------------------------
 -- 3. Fotoğraf kovası (fotoğraf + sesli mesaj)
 -- ---------------------------------------------------------------------------
--- Fotoğraf: JPEG ya da WebP. Sesli mesaj: audio/webm (Chrome/Android), audio/mp4 (iPhone Safari); en çok 2 MB (istemci denetler).
+-- Fotoğraf: JPEG ya da WebP. Sesli mesaj: audio/webm (Chrome/Android), audio/mp4 (iPhone Safari); ses 2 MB sınırı Edge Function
+-- 'medya' ve medya_yukleme_izni (9. bölüm) denetler. Yol: `<oda>/<uuid>.jpg|webp|webm|m4a`.
+-- Yeni kurulum özeldir: okuma imzalı adresle, yükleme 'medya' ile; anon'un kovada hiçbir yetkisi yok.
+-- Var olan kovanın `public` değeri ve eski "photos_insert_anon" politikası burada DEĞİŞTİRİLMEZ: bu dosya canlıda
+-- tekrar çalıştırılınca kova kapanmaz. Kapatma ayrı onaylı adımdır: supabase/gecis/kova-kapat.sql (geri: kova-ac.sql).
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-values ('photos', 'photos', true, 5242880, array['image/jpeg', 'image/webp', 'image/png', 'audio/webm', 'audio/mp4'])
+values ('photos', 'photos', false, 5242880, array['image/jpeg', 'image/webp', 'image/png', 'audio/webm', 'audio/mp4'])
 on conflict (id) do update
-  set public = excluded.public,
-      file_size_limit = excluded.file_size_limit,
+  set file_size_limit = excluded.file_size_limit,
       allowed_mime_types = excluded.allowed_mime_types;
-
--- Yalnız yükleme. SELECT politikası yok: herkese açık URL çalışır, listeleme çalışmaz.
--- Yol js/core/storage.js uploadPhoto / uploadAudio ile aynı: `<oda>/<uuid>.jpg|webp|webm|m4a` (odasız yükleme yok).
-drop policy if exists "photos_insert_anon" on storage.objects;
-create policy "photos_insert_anon"
-  on storage.objects
-  for insert
-  to anon, authenticated
-  with check (bucket_id = 'photos' and name ~ '^[a-z2-9]{10}/[0-9a-f-]{36}\.(jpg|webp|webm|m4a)$');
 
 -- ---------------------------------------------------------------------------
 -- 4. Çift verisi (js/core/veri.js): oda başına belgeler
@@ -848,6 +844,19 @@ create table if not exists public.oda (
 alter table public.oda enable row level security;
 revoke all on table public.oda from anon, authenticated;
 
+-- "Odayı tamamen sil" isteği (9. bölüm): isteyen cihaz ve son geçerlilik.
+alter table public.oda add column if not exists silme_isteyen text;
+alter table public.oda add column if not exists silme_son timestamptz;
+
+-- Tamamen silinen oda: kod bir daha açılmaz, cihazlara 'silindi' denir. Kişisel veri yok.
+create table if not exists public.oda_silindi (
+  room text primary key,
+  silinme timestamptz not null default now()
+);
+
+alter table public.oda_silindi enable row level security;
+revoke all on table public.oda_silindi from anon, authenticated;
+
 create table if not exists public.oda_cihaz (
   room text not null,
   cihaz text not null,
@@ -862,6 +871,9 @@ create table if not exists public.oda_cihaz (
 
 alter table public.oda_cihaz enable row level security;
 revoke all on table public.oda_cihaz from anon, authenticated;
+
+-- Cihazın imzalı okuma yolunu son kullandığı an: kova kapatılmadan önce eski cihaz kaldı mı buradan görülür.
+alter table public.oda_cihaz add column if not exists medya_gorulme timestamptz;
 
 -- Davet: yalnız kodun özeti saklanır. 7 gün geçerli, tek kullanımlık.
 create table if not exists public.oda_davet (
@@ -975,8 +987,10 @@ as $$
                     where c.room = p_room and c.cihaz = p_client and c.durum = 'onayli'));
 $$;
 
--- Var olan RPC'lerin yetkisi (2., 4., 5. bölüm). Kimliksiz (ikisi null): oda satırı yoksa ya da koruma
--- başlamadıysa geçer. Kimlikli: biçim doğru, cihaz onaylı ve anahtar özeti eşit olmalı (koruma öncesinde de).
+-- Var olan RPC'lerin yetkisi (2., 4., 5. bölüm). Kimliksiz (ikisi null): yalnız oda satırı olan ve koruması
+-- başlamamış odada geçer. Satırı olmayan oda kimliksiz yanıt vermez: oda satırı ilk girişte oda_katil ile açılır
+-- ve oda_katil bu denetimden geçmez. Kimlikli: biçim doğru, cihaz onaylı ve anahtar özeti eşit olmalı (koruma öncesinde de).
+-- Bozuk oda kodu: '<p_fn>: gecersiz oda' (22023).
 -- Geçerse son_gorulme en çok 10 dakikada bir yazılır. Değilse '<p_fn>: yetki yok' (42501).
 -- Cihaz satırı 'for key share' ile kilitlenir: cihaz_cikar (delete) süren isteğin bitmesini bekler; böylece
 -- çıkarılan cihazın o an yazdığı davet ya da belge çıkarmadan sonra kalmaz. son_gorulme güncellemesiyle çakışmaz.
@@ -992,9 +1006,12 @@ declare
   v_durum text;
   v_son timestamptz;
 begin
+  if p_room is null or p_room !~ '^[a-z2-9]{10}$' then
+    raise exception '%: gecersiz oda', p_fn using errcode = '22023';
+  end if;
   if p_cihaz is null and p_anahtar is null then
     select o.zorunlu into v_zorunlu from public.oda as o where o.room = p_room;
-    if v_zorunlu is null or pg_catalog.now() < v_zorunlu then
+    if v_zorunlu is not null and pg_catalog.now() < v_zorunlu then
       return;
     end if;
   elsif p_cihaz ~ '^[A-Za-z0-9_-]{1,64}$' and p_anahtar ~ '^[A-Za-z0-9_-]{43}$' then
@@ -1086,6 +1103,11 @@ begin
     raise exception 'oda_katil: gecersiz kod' using errcode = '22023';
   end if;
   v_ozet := public.oda_ozet(p_anahtar);
+
+  -- Tamamen silinen oda bir daha açılmaz (9. bölüm).
+  if exists (select 1 from public.oda_silindi as s where s.room = p_room) then
+    return public.oda_cevap('silindi', p_room, null, null, false);
+  end if;
 
   -- Oda satırı ilk katılmada oluşur ve kilitlenir (eşzamanlı iki kurucu olmaz).
   select * into v_oda from public.oda as o where o.room = p_room for update;
@@ -1242,7 +1264,9 @@ begin
   perform public.oda_bicim('oda_durum', p_room, p_cihaz, p_anahtar);
   select * into v_oda from public.oda as o where o.room = p_room;
   if not found then
-    return public.oda_cevap('yok', p_room, null, null, false);
+    return public.oda_cevap(
+      case when exists (select 1 from public.oda_silindi as s where s.room = p_room) then 'silindi' else 'yok' end,
+      p_room, null, null, false);
   end if;
   select * into v_c from public.oda_cihaz as c where c.room = p_room and c.cihaz = p_cihaz;
   if not found then
@@ -1346,7 +1370,9 @@ begin
   set kanal = public.oda_rastgele('0123456789abcdef', 32),
       zorunlu = least(o.zorunlu, pg_catalog.now()),
       kurtarma_ozet = case when o.kurtarma_olusturan = p_hedef then null else o.kurtarma_ozet end,
-      kurtarma_olusturan = case when o.kurtarma_olusturan = p_hedef then null else o.kurtarma_olusturan end
+      kurtarma_olusturan = case when o.kurtarma_olusturan = p_hedef then null else o.kurtarma_olusturan end,
+      silme_isteyen = case when o.silme_isteyen = p_hedef then null else o.silme_isteyen end,
+      silme_son = case when o.silme_isteyen = p_hedef then null else o.silme_son end
   where o.room = p_room;
   return true;
 end;
@@ -1728,5 +1754,485 @@ revoke execute on function public.fcm_abonelikler(text, integer) from public, an
 grant execute on function public.fcm_hedef(text, text, text) to service_role;
 grant execute on function public.fcm_sonuc(text[], text[], text[]) to service_role;
 grant execute on function public.fcm_abonelikler(text, integer) to service_role;
+
+notify pgrst, 'reload schema';
+
+-- ---------------------------------------------------------------------------
+-- 9. Medya: yetki, sınır, kullanım, kalıcı silme, çöp temizliği, odayı silme, adres taşıma
+-- ---------------------------------------------------------------------------
+-- Edge Function 'medya' (supabase/functions/_shared/medya.js) okuma için imzalı adres verir, yüklemeyi kovaya yazar,
+-- kuyruktaki dosyaları siler. Kova yetkisi servis anahtarındadır; cihaz yetkisi burada denetlenir.
+-- Belgelerdeki medya başvurusu iki biçimdedir: eski herkese açık adres ve 'kova:<oda>/<uuid>.<uzantı>'.
+-- Silinen belge verisi 30 gün çöpte kalır (geri alınır); sonra data = {} olur, satır kalır: artımlı eşitleme görür.
+-- Dosya, odada onu anan hiçbir belge (çöptekiler dahil) kalmayınca kuyruğa girer.
+-- Supabase depolama satırını SQL ile sildirmez: silme Storage API ile yapılır (medya?islem=temizle).
+
+create table if not exists public.medya_silinecek (
+  yol text primary key,
+  room text not null,
+  eklendi timestamptz not null default now()
+);
+
+create index if not exists medya_silinecek_eklendi_idx on public.medya_silinecek (eklendi);
+
+alter table public.medya_silinecek enable row level security;
+revoke all on table public.medya_silinecek from anon, authenticated;
+
+-- Yükleme sayacı (saatlik): oda başına ve genel ('*').
+create table if not exists public.medya_rate (
+  room text not null,
+  bucket timestamptz not null,
+  n integer not null default 0,
+  primary key (room, bucket)
+);
+
+alter table public.medya_rate enable row level security;
+revoke all on table public.medya_rate from anon, authenticated;
+
+-- Sınırlar tek yerde. Oda 800 MB ve 5000 dosya; ücretsiz planın 1 GB'ı için genel 950 MB; saatte oda başına 600,
+-- genel 3000 dosya (yedekten geri yükleme yeniden denenebilir; zaten var olan dosya sayılmaz).
+create or replace function public.medya_sinirlar()
+returns jsonb
+language sql
+immutable
+set search_path = ''
+as $$
+  select '{"oda_bayt": 838860800, "oda_dosya": 5000, "genel_bayt": 996147200, "oda_saatlik": 600, "genel_saatlik": 3000,
+           "foto_bayt": 5242880, "ses_bayt": 2097152}'::jsonb;
+$$;
+
+-- Belge verisindeki medya yolları (`<oda>/<uuid>.<uzantı>`), tekil.
+create or replace function public.medya_yollari(p_data jsonb)
+returns setof text
+language sql
+immutable
+set search_path = ''
+as $$
+  select distinct m[1]
+  from pg_catalog.regexp_matches(p_data::text,
+    '(?:/storage/v1/object/public/photos/|kova:)([a-z2-9]{10}/[0-9a-f-]{36}\.(?:jpg|webp|webm|m4a))', 'g') as m;
+$$;
+
+-- Odanın kovadaki kullanımı (eski yollarla yüklenenler dahil; kaynak storage.objects).
+create or replace function public.medya_kullanim_ic(p_room text)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select pg_catalog.jsonb_build_object(
+    'bayt', coalesce(sum((o.metadata ->> 'size')::bigint), 0),
+    'dosya', count(*),
+    'ses_bayt', coalesce(sum((o.metadata ->> 'size')::bigint) filter (where o.name ~ '\.(webm|m4a)$'), 0))
+  from storage.objects as o
+  where o.bucket_id = 'photos' and o.name like p_room || '/%';
+$$;
+
+-- Edge Function: imzalı adres vermeden önce. Görülme en çok günde bir yazılır.
+create or replace function public.medya_imza_izni(p_room text, p_cihaz text, p_anahtar text)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  perform public.oda_yetki_kimlikli('medya_imza_izni', p_room, p_cihaz, p_anahtar);
+  update public.oda_cihaz as c set medya_gorulme = pg_catalog.now()
+  where c.room = p_room and c.cihaz = p_cihaz
+    and (c.medya_gorulme is null or c.medya_gorulme < pg_catalog.now() - interval '1 day');
+end;
+$$;
+
+-- Edge Function: kovaya yazmadan önce. p_tur 'foto' | 'ses'. Boyut 22023; doluluk ve hız 54000.
+create or replace function public.medya_yukleme_izni(p_room text, p_cihaz text, p_anahtar text, p_bayt bigint, p_tur text)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_s jsonb := public.medya_sinirlar();
+  v_saat timestamptz := pg_catalog.date_trunc('hour', pg_catalog.now());
+  v_k jsonb;
+  v_genel bigint;
+  v_n integer;
+  v_all integer;
+begin
+  perform public.oda_yetki_kimlikli('medya_yukleme_izni', p_room, p_cihaz, p_anahtar);
+  if p_tur is null or p_tur not in ('foto', 'ses') then
+    raise exception 'medya_yukleme_izni: gecersiz tur' using errcode = '22023';
+  end if;
+  if p_bayt is null or p_bayt < 1 or p_bayt > (v_s ->> (p_tur || '_bayt'))::bigint then
+    raise exception 'medya_yukleme_izni: gecersiz boyut' using errcode = '22023';
+  end if;
+  insert into public.medya_rate as r (room, bucket, n) values (p_room, v_saat, 1)
+    on conflict (room, bucket) do update set n = r.n + 1
+    returning r.n into v_n;
+  insert into public.medya_rate as r (room, bucket, n) values ('*', v_saat, 1)
+    on conflict (room, bucket) do update set n = r.n + 1
+    returning r.n into v_all;
+  if v_n > (v_s ->> 'oda_saatlik')::integer or v_all > (v_s ->> 'genel_saatlik')::integer then
+    raise exception 'medya_yukleme_izni: cok fazla yukleme' using errcode = '54000';
+  end if;
+  if v_all = 1 then
+    delete from public.medya_rate as r where r.bucket < v_saat - interval '1 day';
+  end if;
+  v_k := public.medya_kullanim_ic(p_room);
+  if (v_k ->> 'bayt')::bigint + p_bayt > (v_s ->> 'oda_bayt')::bigint
+     or (v_k ->> 'dosya')::bigint >= (v_s ->> 'oda_dosya')::bigint then
+    raise exception 'medya_yukleme_izni: oda dolu' using errcode = '54000';
+  end if;
+  select coalesce(sum((o.metadata ->> 'size')::bigint), 0) into v_genel
+  from storage.objects as o where o.bucket_id = 'photos';
+  if v_genel + p_bayt > (v_s ->> 'genel_bayt')::bigint then
+    raise exception 'medya_yukleme_izni: depo dolu' using errcode = '54000';
+  end if;
+end;
+$$;
+
+-- Ayarlar göstergesi: { bayt, dosya, ses_bayt, sinir }.
+create or replace function public.medya_kullanim(p_room text, p_cihaz text, p_anahtar text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  perform public.oda_yetki_kimlikli('medya_kullanim', p_room, p_cihaz, p_anahtar);
+  return public.medya_kullanim_ic(p_room)
+    || pg_catalog.jsonb_build_object('sinir', (public.medya_sinirlar() ->> 'oda_bayt')::bigint);
+end;
+$$;
+
+-- Yolları kuyruğa alır: yalnız bu odanın yolları ve odada artık anılmayanlar.
+create or replace function public.medya_kuyruga(p_room text, p_yollar text[])
+returns void
+language sql
+security definer
+set search_path = ''
+as $$
+  with anilan as (
+    select distinct r as yol
+    from public.room_doc as d, lateral public.medya_yollari(d.data) as r
+    where d.room = p_room
+  )
+  insert into public.medya_silinecek (yol, room)
+  select distinct y, p_room
+  from pg_catalog.unnest(coalesce(p_yollar, '{}'::text[])) as y
+  where y like p_room || '/%' and y not in (select a.yol from anilan as a)
+  on conflict (yol) do nothing;
+$$;
+
+-- Çöpteki belgeyi kalıcı siler: veri boşalır, updated_at ilerler (öteki cihaz görür), dosyalar kuyruğa girer.
+-- -> iş yapıldı mı (canlı belge ve verisi zaten boş olan false).
+create or replace function public.doc_kalici_sil(p_room text, p_cihaz text, p_anahtar text, p_kind text, p_id text)
+returns boolean
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_data jsonb;
+begin
+  perform public.oda_yetki_kimlikli('doc_kalici_sil', p_room, p_cihaz, p_anahtar);
+  select d.data into v_data from public.room_doc as d
+  where d.room = p_room and d.kind = p_kind and d.id = p_id and d.deleted and d.data <> '{}'::jsonb
+  for update;
+  if not found then
+    return false;
+  end if;
+  update public.room_doc as d set data = '{}'::jsonb, updated_at = pg_catalog.clock_timestamp()
+  where d.room = p_room and d.kind = p_kind and d.id = p_id;
+  perform public.medya_kuyruga(p_room, array(select public.medya_yollari(v_data)));
+  return true;
+end;
+$$;
+
+-- pg_cron (günlük): p_gun günden uzun süredir çöpte duran belgeleri kalıcı siler. -> işlenen belge sayısı.
+create or replace function public.cop_temizle(p_gun integer default 30, p_limit integer default 1000)
+returns integer
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_n integer;
+  v_odalar jsonb;
+  v_room text;
+  v_yollar jsonb;
+begin
+  if p_gun is null or p_gun < 1 then
+    raise exception 'cop_temizle: gecersiz gun' using errcode = '22023';
+  end if;
+  with hedef as (
+    select d.room, d.kind, d.id, d.data from public.room_doc as d
+    where d.deleted and d.data <> '{}'::jsonb
+      and d.updated_at < pg_catalog.now() - pg_catalog.make_interval(days => p_gun)
+    order by d.updated_at
+    limit least(greatest(coalesce(p_limit, 1000), 1), 5000)
+    for update
+  ), temiz as (
+    update public.room_doc as d set data = '{}'::jsonb, updated_at = pg_catalog.clock_timestamp()
+    from hedef as h
+    where d.room = h.room and d.kind = h.kind and d.id = h.id
+    returning h.room, h.data
+  ), yollar as (
+    select t.room, r.yol from temiz as t left join lateral public.medya_yollari(t.data) as r(yol) on true
+  ), odalar as (
+    select y.room, pg_catalog.jsonb_agg(y.yol) filter (where y.yol is not null) as liste from yollar as y group by y.room
+  )
+  select (select count(*) from temiz)::integer,
+         (select coalesce(pg_catalog.jsonb_object_agg(o.room, coalesce(o.liste, '[]'::jsonb)), '{}'::jsonb) from odalar as o)
+  into v_n, v_odalar;
+  for v_room, v_yollar in select e.key, e.value from pg_catalog.jsonb_each(v_odalar) as e loop
+    perform public.medya_kuyruga(v_room,
+      array(select pg_catalog.jsonb_array_elements_text(v_yollar)));
+  end loop;
+  return v_n;
+end;
+$$;
+
+-- Edge Function (islem=temizle): silinecek yollar. Bu arada yeniden anılan dosya (yedekten geri yükleme) kuyruktan çıkar.
+create or replace function public.medya_silinecekler(p_limit integer default 200)
+returns text[]
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_parti text[];
+  v_sil text[];
+begin
+  select coalesce(pg_catalog.array_agg(s.yol), '{}'::text[]) into v_parti
+  from (select q.yol from public.medya_silinecek as q order by q.eklendi
+        limit least(greatest(coalesce(p_limit, 200), 1), 1000)) as s;
+  select coalesce(pg_catalog.array_agg(q.yol), '{}'::text[]) into v_sil
+  from public.medya_silinecek as q
+  where q.yol = any (v_parti)
+    and not exists (select 1 from public.room_doc as d, lateral public.medya_yollari(d.data) as r
+                    where d.room = q.room and r = q.yol);
+  delete from public.medya_silinecek as q where q.yol = any (v_parti) and not (q.yol = any (v_sil));
+  return v_sil;
+end;
+$$;
+
+create or replace function public.medya_silindi(p_yollar text[])
+returns void
+language sql
+security definer
+set search_path = ''
+as $$
+  delete from public.medya_silinecek as q where q.yol = any (coalesce(p_yollar, '{}'::text[]));
+$$;
+
+-- pg_cron (saatlik): kuyrukta iş varsa Edge Function'ı çağırır. Anahtar hatırlatmayla ortak (vault 'hatirlat_anahtar').
+create or replace function public.medya_temizle_cagir()
+returns bigint
+language plpgsql
+set search_path = ''
+as $$
+declare
+  v_url text;
+  v_anahtar text;
+begin
+  if not exists (select 1 from public.medya_silinecek) then
+    return null;
+  end if;
+  select s.decrypted_secret into v_url from vault.decrypted_secrets as s where s.name = 'project_url';
+  select s.decrypted_secret into v_anahtar from vault.decrypted_secrets as s where s.name = 'hatirlat_anahtar';
+  if v_anahtar is null or v_anahtar = '' then
+    raise warning 'medya_temizle_cagir: vault icinde hatirlat_anahtar yok';
+    return null;
+  end if;
+  return net.http_post(
+    url := coalesce(v_url, 'https://blgtlflryxknyalutugw.supabase.co') || '/functions/v1/medya?islem=temizle',
+    body := '{}'::jsonb,
+    headers := pg_catalog.jsonb_build_object('Content-Type', 'application/json', 'x-hatirlat-anahtar', v_anahtar),
+    timeout_milliseconds := 60000
+  );
+end;
+$$;
+
+-- Odayı tamamen sil: bir cihaz ister (48 saat geçerli), başka bir cihaz onaylar. Yedek bilgisayarı (yedek-pc-*) arayüzü
+-- olmadığından cihaz sayılmaz; odada başka gerçek cihaz yoksa isteyen kendisi onaylar.
+create or replace function public.oda_sil_yanit(p_oda public.oda, p_cihaz text)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select pg_catalog.jsonb_build_object(
+    'bekliyor', p_oda.silme_son is not null and p_oda.silme_son > pg_catalog.now(),
+    'son', pg_catalog.to_char(p_oda.silme_son at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+    'ben', p_oda.silme_isteyen is not distinct from p_cihaz,
+    'tek', not exists (select 1 from public.oda_cihaz as c
+                       where c.room = p_oda.room and c.durum = 'onayli' and c.cihaz <> p_cihaz
+                         and c.cihaz not like 'yedek-pc-%'));
+$$;
+
+create or replace function public.oda_sil_durum(p_room text, p_cihaz text, p_anahtar text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_oda public.oda;
+begin
+  perform public.oda_yetki_kimlikli('oda_sil_durum', p_room, p_cihaz, p_anahtar);
+  select * into v_oda from public.oda as o where o.room = p_room;
+  return public.oda_sil_yanit(v_oda, p_cihaz);
+end;
+$$;
+
+create or replace function public.oda_sil_iste(p_room text, p_cihaz text, p_anahtar text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_oda public.oda;
+begin
+  perform 1 from public.oda as o where o.room = p_room for update;
+  perform public.oda_yetki_kimlikli('oda_sil_iste', p_room, p_cihaz, p_anahtar);
+  update public.oda as o
+  set silme_isteyen = p_cihaz, silme_son = pg_catalog.now() + interval '48 hours'
+  where o.room = p_room
+    and (o.silme_son is null or o.silme_son <= pg_catalog.now() or o.silme_isteyen = p_cihaz);
+  select * into v_oda from public.oda as o where o.room = p_room;
+  return public.oda_sil_yanit(v_oda, p_cihaz);
+end;
+$$;
+
+create or replace function public.oda_sil_vazgec(p_room text, p_cihaz text, p_anahtar text)
+returns boolean
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  perform 1 from public.oda as o where o.room = p_room for update;
+  perform public.oda_yetki_kimlikli('oda_sil_vazgec', p_room, p_cihaz, p_anahtar);
+  update public.oda as o set silme_isteyen = null, silme_son = null
+  where o.room = p_room and o.silme_son is not null;
+  return found;
+end;
+$$;
+
+-- Odanın tüm izlerini siler; dosyalar kuyruğa girer. Yalnız oda_sil_onayla çağırır.
+create or replace function public.oda_yok_et(p_room text)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  insert into public.medya_silinecek (yol, room)
+  select o.name, p_room from storage.objects as o
+  where o.bucket_id = 'photos' and o.name like p_room || '/%'
+  on conflict (yol) do nothing;
+  delete from public.room_doc as d where d.room = p_room;
+  delete from public.game_log as g where g.room = p_room;
+  delete from public.push_sub as s where s.room = p_room;
+  delete from public.fcm_sub as f where f.room = p_room;
+  delete from public.oda_davet as v where v.room = p_room;
+  delete from public.oda_cihaz as c where c.room = p_room;
+  delete from public.room_rate as r where r.room = p_room;
+  delete from public.room_byte as b where b.room = p_room;
+  delete from public.push_gonderim as g where g.room = p_room;
+  delete from public.push_kayit_rate as r where r.room = p_room;
+  delete from public.push_rate as r where r.room in (p_room, 'fcm:' || p_room);
+  delete from public.oda_katil_rate as r where r.room = p_room;
+  delete from public.medya_rate as r where r.room = p_room;
+  insert into public.oda_silindi (room) values (p_room) on conflict (room) do nothing;
+  delete from public.oda as o where o.room = p_room;
+end;
+$$;
+
+-- -> true (oda silindi). Geçerli istek yoksa ya da ikinci cihaz gerekirse 22023.
+create or replace function public.oda_sil_onayla(p_room text, p_cihaz text, p_anahtar text)
+returns boolean
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_oda public.oda;
+begin
+  select * into v_oda from public.oda as o where o.room = p_room for update;
+  perform public.oda_yetki_kimlikli('oda_sil_onayla', p_room, p_cihaz, p_anahtar);
+  if v_oda.silme_son is null or v_oda.silme_son <= pg_catalog.now() then
+    raise exception 'oda_sil_onayla: gecerli istek yok' using errcode = '22023';
+  end if;
+  if v_oda.silme_isteyen = p_cihaz and not (public.oda_sil_yanit(v_oda, p_cihaz) ->> 'tek')::boolean then
+    raise exception 'oda_sil_onayla: ikinci cihaz gerekli' using errcode = '22023';
+  end if;
+  perform public.oda_yok_et(p_room);
+  return true;
+end;
+$$;
+
+-- Geçişin son adımı (elle, SQL Editor): eski herkese açık adresleri 'kova:' biçimine çevirir. updated_at değişmez:
+-- önbellekteki eski adres de okunur; yeniden eşitleme ve son-yazan yarışı olmaz. -> çevrilen belge; 0 olana dek çağır.
+create or replace function public.medya_tasi(p_limit integer default 500)
+returns integer
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_desen constant text := 'https://[a-z0-9.-]+/storage/v1/object/public/photos/([a-z2-9]{10}/[0-9a-f-]{36}\.(?:jpg|webp|webm|m4a))';
+  v_n integer;
+begin
+  with hedef as (
+    select d.room, d.kind, d.id from public.room_doc as d
+    where d.data::text ~ v_desen
+    limit least(greatest(coalesce(p_limit, 500), 1), 5000)
+    for update
+  )
+  update public.room_doc as d
+  set data = pg_catalog.regexp_replace(d.data::text, v_desen, 'kova:\1', 'g')::jsonb
+  from hedef as h
+  where d.room = h.room and d.kind = h.kind and d.id = h.id;
+  get diagnostics v_n = row_count;
+  return v_n;
+end;
+$$;
+
+revoke execute on function public.medya_sinirlar() from public, anon, authenticated;
+revoke execute on function public.medya_yollari(jsonb) from public, anon, authenticated;
+revoke execute on function public.medya_kullanim_ic(text) from public, anon, authenticated;
+revoke execute on function public.medya_kuyruga(text, text[]) from public, anon, authenticated;
+revoke execute on function public.medya_imza_izni(text, text, text) from public, anon, authenticated;
+revoke execute on function public.medya_yukleme_izni(text, text, text, bigint, text) from public, anon, authenticated;
+revoke execute on function public.medya_silinecekler(integer) from public, anon, authenticated;
+revoke execute on function public.medya_silindi(text[]) from public, anon, authenticated;
+revoke execute on function public.medya_temizle_cagir() from public, anon, authenticated;
+revoke execute on function public.medya_tasi(integer) from public, anon, authenticated, service_role;
+revoke execute on function public.cop_temizle(integer, integer) from public, anon, authenticated, service_role;
+revoke execute on function public.oda_yok_et(text) from public, anon, authenticated, service_role;
+revoke execute on function public.oda_sil_yanit(public.oda, text) from public, anon, authenticated;
+
+grant execute on function public.medya_imza_izni(text, text, text) to service_role;
+grant execute on function public.medya_yukleme_izni(text, text, text, bigint, text) to service_role;
+grant execute on function public.medya_silinecekler(integer) to service_role;
+grant execute on function public.medya_silindi(text[]) to service_role;
+
+revoke execute on function public.medya_kullanim(text, text, text) from public;
+revoke execute on function public.doc_kalici_sil(text, text, text, text, text) from public;
+revoke execute on function public.oda_sil_durum(text, text, text) from public;
+revoke execute on function public.oda_sil_iste(text, text, text) from public;
+revoke execute on function public.oda_sil_vazgec(text, text, text) from public;
+revoke execute on function public.oda_sil_onayla(text, text, text) from public;
+
+grant execute on function public.medya_kullanim(text, text, text) to anon, authenticated;
+grant execute on function public.doc_kalici_sil(text, text, text, text, text) to anon, authenticated;
+grant execute on function public.oda_sil_durum(text, text, text) to anon, authenticated;
+grant execute on function public.oda_sil_iste(text, text, text) to anon, authenticated;
+grant execute on function public.oda_sil_vazgec(text, text, text) to anon, authenticated;
+grant execute on function public.oda_sil_onayla(text, text, text) to anon, authenticated;
 
 notify pgrst, 'reload schema';

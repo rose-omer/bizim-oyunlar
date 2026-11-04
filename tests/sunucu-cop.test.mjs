@@ -15,7 +15,7 @@ function belgeler(q) {
 }
 
 test('doc_put silme: var olan belgenin verisi kalır; yalnız deleted, author ve updated_at değişir', ATLA, async () => {
-  const { q } = await kur();
+  const { q } = await kur({ gecis: true });
   const { put, satir } = belgeler(q);
   const ilk = await put('a', { metin: 'Kapadokya', not: 'balon' }, 'omer');
   await bekle(3);
@@ -31,7 +31,7 @@ test('doc_put silme: var olan belgenin verisi kalır; yalnız deleted, author ve
 });
 
 test('doc_put silme: hiç olmayan belge {} ile silinmiş olarak oluşur', ATLA, async () => {
-  const { q } = await kur();
+  const { q } = await kur({ gecis: true });
   const { put, satir } = belgeler(q);
   await put('yok', { metin: 'gönderilen' }, 'omer', true);
   const s = await satir('yok');
@@ -39,7 +39,7 @@ test('doc_put silme: hiç olmayan belge {} ile silinmiş olarak oluşur', ATLA, 
 });
 
 test('doc_put: silinmiş belgeye deleted=false ile yazmak onu gönderilen veriyle geri getirir', ATLA, async () => {
-  const { q } = await kur();
+  const { q } = await kur({ gecis: true });
   const { put, satir } = belgeler(q);
   await put('a', { metin: 'süt' }, 'omer');
   await put('a', {}, 'omer', true);
@@ -49,7 +49,7 @@ test('doc_put: silinmiş belgeye deleted=false ile yazmak onu gönderilen veriyl
 });
 
 test('doc_patch silinmiş belgeye: korunan verinin üstüne kurulur ve geri gelir (içerik kaybolmaz)', ATLA, async () => {
-  const { q } = await kur();
+  const { q } = await kur({ gecis: true });
   const { put, patch, satir } = belgeler(q);
   await put('a', { metin: 'Kapadokya', not: 'balon' }, 'omer');
   await put('a', {}, 'gul', true);
@@ -60,7 +60,7 @@ test('doc_patch silinmiş belgeye: korunan verinin üstüne kurulur ve geri geli
 });
 
 test('doc_list silinen belgeyi verisiyle döner; doc_page silineni döndürmez', ATLA, async () => {
-  const { q } = await kur();
+  const { q } = await kur({ gecis: true });
   const { put } = belgeler(q);
   await put('a', { metin: 'bir' }, 'omer');
   await put('b', { metin: 'iki' }, 'omer');
@@ -71,7 +71,7 @@ test('doc_list silinen belgeyi verisiyle döner; doc_page silineni döndürmez',
 });
 
 test('doc_put silme: oran sınırı bir yazma, bayt bütçesi {} (2 bayt) sayar', ATLA, async () => {
-  const { q } = await kur();
+  const { q } = await kur({ gecis: true });
   const { put } = belgeler(q);
   const sayac = async (tablo) => (await q(`select coalesce(sum(${tablo === 'room_rate' ? 'n' : 'bytes'}), 0)::int as n from public.${tablo} where room = $1`, [ODA]))[0].n;
   await put('a', { metin: 'uzun bir metin' }, 'omer');

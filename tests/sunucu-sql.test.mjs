@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { kur, ATLA, ODA, ODA2, ab, SEMA } from './sunucu-pglite.mjs';
 
 test('push_kaydet: kayıt, güncelleme, aynı cihazın eski aboneliği, oda başına 10', ATLA, async () => {
-  const { q } = await kur();
+  const { q } = await kur({ gecis: true });
   const kaydet = (oda, client, sub, ua = null) =>
     q('select public.push_kaydet($1, $2, $3::jsonb, $4) as ok', [oda, client, JSON.stringify(sub), ua]);
   assert.equal((await kaydet(ODA, 'cli-1', ab(1), 'x'.repeat(300)))[0].ok, true);
@@ -37,7 +37,7 @@ test('push_kaydet: kayıt, güncelleme, aynı cihazın eski aboneliği, oda baş
 });
 
 test('push_kaydet / push_sil doğrulama', ATLA, async () => {
-  const { q, hata } = await kur();
+  const { q, hata } = await kur({ gecis: true });
   const dene = (oda, client, sub) =>
     hata('select public.push_kaydet($1, $2, $3::jsonb)', [oda, client, sub == null ? null : JSON.stringify(sub)]);
   const kotu = [
@@ -72,7 +72,7 @@ test('push_kaydet / push_sil doğrulama', ATLA, async () => {
 });
 
 test('push_hedef: gönderen hariç, hız sınırı; push_sonuc', ATLA, async () => {
-  const { db, q, hata } = await kur();
+  const { db, q, hata } = await kur({ gecis: true });
   const kaydet = (oda, client, n) => q('select public.push_kaydet($1, $2, $3::jsonb)', [oda, client, JSON.stringify(ab(n))]);
   await kaydet(ODA, 'omer', 1);
   await kaydet(ODA, 'gul', 2);
@@ -115,7 +115,7 @@ test('push_hedef: gönderen hariç, hız sınırı; push_sonuc', ATLA, async () 
 });
 
 test('hatirlat_belgeler ve hatirlat_isaretle', ATLA, async () => {
-  const { q, hata } = await kur();
+  const { q, hata } = await kur({ gecis: true });
   await q('select public.push_kaydet($1, $2, $3::jsonb)', [ODA, 'omer', JSON.stringify(ab(1))]);
   const put = (oda, kind, id, data, del = false) =>
     q('select * from public.doc_put($1, $2, $3, $4::jsonb, null, $5)', [oda, kind, id, JSON.stringify(data), del]);
@@ -157,7 +157,7 @@ test('hatirlat_belgeler ve hatirlat_isaretle', ATLA, async () => {
 });
 
 test('push_abonelikler: endpoint sırasıyla sayfalı', ATLA, async () => {
-  const { q } = await kur();
+  const { q } = await kur({ gecis: true });
   for (let i = 0; i < 5; i++) await q('select public.push_kaydet($1, $2, $3::jsonb)', [i < 3 ? ODA : ODA2, `c${i}`, JSON.stringify(ab(i))]);
   assert.equal((await q('select * from public.push_abonelikler()')).length, 5);
   const s1 = await q('select endpoint from public.push_abonelikler(null, 2)');
@@ -168,7 +168,7 @@ test('push_abonelikler: endpoint sırasıyla sayfalı', ATLA, async () => {
 });
 
 test('doc_put / doc_patch: saatlik sınırlar, günlük bayt bütçesi, reddedilen yazma sayılmaz', ATLA, async () => {
-  const { db, q, hata } = await kur();
+  const { db, q, hata } = await kur({ gecis: true });
   const put = (oda, id, data) => q('select * from public.doc_put($1, $2, $3, $4::jsonb, null)', [oda, 'liste', id, JSON.stringify(data)]);
   const patch = (oda, id, data) => q('select * from public.doc_patch($1, $2, $3, $4::jsonb, null)', [oda, 'liste', id, JSON.stringify(data)]);
   const sayac = async (tablo, oda) => (await q(`select coalesce(sum(${tablo === 'room_rate' ? 'n' : 'bytes'}), 0)::int as n from public.${tablo} where room = $1`, [oda]))[0].n;
@@ -212,7 +212,7 @@ test('doc_put / doc_patch: saatlik sınırlar, günlük bayt bütçesi, reddedil
 });
 
 test('room_rate / room_byte temizliği: saatin ilk genel yazması 2 günden eski kayıtları siler', ATLA, async () => {
-  const { db, q } = await kur();
+  const { db, q } = await kur({ gecis: true });
   await db.exec(`
     insert into public.room_rate values ('eskioda222', now() - interval '3 days', 5), ('yenioda222', now() - interval '1 day', 5);
     insert into public.room_byte values ('eskioda222', current_date - 5, 100), ('yenioda222', current_date - 1, 100);
@@ -227,7 +227,7 @@ test('room_rate / room_byte temizliği: saatin ilk genel yazması 2 günden eski
 });
 
 test('push_kaydet: oda başına saatte 20, genel saatte 300 kayıt', ATLA, async () => {
-  const { db, q, hata } = await kur();
+  const { db, q, hata } = await kur({ gecis: true });
   const kaydet = (oda, n) => q('select public.push_kaydet($1, $2, $3::jsonb)', [oda, `c${n}`, JSON.stringify(ab(n))]);
   for (let i = 0; i < 20; i++) await kaydet(ODA, i);
   const e = await hata('select public.push_kaydet($1, $2, $3::jsonb)', [ODA, 'c99', JSON.stringify(ab(99))]);
@@ -244,7 +244,7 @@ test('push_kaydet: oda başına saatte 20, genel saatte 300 kayıt', ATLA, async
 });
 
 test('yetkiler: anon yalnız istemci RPC\'leri; tablolar ve yardımcılar kapalı; sunucu RPC yalnız service_role', ATLA, async () => {
-  const { db, q, hata } = await kur();
+  const { db, q, hata } = await kur({ gecis: true });
   await db.exec('set role anon');
   await q('select public.push_kaydet($1, $2, $3::jsonb)', [ODA, 'omer', JSON.stringify(ab(1))]);
   await q('select public.push_sil($1)', [ab(9).endpoint]);
@@ -299,15 +299,15 @@ test('yetkiler: anon yalnız istemci RPC\'leri; tablolar ve yardımcılar kapal�
   await db.exec('reset role');
 });
 
-test('3. bölüm: photos kovası (5 MB, resim ve sesli mesaj) ve anon yükleme politikası; tekrar çalıştırınca çoğalmaz', ATLA, async () => {
-  const { q } = await kur();
+test('3. bölüm: photos kovası (özel, 5 MB, resim ve sesli mesaj); anon yükleme politikası yok; tekrar çalıştırınca çoğalmaz', ATLA, async () => {
+  const { q } = await kur({ gecis: true });
   const b = await q('select id, public, file_size_limit::int as boyut, allowed_mime_types as tur from storage.buckets');
   assert.deepEqual(b, [{
-    id: 'photos', public: true, boyut: 5242880,
+    id: 'photos', public: false, boyut: 5242880,
     tur: ['image/jpeg', 'image/webp', 'image/png', 'audio/webm', 'audio/mp4'],
   }]);
   const p = await q(`select policyname, cmd from pg_catalog.pg_policies where schemaname = 'storage'`);
-  assert.deepEqual(p.map((x) => [x.policyname, x.cmd]), [['photos_insert_anon', 'INSERT']]);
+  assert.deepEqual(p, []);
 });
 
 // ---------- 8. bölüm: FCM ----------
@@ -316,7 +316,7 @@ test('3. bölüm: photos kovası (5 MB, resim ve sesli mesaj) ve anon yükleme p
 const tk = (n) => `cTk${n}_Xy-9:APA91b${'Q'.repeat(140)}${n}`;
 
 test('fcm_kaydet: kayıt, oda taşıma, aynı cihazın eski belirteci, oda başına 10', ATLA, async () => {
-  const { q } = await kur();
+  const { q } = await kur({ gecis: true });
   const kaydet = (oda, client, t) => q('select public.fcm_kaydet($1, $2, $3) as ok', [oda, client, t]);
   assert.equal((await kaydet(ODA, 'gul', tk(1)))[0].ok, true);
   let r = await q('select * from public.fcm_sub');
@@ -338,7 +338,7 @@ test('fcm_kaydet: kayıt, oda taşıma, aynı cihazın eski belirteci, oda baş�
 });
 
 test('fcm_kaydet / fcm_sil doğrulama; kayıt sınırı push_kaydet ile ortak', ATLA, async () => {
-  const { db, q, hata } = await kur();
+  const { db, q, hata } = await kur({ gecis: true });
   const kotu = [
     ['BAD', 'cli', tk(1)],
     [ODA, 'cli 1', tk(1)],
@@ -370,7 +370,7 @@ test('fcm_kaydet / fcm_sil doğrulama; kayıt sınırı push_kaydet ile ortak', 
 });
 
 test('fcm_hedef: gönderen hariç, Web Push\'tan ayrı hız sınırı; fcm_sonuc', ATLA, async () => {
-  const { db, q, hata } = await kur();
+  const { db, q, hata } = await kur({ gecis: true });
   await q('select public.fcm_kaydet($1, $2, $3)', [ODA, 'omer', tk(1)]);
   await q('select public.fcm_kaydet($1, $2, $3)', [ODA, 'gul', tk(2)]);
   await q('select public.fcm_kaydet($1, $2, $3)', [ODA2, 'baska', tk(3)]);
@@ -406,7 +406,7 @@ test('fcm_hedef: gönderen hariç, Web Push\'tan ayrı hız sınırı; fcm_sonuc
 });
 
 test('fcm_abonelikler sayfalı; hatirlat_belgeler yalnız FCM\'li odayı da kapsar', ATLA, async () => {
-  const { q } = await kur();
+  const { q } = await kur({ gecis: true });
   for (let i = 0; i < 5; i++) await q('select public.fcm_kaydet($1, $2, $3)', [i < 3 ? ODA : ODA2, `c${i}`, tk(i)]);
   const s1 = await q('select token from public.fcm_abonelikler(null, 2)');
   const s2 = await q('select token from public.fcm_abonelikler($1, 2)', [s1[1].token]);
@@ -421,7 +421,7 @@ test('fcm_abonelikler sayfalı; hatirlat_belgeler yalnız FCM\'li odayı da kaps
 });
 
 test('6. bölüm: hatırlatma anahtarı yoksa üretilir, varsa dokunulmaz; hatirlat_anahtar yalnız service_role', ATLA, async () => {
-  const { db, q, hata } = await kur();
+  const { db, q, hata } = await kur({ gecis: true });
   const anahtarlar = async () => (await q(`select secret from vault.secrets where name = 'hatirlat_anahtar'`)).map((r) => r.secret);
   const [ilk] = await anahtarlar();
   assert.match(ilk, /^[0-9a-f]{64}$/, '32 rastgele bayt, hex');
@@ -442,7 +442,7 @@ test('6. bölüm: hatırlatma anahtarı yoksa üretilir, varsa dokunulmaz; hatir
 });
 
 test('6. bölüm: adlı cron işleri çoğalmaz; komut Edge Function\'ı vault anahtarıyla çağırır', ATLA, async () => {
-  const { db, q, hata } = await kur();
+  const { db, q, hata } = await kur({ gecis: true });
   const isler = await q('select jobname, schedule, command from cron.job order by jobname');
   assert.deepEqual(isler.map((j) => [j.jobname, j.schedule]), [['biz-hatirlat-aksam', '0 17 * * *'], ['biz-hatirlat-sabah', '0 6 * * *']]);
 

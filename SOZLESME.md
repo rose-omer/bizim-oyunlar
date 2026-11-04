@@ -471,6 +471,7 @@ v3 bölümleri v1 ve v2'nin üstüne gelir. Çatışmada v3 geçerli.
 - `js/core/pwa.js` `guncellemeIzle({ bildir })`: yayın sürümü = GitHub Pages `Last-Modified`. Öne gelince ve açıkken 30 dk'da bir bakar.
   Boştaki sayfa (30 sn+ arka planda) yenilenir; oyunda, Birlikte İzle'de, açık pencerede ya da dolu yazı alanında "Yeni sürüm hazır" toast'u. Android uygulamasında yayından 10 dk sonra (HTTP önbelleği).
 - `sw.js`: HTML, JS ve CSS ağ önce; görsel ve font önbellekten.
+- Yayın damgası: `pages.yml` `_site` kopyasında `dev/surum-damgala.mjs` çalıştırır. Yerel js ve css adresleri (import, `import()`, `new URL`, HTML, CSS `@import`) `?v=<commit>` alır; `sw.js` `SURUM` aynı değere bağlanır. Neden: APK'da service worker yok, Pages 10 dk önbellek verir; eski ve yeni modül karışınca sayfa boş kalır. Depo ve ev sunucusu damgasızdır. Yeni dosya yükleme biçimi eklersen damga betiğine ve testine (`tests/yayin-damga.test.mjs`) ekle: damgasız adres yayını durdurur.
 - `js/core/mobil.js` `kabukGuncellemeKontrol`: 12 saatte bir son APK sürümü; yeniyse bir kez "İndir" toast'u.
 
 ## 26. Yeni veri türleri

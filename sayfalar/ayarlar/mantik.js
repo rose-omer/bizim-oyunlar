@@ -151,6 +151,52 @@ export function yedekDosyaAdi(simdi = new Date()) {
   return `biz-ikimiz-yedek-${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}.json`;
 }
 
+export function tamYedekDosyaAdi(simdi = new Date()) {
+  const d = new Date(simdi);
+  return `biz-ikimiz-tam-yedek-${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}.bizyedek`;
+}
+
+/** Parola formu: hata metni | null. */
+export function parolaHatasi(parola, tekrar) {
+  if (String(parola || '').length < 8) return 'Parola en az 8 karakter olmalı.';
+  if (parola !== tekrar) return 'Parolalar eşleşmiyor.';
+  return null;
+}
+
+/** Son tam yedek satırı. */
+export function yedekSonGun(iso, simdi = new Date()) {
+  const t = Date.parse(iso || '');
+  if (!Number.isFinite(t)) return 'Henüz tam yedek almadın.';
+  const gun = Math.floor((new Date(simdi).getTime() - t) / 86_400_000);
+  return `Son tam yedek: ${gun <= 0 ? 'bugün' : gun === 1 ? 'dün' : `${gun} gün önce`}.`;
+}
+
+// ---------- Kullanım göstergesi ----------
+const mb = (bayt) => {
+  const n = bayt / (1024 * 1024);
+  return `${(n >= 10 || n === 0 ? Math.round(n) : Math.round(n * 10) / 10).toLocaleString('tr-TR')} MB`;
+};
+
+/** medya_kullanim → { oran (0–1), metin, alt, uyari } | null. */
+export function kullanimGorunum(k) {
+  if (!k) return null;
+  const oran = k.sinir > 0 ? Math.min(1, k.bayt / k.sinir) : 1;
+  return {
+    oran,
+    metin: `${mb(k.bayt)} / ${mb(k.sinir)}`,
+    alt: `${Number(k.dosya).toLocaleString('tr-TR')} dosya${k.ses_bayt ? `, sesli mesaj ${mb(k.ses_bayt)}` : ''}`,
+    uyari: oran >= 0.9 ? 'Yer azaldı. Son silinenleri kalıcı silmek yer açar.' : null,
+  };
+}
+
+// ---------- Odayı tamamen sil ----------
+/** oda_sil_durum → 'yok' (bu modda yok) | 'bos' | 'bekliyorum' (ikinci cihazın onayı bekleniyor) | 'onayla'. */
+export function odaSilGorunum(d) {
+  if (!d) return 'yok';
+  if (!d.bekliyor) return 'bos';
+  return d.ben && !d.tek ? 'bekliyorum' : 'onayla';
+}
+
 // ---------- Yedekten geri yükleme ----------
 const TUR_ADLARI = {
   kisi: 'profil', cift: 'çift bilgisi', gun: 'özel gün', mesaj: 'mesaj', okundu: 'okundu bilgisi', ani: 'anı',

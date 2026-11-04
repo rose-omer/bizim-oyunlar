@@ -725,6 +725,9 @@ export function startAppServices() {
       d.url ? { action: { label: 'Aç', onClick: () => { location.href = new URL(d.url, SITE_ROOT).href; } } } : {});
   });
   import('./kilit.js').then((m) => m.kilitKontrol()).catch((e) => console.warn('[kilit]', e));
+  if (!location.pathname.includes('/games/')) {
+    import('./yedek-hatirlat.js').then((m) => m.yedekHatirlat(currentRoom(), toast)).catch((e) => console.warn('[yedek]', e));
+  }
   import('./pwa.js').then((m) => {
     m.registerPwa();
     m.guncellemeIzle({

@@ -478,3 +478,10 @@ ol.ayar-adimlar {
 }
 .cop-alt { color: var(--muted); font-size: 0.8125rem; line-height: 1.4; }
 .cop .btn.small { min-height: 44px; }
+
+/* ---------- Tam yedek, kullanım, kalıcı sil ---------- */
+.ayar-parola { display: flex; flex-direction: column; gap: 6px; }
+.ayar-parola .input { width: 100%; }
+.ayar-hata { color: var(--bad); font-size: 0.875rem; min-height: 1.2em; }
+.ayar-kullanim-metin { font-weight: 700; font-variant-numeric: tabular-nums; }
+.cop-eylem { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }

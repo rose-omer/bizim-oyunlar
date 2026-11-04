@@ -1,11 +1,11 @@
 // Ayarlar: profil, biz, bildirimler, kilit, görünüm, konum paylaşımı (satır → Konum sayfası), yedek (indir / geri yükle), cihazlar, oda, hakkında.
 import { bootPage } from '../../js/core/sayfa.js';
 import { openProfil } from '../../js/core/profil.js';
-import { openCollection, listDocs, putDoc, iceAktar, onbellekTemizle } from '../../js/core/veri.js';
+import { openCollection, listDocs, putDoc, iceAktar, onbellekTemizle, kaliciSil } from '../../js/core/veri.js';
 import { sayfaById } from '../../js/core/games.js';
 import { COP_TURLERI, copListesi, copOnizleme, copKimZaman } from './mantik.js';
 import {
-  setName, inviteUrl, lobbyUrl, pageUrl, readStore, writeStore, parseYapistirilanLink, buildTasimaUrl, SITE_ROOT,
+  setName, inviteUrl, lobbyUrl, pageUrl, readStore, writeStore, parseYapistirilanLink, buildTasimaUrl, SITE_ROOT, isLocalMode,
 } from '../../js/core/identity.js';
 import { yapistirilanLinkiUygula } from '../../js/core/kapi.js';
 import {
@@ -13,11 +13,17 @@ import {
 } from '../../js/core/ui.js';
 import {
   cihazlar, cihazOnayla, cihazReddet, cihazCikar, kurtarmaOlustur, odaGiris, uyelikModu, tasimaLinki, davetOlustur,
+  medyaKullanim, odaSilDurum, odaSilIste, odaSilVazgec, odaSilOnayla,
 } from '../../js/core/uyelik.js';
-import { uploadPhoto, medyaAdresi } from '../../js/core/storage.js';
+import {
+  uploadPhoto, uploadAudio, medyaAdresi, loadPhoto, medyaGeriYukle, medyaVarMi, medyaYolu,
+} from '../../js/core/storage.js';
+import { sifreliMi, sifreDestegi, YedekHatasi } from '../../js/core/yedek-sifre.js';
+import { yedekAlindi, sonYedek } from '../../js/core/yedek-hatirlat.js';
+import { tamYedekUret, tamYedekOku, yedekMedyalari, medyaEsle, belgelereUygula } from './yedek-tam.js';
 import { fotoKirp } from '../../js/core/kirp.js';
 import { isMuted, setMuted, sfx } from '../../js/core/sound.js';
-import { bildirimDestegi, bildirimDurumu, bildirimAc, bildirimKapat, bildirimGizliMi } from '../../js/core/bildirim.js';
+import { bildirimDestegi, bildirimDurumu, bildirimAc, bildirimKapat, bildirimGizliMi, bildir } from '../../js/core/bildirim.js';
 import { dosyaPaylas } from '../../js/core/dosya-paylas.js';
 import { kilitAyarla, kilitVarMi, pinHatasi, pinDogruMu, cihazdanUnut } from '../../js/core/kilit.js';
 import { daysTogether, toDay } from '../../js/core/gunler.js';
@@ -28,6 +34,7 @@ import {
   SURUM, K_TEMA, TEMA_RENKLERI, TEMA_MODLARI, KISI_RENKLERI, K_ACIK_BOLUMLER, acikBolumler, acikGuncelle,
   bulusmaMetni,
   bildirimGorunum, YEDEK_TURLERI, yedekVerisi, yedekSayisi, yedekDosyaAdi, yedekSonucMesaji, yedektenBelgeler, parcala, yedekOzeti,
+  tamYedekDosyaAdi, parolaHatasi, yedekSonGun, kullanimGorunum, odaSilGorunum,
 } from './mantik.js';
 import { konumOku, durumEtiketi } from '../konum/mantik.js';
 
@@ -597,26 +604,34 @@ function konumCiz() {
 }
 
 // ---------- Verilerimiz ----------
-const yedekBtn = h('button', { type: 'button', class: 'btn small', onclick: yedekIndir }, svg('indir'), h('span', {}, 'Yedeği indir'));
+const DUZ_ETIKET = 'Düz yedek (fotoğrafsız)';
+const yedekBtn = h('button', { type: 'button', class: 'btn small ghost', onclick: yedekIndir }, svg('indir'), h('span', {}, DUZ_ETIKET));
+
+/** Tüm türlerin belgeleri → yedek nesnesi | null (hiçbiri alınamadı: toast gösterilmiş olur). */
+async function belgeleriTopla(simdi) {
+  const sonuclar = {};
+  const hatalar = {};
+  const sonuc = await Promise.allSettled(YEDEK_TURLERI.map((t) => listDocs(roomId, t)));
+  sonuc.forEach((r, i) => {
+    if (r.status === 'fulfilled') sonuclar[YEDEK_TURLERI[i]] = r.value;
+    else hatalar[YEDEK_TURLERI[i]] = r.reason?.message || 'hata';
+  });
+  if (!Object.keys(sonuclar).length) {
+    toast('Yedek alınamadı. Bağlantını kontrol edip tekrar dener misin?');
+    return null;
+  }
+  return yedekVerisi({ sonuclar, hatalar, simdi });
+}
+
 async function yedekIndir() {
   const etiket = yedekBtn.querySelector('span:last-child');
   yedekBtn.disabled = true;
   yedekBtn.setAttribute('aria-busy', 'true');
   etiket.textContent = 'Hazırlanıyor…';
   try {
-    const sonuclar = {};
-    const hatalar = {};
-    const sonuc = await Promise.allSettled(YEDEK_TURLERI.map((t) => listDocs(roomId, t)));
-    sonuc.forEach((r, i) => {
-      if (r.status === 'fulfilled') sonuclar[YEDEK_TURLERI[i]] = r.value;
-      else hatalar[YEDEK_TURLERI[i]] = r.reason?.message || 'hata';
-    });
-    if (!Object.keys(sonuclar).length) {
-      toast('Yedek alınamadı. Bağlantını kontrol edip tekrar dener misin?');
-      return;
-    }
     const simdi = new Date();
-    const yedek = yedekVerisi({ sonuclar, hatalar, simdi });
+    const yedek = await belgeleriTopla(simdi);
+    if (!yedek) return;
     const cikti = await dosyaPaylas({
       metin: JSON.stringify(yedek, null, 2), ad: yedekDosyaAdi(simdi), tur: 'application/json',
       dialogBaslik: 'Yedeği kaydet', webShare: false,
@@ -626,14 +641,110 @@ async function yedekIndir() {
   } finally {
     yedekBtn.disabled = false;
     yedekBtn.removeAttribute('aria-busy');
-    etiket.textContent = 'Yedeği indir';
+    etiket.textContent = DUZ_ETIKET;
+  }
+}
+
+// ---------- Tam yedek (parolalı, fotoğraf ve sesler dahil) ----------
+/**
+ * Metin girdili pencere. alanlar: [{ etiket, tur?, otomatik? }]. dogrula(değerler) -> hata metni | null.
+ * -> değerler[] | null (vazgeçildi).
+ */
+function girdiPenceresi({ metin, alanlar, ok, dogrula }) {
+  return new Promise((resolve) => {
+    let sonuc = null;
+    const hata = h('p', { class: 'ayar-hata', role: 'alert' });
+    const girdiler = alanlar.map((a) => h('input', {
+      class: 'input', type: a.tur || 'password', autocomplete: a.otomatik || 'new-password', autocapitalize: 'off', spellcheck: 'false',
+    }));
+    const dlg = h('dialog', { class: 'ui-dialog', 'aria-label': ok });
+    const form = h('form', { class: 'dialog-card stack', method: 'dialog' },
+      h('p', { class: 'dialog-text' }, metin),
+      ...alanlar.map((a, i) => h('label', { class: 'ayar-parola' }, h('span', { class: 'ayar-etiket' }, a.etiket), girdiler[i])),
+      hata,
+      h('div', { class: 'dialog-actions' },
+        h('button', { type: 'button', class: 'btn ghost', onclick: () => dlg.close() }, 'Vazgeç'),
+        h('button', { type: 'submit', class: 'btn primary' }, ok)));
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const degerler = girdiler.map((g) => g.value);
+      const sorun = dogrula?.(degerler);
+      if (sorun) {
+        hata.textContent = sorun;
+        return;
+      }
+      sonuc = degerler;
+      dlg.close();
+    });
+    dlg.append(form);
+    dlg.addEventListener('close', () => {
+      dlg.remove();
+      resolve(sonuc);
+    });
+    document.body.append(dlg);
+    dlg.showModal();
+  });
+}
+
+const yedekSonSatir = h('p', { class: 'ayar-yardim' });
+const yedekSonCiz = () => { yedekSonSatir.textContent = yedekSonGun(sonYedek(roomId)); };
+const TAM_ETIKET = 'Tam yedek al';
+const tamBtn = h('button', { type: 'button', class: 'btn small primary', onclick: tamYedekAl }, svg('indir'), h('span', {}, TAM_ETIKET));
+
+async function tamYedekAl() {
+  if (!sifreDestegi()) {
+    toast('Parolalı yedek bu adreste çalışmaz. Siteyi https adresinden ya da uygulamadan aç.', { ms: 6000 });
+    return;
+  }
+  const girdi = await girdiPenceresi({
+    metin: 'Yedek bu parolayla şifrelenir. Parolayı unutursan dosya açılmaz; kimse geri getiremez.',
+    alanlar: [{ etiket: 'Parola (en az 8 karakter)' }, { etiket: 'Parola tekrar' }],
+    ok: 'Yedeği hazırla',
+    dogrula: ([p, t]) => parolaHatasi(p, t),
+  });
+  if (!girdi) return;
+  for (const b of [tamBtn, geriBtn, yedekBtn]) b.disabled = true;
+  tamBtn.setAttribute('aria-busy', 'true');
+  geriKutu.hidden = false;
+  geriIlerleme.value = 0;
+  geriDurum.textContent = 'Kayıtlar okunuyor…';
+  try {
+    const simdi = new Date();
+    const yedek = await belgeleriTopla(simdi);
+    if (!yedek) return;
+    const { blob, medyaSayisi, eksikMedya } = await tamYedekUret({
+      yedek,
+      parola: girdi[0],
+      indir: loadPhoto,
+      onIlerleme: (biten, toplam) => {
+        geriIlerleme.max = toplam;
+        geriIlerleme.value = biten;
+        geriDurum.textContent = `Yedek hazırlanıyor… ${sayi(biten)} / ${sayi(toplam)}`;
+      },
+    });
+    const cikti = await dosyaPaylas({
+      blob, ad: tamYedekDosyaAdi(simdi), tur: 'application/octet-stream', dialogBaslik: 'Yedeği kaydet', webShare: false,
+    });
+    const mesaj = yedekSonucMesaji(cikti, { sayi: `${sayi(yedekSayisi(yedek))} kayıt ve ${sayi(medyaSayisi)} dosya`, eksik: !!yedek.eksik || eksikMedya.length > 0 });
+    if (cikti === 'indirildi' || cikti === 'paylasildi') {
+      yedekAlindi(roomId, simdi);
+      yedekSonCiz();
+    }
+    if (mesaj) toast(eksikMedya.length ? `${mesaj} Alınamayan dosya: ${sayi(eksikMedya.length)}.` : mesaj, { ms: 6000 });
+  } catch (e) {
+    console.warn('[yedek]', e);
+    toast('Yedek hazırlanamadı. Telefonda yer azsa bilgisayardan dene.', { ms: 6000 });
+  } finally {
+    for (const b of [tamBtn, geriBtn, yedekBtn]) b.disabled = false;
+    tamBtn.removeAttribute('aria-busy');
+    geriKutu.hidden = true;
   }
 }
 
 // Yedekten geri yükleme: dosya → doğrula → özet + onay → 200'lük parçalarla doc_ice_aktar → ilerleme → toast.
 const PARCA = 200;
 const sayi = (n) => n.toLocaleString('tr-TR');
-const geriSecici = h('input', { type: 'file', accept: '.json,application/json', class: 'sr-only', tabindex: '-1', 'aria-hidden': 'true' });
+const geriSecici = h('input', { type: 'file', accept: '.json,.bizyedek,application/json,application/octet-stream', class: 'sr-only', tabindex: '-1', 'aria-hidden': 'true' });
 const geriBtn = h('button', { type: 'button', class: 'btn small', onclick: () => geriSecici.click() }, svg('yukle'), h('span', {}, 'Yedekten geri yükle'));
 const geriIlerleme = h('progress', { class: 'ayar-ilerleme', max: '1', value: '0', 'aria-labelledby': 'ayar-geri-durum' });
 const geriDurum = h('p', { class: 'ayar-yardim', id: 'ayar-geri-durum', role: 'status' });
@@ -644,7 +755,69 @@ geriSecici.addEventListener('change', () => {
   if (f) geriYukle(f);
 });
 
+/** Parolalı yedek: parola sor, aç, onay al; önce dosyalar, sonra kayıtlar. */
+async function tamGeriYukle(dosya) {
+  if (!sifreDestegi()) {
+    toast('Parolalı yedek bu adreste açılmaz. Siteyi https adresinden ya da uygulamadan aç.', { ms: 6000 });
+    return;
+  }
+  const girdi = await girdiPenceresi({
+    metin: 'Bu yedek parolalı. Yedeği alırken yazdığın parolayı gir.',
+    alanlar: [{ etiket: 'Parola', otomatik: 'current-password' }],
+    ok: 'Aç',
+  });
+  if (!girdi) return;
+  let acik;
+  try {
+    acik = await tamYedekOku(dosya, girdi[0]);
+  } catch (e) {
+    toast(e instanceof YedekHatasi ? e.message : 'Yedek açılamadı.', { ms: 6000 });
+    return;
+  }
+  const { belgeler, hatalar, sayilar } = yedektenBelgeler(acik.yedek);
+  if (!belgeler.length) {
+    toast(hatalar[0] || 'Bu yedekte geri yüklenecek kayıt yok.');
+    return;
+  }
+  const medya = yedekMedyalari(acik.yedek);
+  const atlanan = hatalar.length ? ' Okunamayan birkaç kayıt atlanır.' : '';
+  const ok = await confirmDialog(`${yedekOzeti(sayilar)}, ${sayi(medya.length)} dosya.${atlanan} Var olan kayıtlar silinmez; daha yeni kopyalar korunur; silinmiş kayıtlar geri gelir.`, { ok: 'Geri yükle' });
+  if (!ok) return;
+
+  await geriYuklemeCalistir(belgeler, async () => {
+    const yerel = isLocalMode();
+    let varOlan = new Set();
+    if (!yerel) {
+      try {
+        varOlan = new Set((await medyaVarMi(roomId, medya.map(medyaYolu).filter(Boolean))).var);
+      } catch { /* bilinmiyor: yükleme 409 ile yine atlar */ }
+    }
+    let biten = 0;
+    geriIlerleme.max = Math.max(medya.length, 1);
+    const ilerle = (n) => {
+      biten = n;
+      geriIlerleme.value = biten;
+      geriDurum.textContent = `Dosyalar yükleniyor… ${sayi(biten)} / ${sayi(medya.length)}`;
+    };
+    ilerle(0);
+    try {
+      return await medyaEsle({
+        roomId, yerel, varOlan, medyalar: acik.medyalar(), geriYukle: medyaGeriYukle, yeniFoto: uploadPhoto, yeniSes: uploadAudio, onIlerleme: ilerle,
+      });
+    } catch (e) {
+      // Dosyanın devamı bozuk: elde kalan kayıtlar yine yüklensin.
+      return { harita: new Map(), yuklenen: biten, atlanan: 0, hata: 1, ilkHata: e?.message || 'Yedek dosyası bozulmuş.' };
+    }
+  });
+}
+
 async function geriYukle(dosya) {
+  let sifreli = false;
+  try { sifreli = await sifreliMi(dosya); } catch { /* aşağıda okuma hatası verir */ }
+  if (sifreli) {
+    await tamGeriYukle(dosya);
+    return;
+  }
   if (dosya.size > 25 * 1024 * 1024) {
     toast('Bu dosya bir Biz İkimiz yedeği olamayacak kadar büyük.');
     return;
@@ -659,19 +832,29 @@ async function geriYukle(dosya) {
   const atlanan = hatalar.length ? ' Okunamayan birkaç kayıt atlanır.' : '';
   const ok = await confirmDialog(`${yedekOzeti(sayilar)}.${atlanan} Var olan kayıtlar silinmez; daha yeni kopyalar korunur; silinmiş kayıtlar geri gelir.`, { ok: 'Geri yükle' });
   if (!ok) return;
+  await geriYuklemeCalistir(belgeler);
+}
 
+/** Belgeleri parçalarla yazar; önce medyaAdimi (varsa) dosyaları koyar ve yeni başvuruları verir. */
+async function geriYuklemeCalistir(belgelerIlk, medyaAdimi = null) {
+  let belgeler = belgelerIlk;
   const toplam = belgeler.length;
   let giden = 0;
   let yazilan = 0;
-  for (const b of [geriBtn, yedekBtn]) { b.disabled = true; }
+  let medya = null;
+  for (const b of [geriBtn, yedekBtn, tamBtn]) { b.disabled = true; }
   geriBtn.setAttribute('aria-busy', 'true');
-  geriIlerleme.max = toplam;
   geriKutu.hidden = false;
   const ilerle = () => {
     geriIlerleme.value = giden;
     geriDurum.textContent = `Geri yükleniyor… ${sayi(giden)} / ${sayi(toplam)}`;
   };
   try {
+    if (medyaAdimi) {
+      medya = await medyaAdimi();
+      belgeler = belgelereUygula(belgeler, medya.harita);
+    }
+    geriIlerleme.max = toplam;
     for (const parca of parcala(belgeler, PARCA)) {
       ilerle();
       yazilan += await iceAktar(roomId, parca);
@@ -685,14 +868,17 @@ async function geriYukle(dosya) {
     konum.refresh({ tam: true });
     copYukle({ zorla: true }); // yedek silinmiş kayıtları geri getirmiş olabilir
     sfx('pop');
-    toast(yazilan
+    const dosyaMetni = medya ? ` Dosya: ${sayi(medya.yuklenen)} yüklendi, ${sayi(medya.atlanan)} zaten vardı.` : '';
+    const dosyaHata = medya?.hata ? ` ${sayi(medya.hata)} dosya yüklenemedi: ${medya.ilkHata}` : '';
+    toast((yazilan
       ? `Geri yükleme bitti: ${sayi(yazilan)} kayıt eklendi ya da güncellendi.`
-      : 'Geri yükleme bitti. Yedekteki her şey zaten burada.');
+      : 'Geri yükleme bitti. Yedekteki kayıtlar zaten burada.') + dosyaMetni + dosyaHata, dosyaHata ? { ms: 10000 } : undefined);
+    kullanimYukle();
   } catch (e) {
     const kalan = giden ? ` ${sayi(giden)} kayıt yüklendi; kalanı için yeniden deneyebilirsin.` : '';
     toast(`${e?.message || 'Geri yüklenemedi.'}${kalan}`, { ms: 8000 });
   } finally {
-    for (const b of [geriBtn, yedekBtn]) { b.disabled = false; }
+    for (const b of [geriBtn, yedekBtn, tamBtn]) { b.disabled = false; }
     geriBtn.removeAttribute('aria-busy');
     geriKutu.hidden = true;
   }
@@ -749,7 +935,45 @@ function copSatiri(k, adlar) {
     h('div', { class: 'cop-metin' },
       h('p', { class: 'cop-baslik' }, o.metin),
       h('p', { class: 'cop-alt' }, `${o.tur} · ${copKimZaman(k.author, k.updated_at, { benId: myId, adlar })}`)),
-    islem('Geri al', 'btn small', `Geri al: ${o.tur}, ${o.metin}`, () => geriAl(k)));
+    h('div', { class: 'cop-eylem' },
+      islem('Geri al', 'btn small', `Geri al: ${o.tur}, ${o.metin}`, () => geriAl(k)),
+      islem('Kalıcı sil', 'btn small ghost', `Kalıcı sil: ${o.tur}, ${o.metin}`, () => copKaliciSil(k))));
+}
+
+async function copKaliciSil(k) {
+  const ok = await confirmDialog('Bu kayıt ve fotoğrafı ya da sesi sunucudan da silinecek. Geri alınamaz.', { ok: 'Kalıcı sil' });
+  if (!ok) return;
+  try {
+    await kaliciSil(roomId, k.tur, k.id);
+  } catch (e) {
+    toast(e?.message || 'Silinemedi. Bağlantını kontrol et.');
+    return;
+  }
+  copKayitlar = copKayitlar.filter((x) => x !== k);
+  copCiz();
+  copIcerik.querySelector('.cop .btn, [tabindex="-1"]')?.focus();
+  toast('Kalıcı olarak silindi.');
+}
+
+// ---------- Kullanım göstergesi ----------
+const kullanimMetin = h('p', { class: 'ayar-kullanim-metin' });
+const kullanimCubuk = h('progress', { class: 'ayar-ilerleme', max: '1', value: '0', 'aria-label': 'Fotoğraf ve ses alanı' });
+const kullanimAlt = h('p', { class: 'ayar-yardim' });
+const kullanimKutu = h('div', { class: 'ayar-alan', hidden: true },
+  h('div', { class: 'ayar-alan-ust' }, h('h3', { class: 'ayar-etiket' }, 'Fotoğraf ve ses alanı')), kullanimMetin, kullanimCubuk, kullanimAlt);
+
+async function kullanimYukle() {
+  let g = null;
+  try {
+    g = kullanimGorunum(await medyaKullanim(roomId));
+  } catch (e) {
+    console.warn('[kullanım]', e?.message || e); // işlev henüz yayında değilse gösterge çıkmaz
+  }
+  kullanimKutu.hidden = !g;
+  if (!g) return;
+  kullanimMetin.textContent = g.metin;
+  kullanimCubuk.value = g.oran;
+  kullanimAlt.textContent = g.uyari ? `${g.alt}. ${g.uyari}` : g.alt;
 }
 
 async function geriAl(k) {
@@ -1101,6 +1325,78 @@ const linkFormu = h('form', {
   h('p', { class: 'ayar-yardim', id: 'ayar-link-y' }, 'Sevgilinin davet linkini ya da tarayıcıdan aldığın taşıma linkini yapıştır.'),
   h('div', { class: 'ayar-eylemler' }, h('button', { type: 'submit', class: 'btn small' }, 'Linki uygula')));
 
+// ---------- Odayı tamamen sil (iki onay) ----------
+const odaSilKutu = h('div', { class: 'ayar-tehlike', hidden: true });
+
+async function odaSilOnayAkisi() {
+  const girdi = await girdiPenceresi({
+    metin: 'Bu oda; mesajlar, anılar, fotoğraflar ve seslerle birlikte ikiniz için de kalıcı olarak silinir. Geri dönüşü yok. Önce tam yedek al. Onaylamak için SİL yaz.',
+    alanlar: [{ etiket: 'Onay', tur: 'text', otomatik: 'off' }],
+    ok: 'Odayı sil',
+    dogrula: ([m]) => (m.trim().toLocaleUpperCase('tr') === 'SİL' ? null : 'Onaylamak için SİL yaz.'),
+  });
+  if (!girdi) return;
+  try {
+    if (!(await odaSilOnayla(roomId))) throw new Error('Silinemedi.');
+  } catch (e) {
+    toast(/ikinci cihaz/.test(e?.message || '') ? 'Bu isteği başka bir cihaz onaylamalı.' : 'Oda silinemedi. Bağlantını kontrol et.');
+    odaSilCiz();
+    return;
+  }
+  await cihazdanUnut(roomId);
+  location.replace(lobbyUrl());
+}
+
+async function odaSilCiz() {
+  let d = null;
+  try {
+    d = await odaSilDurum(roomId);
+  } catch (e) {
+    console.warn('[oda sil]', e?.message || e);
+  }
+  const g = odaSilGorunum(d);
+  odaSilKutu.hidden = g === 'yok';
+  if (g === 'yok') return;
+  const kalan = d.bekliyor ? Math.max(1, Math.ceil((Date.parse(d.son) - Date.now()) / 3_600_000)) : 0;
+  if (g === 'bos') {
+    odaSilKutu.replaceChildren(
+      h('p', { class: 'ayar-satir-aciklama' }, 'Odayı tamamen silmek ikinizin de onayını ister. Mesajlar, anılar, fotoğraflar ve sesler sunucudan kalıcı olarak silinir.'),
+      islem('Odayı tamamen sil', 'btn small ghost', 'Odayı tamamen sil', async () => {
+        if (!(await confirmDialog('Silme isteği sevgiline gider. 48 saat içinde o da onaylarsa oda kalıcı olarak silinir. Önce tam yedek almanı öneririz.', { ok: 'İsteği gönder' }))) return;
+        try {
+          await odaSilIste(roomId);
+          bildir(roomId, { tur: 'mesaj', baslik: 'Biz İkimiz', metin: 'Odayı silme isteği var. Ayarlar › Oda’dan bak.', url: 'sayfalar/ayarlar/#ayar-oda' });
+          toast('İstek gönderildi.');
+        } catch {
+          toast('İstek gönderilemedi. Bağlantını kontrol et.');
+        }
+        odaSilCiz();
+      }));
+  } else if (g === 'bekliyorum') {
+    odaSilKutu.replaceChildren(
+      h('p', { class: 'ayar-satir-aciklama', role: 'status' }, `Silme isteğin bekliyor. Sevgilin ${kalan} saat içinde onaylarsa oda silinir.`),
+      islem('Vazgeç', 'btn small', 'Silme isteğinden vazgeç', vazgec));
+  } else {
+    odaSilKutu.replaceChildren(
+      h('p', { class: 'ayar-satir-aciklama', role: 'status' }, d.ben
+        ? `Odada başka cihaz yok; silmeyi sen onaylarsın. İstek ${kalan} saat geçerli.`
+        : `Sevgilin odayı tamamen silmek istiyor. İstek ${kalan} saat geçerli.`),
+      h('div', { class: 'ayar-eylemler' },
+        islem('Onayla ve sil', 'btn small ghost', 'Onayla ve odayı kalıcı sil', odaSilOnayAkisi),
+        islem('Vazgeç', 'btn small', 'Silme isteğinden vazgeç', vazgec)));
+  }
+}
+
+async function vazgec() {
+  try {
+    await odaSilVazgec(roomId);
+    toast('Silme isteği kaldırıldı.');
+  } catch {
+    toast('Bağlantını kontrol et.');
+  }
+  odaSilCiz();
+}
+
 const odaKart = kart(
   linkFormu,
   h('div', { class: 'ayar-ayrac' }),
@@ -1129,15 +1425,22 @@ const odaKart = kart(
         await cihazdanUnut(roomId);
         location.replace(lobbyUrl());
       },
-    }, svg('cikis'), 'Bu cihazda odadan çık')));
+    }, svg('cikis'), 'Bu cihazda odadan çık')),
+  odaSilKutu);
 
 // ---------- Sayfa ----------
 const veriBolumu = bolum('veri', 'Verilerimiz', kart(
-  h('p', { class: 'ayar-satir-aciklama' }, 'Profiller, mesajlar, anılar, mektuplar, listeler ve özel günler tek bir dosyada. Fotoğrafların kendisi değil, adresleri girer. Geri yüklerken var olan kayıtlar silinmez.'),
-  h('div', { class: 'ayar-eylemler' }, yedekBtn, geriBtn, geriSecici),
-  geriKutu), copKart);
-// Son silinenler yalnız bölüm açılınca yüklenir (her türün tüm belgeleri okunur).
-veriBolumu.addEventListener('toggle', () => { if (veriBolumu.open) copYukle(); });
+  h('p', { class: 'ayar-satir-aciklama' }, 'Tam yedek: mesajlar, anılar, fotoğraflar ve sesler tek dosyada, senin parolanla şifreli. Ayda bir almanı öneririz. Geri yüklerken var olan kayıtlar silinmez.'),
+  h('div', { class: 'ayar-eylemler' }, tamBtn, geriBtn, geriSecici),
+  yedekSonSatir,
+  geriKutu,
+  h('div', { class: 'ayar-ayrac' }),
+  h('p', { class: 'ayar-yardim' }, 'Düz yedek yalnız kayıtları alır: fotoğrafların kendisi girmez ve dosya şifresizdir.'),
+  h('div', { class: 'ayar-eylemler' }, yedekBtn)), kart(kullanimKutu), copKart);
+yedekSonCiz();
+const veriAcildi = () => { if (veriBolumu.open) { copYukle(); kullanimYukle(); } };
+// Son silinenler ve kullanım yalnız bölüm açılınca yüklenir (her türün tüm belgeleri okunur).
+veriBolumu.addEventListener('toggle', veriAcildi);
 
 app.replaceChildren(h('div', { class: 'ayar' },
   canli,
@@ -1160,6 +1463,8 @@ const hepsiniYenile = () => { profilYenile(); bizYenile(); };
 profil.on('change', hepsiniYenile);
 konum.on('change', konumCiz);
 hepsiniYenile();
+veriAcildi();
+odaSilCiz();
 konumCiz();
 temaYenile();
 kilitCiz();
@@ -1171,6 +1476,7 @@ document.addEventListener('visibilitychange', () => {
   bildirimCiz();
   konumCiz();
   cihazYukle();
+  odaSilCiz();
 });
 window.addEventListener('bizim:uyelik', (e) => { if (e.detail?.roomId === roomId) cihazYukle(); });
 setInterval(() => { if (document.visibilityState === 'visible' && uyeModu()) cihazYukle(); }, 20_000);

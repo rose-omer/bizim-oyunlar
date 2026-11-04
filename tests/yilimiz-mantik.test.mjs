@@ -169,3 +169,47 @@ test('gorselOzeti: sıfır olmayan sayılar, en çok 6; ad ve yıl', () => {
   assert.deepEqual(g.sayilar, [{ deger: '2', etiket: 'mesaj' }, { deger: '1', etiket: 'maç' }, { deger: '304', etiket: 'gün birlikte' }]);
   assert.equal(g.emoji, '❤️');
 });
+
+test('fotoGunOzeti: yalnız o yıl, ikinizin de gönderdiği günler', async () => {
+  const { fotoGunOzeti } = await import('../sayfalar/yilimiz/mantik.js');
+  const d = (gun, kim) => ({ id: gun + '-' + kim, data: { foto: 'x.webp' } });
+  const l = [d('2026-03-01', 'ben'), d('2026-03-01', 'o'), d('2026-03-02', 'ben'), d('2025-03-01', 'ben'), d('2025-03-01', 'o')];
+  assert.deepEqual(fotoGunOzeti(l, 2026, 'ben'), { gun: 2, ortak: 1 });
+  assert.deepEqual(fotoGunOzeti([], 2026, 'ben'), { gun: 0, ortak: 0 });
+});
+
+test('mektupOzeti: o yıl yazılanlar; kilitli kapsül sayılmaz ve ele verilmez', async () => {
+  const { mektupOzeti } = await import('../sayfalar/yilimiz/mantik.js');
+  const simdi = Date.parse('2026-06-01T00:00:00Z');
+  const m = (kimden, created_at, data = {}) => ({ author: kimden, created_at, data: { kimden, ...data } });
+  const l = [
+    m('ben', '2026-02-01T10:00:00Z'), m('o', '2026-03-01T10:00:00Z'), m('o', '2026-04-01T10:00:00Z'),
+    m('o', '2026-05-01T10:00:00Z', { acilis: '2027-01-01T00:00:00Z' }),
+    m('ben', '2026-02-01T10:00:00Z', { acilis: '2026-05-01T00:00:00Z' }), // açılmış kapsül sayılır
+    m('o', '2025-03-01T10:00:00Z'),
+  ];
+  assert.deepEqual(mektupOzeti(l, 2026, simdi), { sayi: 4, kisiler: { ben: 2, o: 2 } });
+});
+
+test('hikayeKartlari: fotoğraf ve mektup kartı yalnız veri varsa, sayfasına bağlantıyla', async () => {
+  const { yilOzeti, hikayeKartlari } = await import('../sayfalar/yilimiz/mantik.js');
+  const bos = { baslangic: null, mesajlar: [], dokunuslar: [], anilar: [], gs: [], skor: {}, mesajAsildi: false };
+  const kisiler = [{ id: 'ben', ad: 'Ömer' }, { id: 'o', ad: 'Gül' }];
+  const kimlik = { yil: 2026, bugun: '2026-06-01', ids: ['ben', 'o'] };
+  const ids = (v) => hikayeKartlari(yilOzeti(v, kimlik), { kisiler }).map((k) => k.id);
+  assert.ok(!ids(bos).includes('gunfoto'));
+  assert.ok(!ids(bos).includes('mektup'));
+  const dolu = {
+    ...bos,
+    gunfoto: [{ id: '2026-03-01-ben', data: { foto: 'a' } }, { id: '2026-03-01-o', data: { foto: 'b' } }],
+    mektuplar: [{ author: 'ben', created_at: '2026-02-01T10:00:00Z', data: { kimden: 'ben' } }],
+  };
+  const kartlar = hikayeKartlari(yilOzeti(dolu, kimlik), { kisiler });
+  const foto = kartlar.find((k) => k.id === 'gunfoto');
+  const mektup = kartlar.find((k) => k.id === 'mektup');
+  assert.match(foto.baslik, /1 gün/);
+  assert.equal(foto.eylem.yol, 'sayfalar/gunfoto/');
+  assert.match(mektup.baslik, /1 mektup/);
+  assert.equal(mektup.eylem.yol, 'sayfalar/mektup/');
+  assert.ok(!kartlar.some((k) => k.id === 'bos'));
+});

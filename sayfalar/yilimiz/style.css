@@ -234,6 +234,7 @@
 .yl-ok:disabled { opacity: 0.4; cursor: default; }
 
 /* ---------- Diğer sayfalar ---------- */
+.yl-kart-git { align-self: flex-start; }
 .yl-baglantilar { margin-top: 8px; }
 .yl-yon-ikon { color: var(--accent-strong); }
 .yl-yon-ikon svg { width: 24px; height: 24px; }

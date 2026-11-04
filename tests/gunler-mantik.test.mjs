@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {
   iyelik, dogumGunleri, kacinciYazi, birlesikListe, gecmisPlanlar, olusumlar, takvimOlaylari,
   tasZaman, hatirlatmalar, kutlamaGerekli, gunDogrula, bulusmaIso, isoParcala, bulusmaDogrula,
-  tarihYazi, ayBasligi, haftaGunleri, ayKaydir, sureYazi, oneriler, kalanYazi,
+  tarihYazi, ayBasligi, haftaGunleri, ayKaydir, sureYazi, oneriler, kalanYazi, gununAnilari,
 } from '../sayfalar/gunler/mantik.js';
 
 const BUGUN = '2026-10-30';
@@ -204,4 +204,12 @@ test('metin biçimleri (tr-TR)', () => {
   assert.equal(oneriler(BUGUN)[3].etiket, 'Sevgililer Günü (14 Şubat)');
   assert.deepEqual([kalanYazi(0), kalanYazi(1), kalanYazi(5), kalanYazi(-1), kalanYazi(-90)],
     ['Bugün', 'Yarın', '5 gün kaldı', 'Dün', '90 gün önce']);
+});
+
+test('gununAnilari: o tarih ve geçmiş yılların aynı günü; yakın olan önce; gelecek yıl yok', () => {
+  const a = (id, tarih) => ({ id, created_at: '2026-01-01T00:00:00Z', data: { baslik: id, tarih } });
+  const l = [a('uzak', '2023-10-30'), a('baska', '2026-10-29'), a('bu', '2026-10-30'), a('yakin', '2025-10-30'), a('sonra', '2027-10-30')];
+  assert.deepEqual(gununAnilari(l, '2026-10-30').map((d) => d.id), ['bu', 'yakin', 'uzak']);
+  assert.deepEqual(gununAnilari([], '2026-10-30'), []);
+  assert.deepEqual(gununAnilari(null, '2026-10-30'), []);
 });

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  NOT_MAX, docId, fotoOku, gunlereGore, gunDurumu, gorunum, yeniKayit, arsiv, bildirimMetni,
+  NOT_MAX, docId, fotoOku, gunlereGore, gunDurumu, gorunum, yeniKayit, arsiv, bildirimMetni, aniTaslagi,
 } from '../sayfalar/gunfoto/mantik.js';
 
 const BEN = 'omer-test-id';
@@ -96,4 +96,13 @@ test('bildirimMetni: partner göndermişse açılış, yoksa davet', () => {
   assert.match(acilis.baslik, /açıldı/);
   assert.match(acilis.metin, /Ömer/);
   assert.match(bildirimMetni({ benAd: '', partnerGonderdi: false }).metin, /^Sevgilin/);
+});
+
+test('aniTaslagi: yalnız açık fotoğraflar; kilitli partner fotoğrafı asla girmez', () => {
+  const ben = { foto: 'b.webp', not: 'kahve' };
+  const o = { foto: 'o.webp', not: '' };
+  assert.deepEqual(aniTaslagi({ ben, partner: o }, { ben: 'acik', partner: 'acik' }), { fotolar: ['b.webp', 'o.webp'], not: 'kahve' });
+  assert.deepEqual(aniTaslagi({ ben: null, partner: o }, { ben: 'bos', partner: 'kilitli' }), { fotolar: [], not: '' });
+  assert.deepEqual(aniTaslagi({ ben: null, partner: o }, { ben: 'bos', partner: 'acik' }), { fotolar: ['o.webp'], not: '' });
+  assert.equal(aniTaslagi({ ben: { foto: 'b', not: 'x' }, partner: { foto: 'o', not: 'y' } }, { ben: 'acik', partner: 'acik' }).not, 'x\ny');
 });

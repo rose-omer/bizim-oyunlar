@@ -1,14 +1,16 @@
-// "Daha": gruplu özellik listesi, davet (sevgili yokken), uygulamayı yükle, Android APK. Ayarlar üst çubukta.
+// "Daha": arama, son kullanılanlar, gruplu özellik listesi, davet (sevgili yokken), uygulamayı yükle, Android APK. Ayarlar üst çubukta.
 import { bootPage } from '../../js/core/sayfa.js';
 import { SAYFALAR, SEKMELER, sayfaById } from '../../js/core/games.js';
-import { pageUrl } from '../../js/core/identity.js';
+import { pageUrl, readStore, writeStore } from '../../js/core/identity.js';
 import { openProfil } from '../../js/core/profil.js';
 import { h, icon, toast, shareInvite, knownPartner } from '../../js/core/ui.js';
 import { kurulumDurumu } from '../../js/core/pwa.js';
 import { isNative } from '../../js/core/mobil.js';
-import { APK_URL, IOS_ADIMLARI, dahaGruplari, davetGoster, apkGoster, kurulumGorunum } from './mantik.js';
+import {
+  APK_URL, IOS_ADIMLARI, dahaGruplari, davetGoster, apkGoster, kurulumGorunum, dahaAra, sonOku, sonEkle, sonSayfalar,
+} from './mantik.js';
 
-const { room, roomId } = await bootPage({ ns: 'daha', title: 'Daha', tab: 'daha' });
+const { room, roomId, me } = await bootPage({ ns: 'daha', title: 'Daha', tab: 'daha' });
 const app = document.getElementById('app');
 
 const STROKE = 'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"';
@@ -18,6 +20,7 @@ const SVG = {
   yukle: '<path d="M12 4v10.5M7.5 10 12 14.5 16.5 10"/><path d="M5 19.5h14"/>',
   telefon: '<rect x="6.5" y="2.5" width="11" height="19" rx="2.5"/><path d="M10.5 18.5h3"/>',
   ekle: '<rect x="4" y="4" width="16" height="16" rx="4"/><path d="M12 8.5v7M8.5 12h7"/>',
+  ara: '<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/>',
 };
 
 // ---------- Üst çubuk: Ayarlar ----------
@@ -42,11 +45,16 @@ function satir({ ikon, baslik, aciklama, sag = null, ek = null, ...props }) {
     ek);
 }
 
+// Yerel modda iki sekme aynı depoyu paylaşır: anahtar kişiye özel.
+const SON_ANAHTAR = `bizim.daha.son.${me.clientId}`;
+const sonKaydet = (id) => writeStore('local', SON_ANAHTAR, JSON.stringify(sonEkle(sonOku(readStore('local', SON_ANAHTAR)), id)));
+
 const sayfaSatiri = (s) => satir({
   ikon: h('span', { class: 'daha-emoji', 'aria-hidden': 'true' }, s.icon),
   baslik: s.title,
   aciklama: s.desc,
   href: pageUrl(s.path),
+  onclick: () => sonKaydet(s.id),
   sag: svg(SVG.ileri),
 });
 
@@ -123,13 +131,63 @@ function uygulamaCiz() {
   uygulamaBolumu.hidden = !satirlar.length;
 }
 
-app.replaceChildren(h('div', { class: 'daha' },
+const gruplar = dahaGruplari(SAYFALAR, SEKMELER);
+
+// Son kullandıkların: yalnız bu cihazda; hiç yoksa bölüm yok.
+const sonListe = h('ul', { class: 'daha-son', role: 'list' });
+const sonBolumu = bolum('son', 'Son kullandıkların', sonListe);
+function sonCiz() {
+  const liste = sonSayfalar(sonOku(readStore('local', SON_ANAHTAR)), gruplar);
+  sonListe.replaceChildren(...liste.map((s) => h('li', {},
+    h('a', { class: 'daha-son-oge', href: pageUrl(s.path), onclick: () => sonKaydet(s.id) },
+      h('span', { class: 'daha-emoji', 'aria-hidden': 'true' }, s.icon),
+      h('span', { class: 'daha-son-ad' }, s.title)))));
+  sonBolumu.hidden = !liste.length;
+}
+
+// Arama: yazarken süzer; sonuç varken gruplar gizli.
+const araDurum = h('p', { class: 'daha-ara-durum', role: 'status' });
+const araListe = h('ul', { class: 'daha-liste', role: 'list', hidden: true });
+const araSonuc = h('section', { class: 'daha-bolum', 'aria-label': 'Arama sonuçları', hidden: true }, araDurum, araListe);
+const araGirdi = h('input', {
+  id: 'daha-ara', class: 'input daha-ara-girdi', type: 'search', autocomplete: 'off', enterkeyhint: 'search',
+  placeholder: 'Ne arıyorsun? Mektup, harcama…',
+});
+const icerik = h('div', {},
   davetBolumu,
-  dahaGruplari(SAYFALAR, SEKMELER).map((g) => bolum(g.id, g.baslik,
+  sonBolumu,
+  gruplar.map((g) => bolum(g.id, g.baslik,
     h('ul', { class: 'daha-liste', role: 'list' }, g.sayfalar.map(sayfaSatiri)), g.id)),
-  uygulamaBolumu));
+  uygulamaBolumu);
+function araCiz() {
+  const sorgu = araGirdi.value.trim();
+  icerik.hidden = !!sorgu;
+  araSonuc.hidden = !sorgu;
+  if (!sorgu) return;
+  const liste = dahaAra(SAYFALAR, sorgu);
+  araListe.replaceChildren(...liste.map(sayfaSatiri));
+  araListe.hidden = !liste.length;
+  araDurum.textContent = liste.length ? `${liste.length} sonuç` : `“${sorgu}” için bir şey bulamadık. Başka bir kelime dene.`;
+}
+araGirdi.addEventListener('input', araCiz);
+araGirdi.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape' || !araGirdi.value) return;
+  araGirdi.value = '';
+  araCiz();
+});
+
+app.replaceChildren(h('div', { class: 'daha' },
+  h('div', { class: 'daha-ara', role: 'search' },
+    h('label', { class: 'sr-only', for: 'daha-ara' }, 'Özelliklerde ara'),
+    h('span', { class: 'daha-ara-ikon' }, svg(SVG.ara)),
+    araGirdi),
+  araSonuc,
+  icerik));
 davetCiz();
 uygulamaCiz();
+sonCiz();
+// Geri ile dönünce (sayfa önbelleği) son kullanılanlar ve arama yeniden çizilsin.
+addEventListener('pageshow', () => { sonCiz(); araCiz(); });
 
 room.on('presence', davetCiz);
 openProfil(room).then((p) => {

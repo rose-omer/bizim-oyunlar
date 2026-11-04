@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   MAX_METIN, gunAnahtari, gunEtiketi, saatEtiketi, gonderen, satirlar, baglantilar, kisalt, ozet,
   metniTemizle, metinHatasi, tepkiYamasi, tepkiOzeti, okunduHedefi, gorulduBilgisi, sadeceEmoji,
-  yaziyorGonderilsinMi, altaYakinMi,
+  yaziyorGonderilsinMi, altaYakinMi, okunmamisSayisi, rozetMetni,
 } from '../sayfalar/sohbet/mantik.js';
 
 // Yerel saatle tarih üret (testler saat diliminden bağımsız kalsın).
@@ -203,4 +203,37 @@ test('gunEtiketi aynı biçimleyiciyi yeniden kullanır (sonuç değişmez)', as
     assert.equal(gunEtiketi(new Date(2026, 9, 12, 9).toISOString(), simdi), '12 Ekim Pazartesi');
     assert.equal(gunEtiketi(new Date(2025, 11, 31, 9).toISOString(), simdi), '31 Aralık 2025 Çarşamba');
   }
+});
+
+test('okunmamisSayisi: okundu işaretinden sonraki karşı taraf mesajları (liste yeniden eskiye)', () => {
+  const m = (id, kimden, created_at = '2026-11-04T10:00:00Z') => ({ id, author: kimden, data: { kimden }, created_at });
+  const sayfa = [m('d', 'o'), m('c', 'o'), m('b', 'o'), m('a', 'o')];
+  assert.equal(okunmamisSayisi(sayfa, { data: { son: 'b' } }, 'ben'), 2);
+  assert.equal(okunmamisSayisi(sayfa, { data: { son: 'd' } }, 'ben'), 0);
+  assert.equal(okunmamisSayisi(sayfa, null, 'ben'), 4); // hiç okundu yok
+  assert.equal(okunmamisSayisi([], null, 'ben'), 0);
+  assert.equal(okunmamisSayisi(null, null, 'ben'), 0);
+});
+
+test('okunmamisSayisi: benim mesajım önceki her şeyi görülmüş sayar; bekleyen sayılmaz', () => {
+  const m = (id, kimden) => ({ id, author: kimden, data: { kimden }, created_at: '2026-11-04T10:00:00Z' });
+  assert.equal(okunmamisSayisi([m('c', 'o'), m('b', 'ben'), m('a', 'o')], null, 'ben'), 1);
+  assert.equal(okunmamisSayisi([m('b', 'ben'), m('a', 'o')], null, 'ben'), 0);
+  // Tepki yazınca author değişir; gönderen data.kimden'dir.
+  assert.equal(okunmamisSayisi([{ id: 'x', author: 'o', data: { kimden: 'ben' } }, m('a', 'o')], null, 'ben'), 0);
+  assert.equal(okunmamisSayisi([{ ...m('p', 'o'), pending: true }], null, 'ben'), 0);
+});
+
+test('okunmamisSayisi: işaret sayfada yoksa (silinmiş, eski) zamana bakar', () => {
+  const m = (id, saat) => ({ id, author: 'o', data: { kimden: 'o' }, created_at: '2026-11-04T' + saat + ':00:00Z' });
+  const ok = { data: { son: 'silinen', at: '2026-11-04T10:30:00Z' } };
+  assert.equal(okunmamisSayisi([m('c', '12'), m('b', '11'), m('a', '10')], ok, 'ben'), 2);
+  assert.equal(okunmamisSayisi([m('c', '12')], { data: { son: 'silinen' } }, 'ben'), 1); // zaman da yok
+});
+
+test('rozetMetni: 9 üstü 9+, yoksa boş', () => {
+  assert.equal(rozetMetni(0), '');
+  assert.equal(rozetMetni(3), '3');
+  assert.equal(rozetMetni(9), '9');
+  assert.equal(rozetMetni(10), '9+');
 });

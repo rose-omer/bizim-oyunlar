@@ -1,14 +1,13 @@
 // Biz İkimiz service worker (site kökünde; kapsam = site kökü, alt klasörde de doğru). Sahip: Sunucu ajanı.
 // - HTML, JS ve CSS: ağ önce, önbellek yedek (yeni sürüm hemen ve birlikte gelir; çevrimdışında son kopya).
 // - Görsel, ikon, font: önbellekten hemen, arkada tazele (stale-while-revalidate).
-// - Supabase, YouTube ve diğer dış adresler önbelleğe alınmaz (yalnız Google Fonts alınır).
+// - Supabase, YouTube ve diğer dış adresler önbelleğe alınmaz.
 // - push → bildirim gösterir; bildirime dokununca açık pencereyi odaklar ya da sayfayı açar.
 // Tüm önbelleği atmak için SURUM'u değiştir.
-const SURUM = '2026-10-30.2';
+const SURUM = '2026-11-04.1';
 const ONBELLEK = `biz-${SURUM}`;
 const KOK = new URL('./', self.location.href).href;
-const ON_YUKLE = ['./', 'css/base.css', 'assets/favicon.svg', 'manifest.webmanifest', 'assets/icons/icon-192.png', 'assets/icons/rozet-96.png'];
-const FONT_HOST = new Set(['fonts.googleapis.com', 'fonts.gstatic.com']);
+const ON_YUKLE = ['./', 'css/base.css', 'assets/favicon.svg', 'manifest.webmanifest', 'assets/icons/icon-192.png', 'assets/icons/rozet-96.png', 'assets/fonts/fraunces.woff2', 'assets/fonts/nunito.woff2'];
 const VARLIK_RE = /\.(png|jpe?g|webp|gif|svg|ico|woff2?|ttf|otf|webmanifest)$/i;
 const VARLIK_HEDEF = new Set(['image', 'font', 'manifest']);
 
@@ -48,7 +47,6 @@ self.addEventListener('fetch', (e) => {
     }
     return;
   }
-  if (FONT_HOST.has(url.hostname)) e.respondWith(tazeleArkada(e));
   // Supabase, YouTube ve diğerleri: dokunma (tarayıcı doğrudan gider).
 });
 

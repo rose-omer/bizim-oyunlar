@@ -1,4 +1,7 @@
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT@0,9..144,400..700,0..100;1,9..144,400..700,0..100&family=Nunito:wght@400..800&display=swap');
+/* Fontlar sitede (OFL, assets/fonts/OFL-*.txt). Türkçe alt küme; Fraunces'ta SOFT 100'e sabit, ağırlık 400–700. */
+@font-face { font-family: 'Fraunces'; font-style: normal; font-weight: 400 700; font-display: swap; src: url('../assets/fonts/fraunces.woff2') format('woff2'); }
+@font-face { font-family: 'Fraunces'; font-style: italic; font-weight: 400 700; font-display: swap; src: url('../assets/fonts/fraunces-italic.woff2') format('woff2'); }
+@font-face { font-family: 'Nunito'; font-style: normal; font-weight: 400 800; font-display: swap; src: url('../assets/fonts/nunito.woff2') format('woff2'); }
 
 /* Biz İkimiz — ortak görünüm.
    Oyunlar renk sabit yazmaz; aşağıdaki değişkenleri kullanır.

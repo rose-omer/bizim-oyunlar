@@ -44,7 +44,7 @@ Kayıt: `js/core/games.js` → `GAMES` dizisi (koordinatör yazdı).
 - Alt ajanlar tarayıcı aracı kullanmaz. Tarayıcı testini koordinatör yapar.
 - Ağ bütçesi: istemci başına en fazla 10 mesaj/sn (sürekli). Tek mesaj < 100 KB.
   Sürükleme ve çizim verisi 100 ms'de bir toplu gönderilir; alıcı yumuşatır.
-- Font: Google Fonts `@import` ile `css/base.css` içinde. Başka CDN yok.
+- Font: Fraunces ve Nunito sitede: `assets/fonts/` (alt küme WOFF2, OFL), `css/base.css` `@font-face`, `font-display: swap`. Font için dış adres yok; CSP `font-src 'self'`.
 - Erişilebilirlik: gerçek `<button>`, görünür odak, `aria-label`, en az 44 px dokunma alanı.
 - Kullanıcıya görünen metin Türkçe, sıcak ve kısa. Açık saçık içerik yok (en fazla PG-13).
 

@@ -15,6 +15,7 @@ const types = {
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
   '.ico': 'image/x-icon',
+  '.woff2': 'font/woff2',
   '.webmanifest': 'application/manifest+json',
 };
 

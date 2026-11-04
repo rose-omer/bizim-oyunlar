@@ -8,7 +8,8 @@ import { toDay } from '../../js/core/gunler.js';
 import { pageUrl, writeStore } from '../../js/core/identity.js';
 import { h, toast, initial, genitive, knownPartner } from '../../js/core/ui.js';
 import { sfx } from '../../js/core/sound.js';
-import { dosyaSec, fotoMu, fotoYukle, fotoImg } from '../../js/core/foto.js';
+import { dosyaSec, fotoMu, fotoKucult, fotoImg, hataMetni } from '../../js/core/foto.js';
+import { uploadPhoto } from '../../js/core/storage.js';
 import { ikon } from '../anilar/ikon.js';
 import { ANI_TASLAK_ANAHTARI } from '../anilar/mantik.js';
 import {
@@ -41,7 +42,7 @@ const buyukHarf = (s) => (s ? s[0].toLocaleUpperCase('tr') + s.slice(1) : s);
 
 // ---------- Durum ----------
 let bugun = toDay();
-let secim = null;       // { file, url } seçilmiş ama gönderilmemiş fotoğraf
+let secim = null;       // { blob, url } seçilmiş (küçültülmüş) ama gönderilmemiş fotoğraf
 let gonderiliyor = false;
 let onceki = null;      // { gun, ikisi, partner }: canlı açılışı yakalamak için
 
@@ -259,8 +260,16 @@ async function sec() {
     toast('Bu bir fotoğraf değil gibi. Lütfen bir fotoğraf seç.');
     return;
   }
+  // Hemen küçült: Android'de seçilen dosya bir süre sonra okunamaz olabiliyor.
+  let blob;
+  try {
+    ({ blob } = await fotoKucult(file));
+  } catch (err) {
+    toast(hataMetni(err, file));
+    return;
+  }
   if (secim) URL.revokeObjectURL(secim.url);
-  secim = { file, url: URL.createObjectURL(file) };
+  secim = { blob, url: URL.createObjectURL(blob) };
   ciz();
   notGirdi.value = '';
   notGirdi.focus({ preventScroll: true });
@@ -295,7 +304,7 @@ async function gonder(e) {
   gonderBtn.textContent = 'Gönderiliyor…';
   ciz();
   try {
-    const [url] = await fotoYukle(roomId, [secim.file], { enFazla: 1 });
+    const url = await uploadPhoto(secim.blob, roomId).catch((e) => { throw new Error(hataMetni(e)); });
     const r = yeniKayit({ foto: url, not: notGirdi.value });
     await col.put(r.data, docId(gun, me.clientId));
   } catch (err) {

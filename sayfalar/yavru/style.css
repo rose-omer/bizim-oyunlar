@@ -312,6 +312,7 @@
 }
 .yv-asama { background: var(--accent-soft); color: var(--accent-strong); }
 .yv-kisilik { background: var(--tint-6); color: var(--text); cursor: help; }
+.yv-seri { background: var(--accent-soft); color: var(--accent-strong); font-variant-numeric: tabular-nums; }
 .yv-jeton { gap: 4px; background: var(--surface-2); color: var(--text); font-variant-numeric: tabular-nums; }
 .yv-buyume { margin: 0; color: var(--muted); font-size: 0.875rem; font-weight: 650; line-height: 1.4; }
 
@@ -824,6 +825,31 @@
 
 /* ---------- Partner odası, görev odası, ninni, sallama ---------- */
 .yv-burada { max-width: calc(100% - 24px); }
+.yv-gorev-seri { margin: 0; color: var(--accent-strong); font-size: 0.875rem; font-weight: 750; line-height: 1.4; }
+.yv-gorev-seri[hidden] { display: none; }
+.yv-ad-oneri { display: flex; flex-wrap: wrap; gap: 8px; }
+.yv-ad-oneri[hidden] { display: none; }
+.yv-ad-oneri .btn { min-height: 44px; }
+/* ---------- İlk gün rehberi ---------- */
+.yv-rehber {
+  display: flex; flex-direction: column; gap: 12px; padding: 14px 16px;
+  border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface);
+}
+.yv-rehber[hidden] { display: none; }
+.yv-adimlar { display: flex; flex-direction: column; gap: 12px; margin: 0; padding: 0; list-style: none; }
+.yv-adim { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 10px; align-items: start; }
+.yv-adim-no {
+  display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%;
+  background: var(--surface-2); color: var(--muted); font-size: 0.875rem; font-weight: 850; font-variant-numeric: tabular-nums;
+}
+.yv-adim[data-durum='simdi'] .yv-adim-no { background: var(--accent-soft); color: var(--accent-strong); }
+.yv-adim[data-durum='tamam'] .yv-adim-no { background: color-mix(in srgb, var(--good) 18%, var(--surface)); color: var(--good); }
+.yv-adim-govde { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; }
+.yv-adim-baslik { font-weight: 800; line-height: 1.35; }
+.yv-adim[data-durum='sonra'] .yv-adim-baslik { color: var(--muted); }
+.yv-adim-alt { color: var(--muted); font-size: 0.875rem; font-weight: 650; line-height: 1.4; }
+.yv-davet { min-height: 44px; margin-top: 6px; }
+.yv-davet[hidden] { display: none; }
 .yv-gorev-odalar { display: flex; flex-wrap: wrap; gap: 8px; }
 .yv-gorev-odalar[hidden] { display: none; }
 .yv-gorev-git { gap: 6px; }

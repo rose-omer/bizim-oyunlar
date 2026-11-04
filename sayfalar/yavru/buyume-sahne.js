@@ -1,12 +1,14 @@
 // Yavrumuz: "büyüdü" geçiş sahnesi. Kundaktaki bebek parıltıyla oturan büyük bebeğe dönüşür; yazı ve kısa konfeti.
 // ~3,8 sn; dokununca (ya da Escape/Enter) geçilir; hareket azaltmada doğrudan son kare. Çatlama sahnesi deseni
 // (cizim.js .yv-cs + app.js catlamaSahnesi): tam ekran kat, arka plan inert, cihaz başına bir kez (kararı çağıran verir).
+// kutlamaSahnesi aynı kabukla kısa kutlama: evre, ay dönümü, doğum günü, seri ödülü, mum (tek bebek, başlık, alt satır).
 // Üst düzeyde DOM yok: buyumeSahnesiGerekli, buyumeMetni, konfetiParcalari, buyumeCizimleri Node'da test edilir.
 import { bebekSvg } from './bebek.js';
 import { SAHNE_SURE } from './mantik.js';
 
 export const BUYUME_SURE = 3800; // ms: kendiliğinden kapanma (hareketli)
 export const BUYUME_SURE_AZ = 2400; // ms: hareket azaltmada son karenin ekranda kalma süresi
+export const KUTLAMA_SURE = 4600; // ms: kutlama sahnesi kendiliğinden kapanma
 
 /**
  * Büyüme sahnesi oynasın mı: yavru büyümüş, büyüme son SAHNE_SURE (3 gün) içinde ve bu cihaz sahneyi görmemiş
@@ -64,43 +66,30 @@ function stilEkle() {
   document.head.append(s);
 }
 
+const yap = (tag, cls, html) => {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (html) e.innerHTML = html; // yalnız kodla üretilen SVG
+  return e;
+};
+
 /**
- * Sahneyi oynatır. kok: eklenecek kap (genelde document.body; diğer çocukları sahne boyunca inert).
- * renk 1–6, kisilik, giyim ({ bas, goz, boyun }: giyim.js giyimOku), ad (yazı), onBitti (kapanınca bir kez).
- * -> { kapat() }. Çizim stilleri (CIZIM_CSS + BEBEK_CSS) sayfada olmalı.
+ * Tam ekran kabuk: sahne, metin, Devam, konfeti, inert arka plan, odak, kapanış. Dokunmak ya da Escape/Enter geçer.
+ * -> { kapat() }. yazilar: [[öğe, metin, gecikme ms]] (ekran okuyucu bir kez okur; hareket azaltmada hemen).
  */
-export function buyumeSahnesi(kok, { renk = 1, kisilik = '', giyim = null, ad = '', onBitti } = {}) {
+function sahneKabugu(kok, { sahne, sinif = '', c, etiket, metinler, yazilar, sure, sureAz, onBitti }) {
   stilEkle();
   const az = azHareket();
-  const c = Number.isInteger(renk) && renk >= 1 && renk <= 6 ? renk : 1;
-  const ciz = buyumeCizimleri({ renk: c, kisilik, giyim });
   const onceOdak = document.activeElement;
-  const yap = (tag, cls, html) => {
-    const e = document.createElement(tag);
-    if (cls) e.className = cls;
-    if (html) e.innerHTML = html; // yalnız kodla üretilen SVG
-    return e;
-  };
-
-  const sahne = yap('div', 'yv-bs-sahne');
-  sahne.setAttribute('aria-hidden', 'true');
-  sahne.append(yap('span', 'yv-bs-hale'), yap('span', 'yv-bs-kucuk', ciz.kucuk), yap('span', 'yv-bs-isik'), yap('span', 'yv-bs-buyuk', ciz.buyuk));
-  for (const [x, yy, g, s] of YILDIZLAR) {
-    const y = yap('span', 'yv-bs-yildiz', YILDIZ);
-    y.style.cssText = `left:${x}%;top:${yy}%;--gecik:${g}s;--olcek:${s}`;
-    sahne.append(y);
-  }
-  const metin = yap('p', 'yv-bs-metin');
-  metin.setAttribute('role', 'status');
   const gec = yap('button', 'yv-bs-gec');
   gec.type = 'button';
   gec.textContent = 'Devam';
-  const kat = yap('div', `yv-bs${az ? ' az' : ''}`);
+  const kat = yap('div', `yv-bs${sinif ? ` ${sinif}` : ''}${az ? ' az' : ''}`);
   kat.setAttribute('role', 'dialog');
   kat.setAttribute('aria-modal', 'true');
-  kat.setAttribute('aria-label', buyumeMetni(ad));
+  kat.setAttribute('aria-label', etiket);
   kat.style.setProperty('--yv-govde', `var(--yv-r${c})`);
-  kat.append(sahne, metin, gec);
+  kat.append(sahne, ...metinler, gec);
   if (!az) {
     const konfeti = yap('div', 'yv-bs-konfeti');
     konfeti.setAttribute('aria-hidden', 'true');
@@ -117,10 +106,8 @@ export function buyumeSahnesi(kok, { renk = 1, kisilik = '', giyim = null, ad = 
   kok.append(kat);
   gec.focus({ preventScroll: true });
 
-  const zamanlar = [];
-  // Yazı parıltıyla gelir (ekran okuyucu bir kez okur); hareket azaltmada hemen.
-  zamanlar.push(setTimeout(() => { metin.textContent = buyumeMetni(ad); }, az ? 0 : 1900));
-  zamanlar.push(setTimeout(kapat, az ? BUYUME_SURE_AZ : BUYUME_SURE));
+  const zamanlar = yazilar.map(([e, metin, gecikme]) => setTimeout(() => { e.textContent = metin; }, az ? 0 : gecikme));
+  zamanlar.push(setTimeout(kapat, az ? sureAz : sure));
 
   let kapandi = false;
   function kapat() {
@@ -141,6 +128,60 @@ export function buyumeSahnesi(kok, { renk = 1, kisilik = '', giyim = null, ad = 
   kat.addEventListener('click', kapat);
   document.addEventListener('keydown', tus);
   return { kapat };
+}
+
+const renkNo = (renk) => (Number.isInteger(renk) && renk >= 1 && renk <= 6 ? renk : 1);
+
+function yildizlar(sahne) {
+  for (const [x, yy, g, s] of YILDIZLAR) {
+    const y = yap('span', 'yv-bs-yildiz', YILDIZ);
+    y.style.cssText = `left:${x}%;top:${yy}%;--gecik:${g}s;--olcek:${s}`;
+    sahne.append(y);
+  }
+}
+
+/**
+ * Sahneyi oynatır. kok: eklenecek kap (genelde document.body; diğer çocukları sahne boyunca inert).
+ * renk 1–6, kisilik, giyim ({ bas, goz, boyun }: giyim.js giyimOku), ad (yazı), onBitti (kapanınca bir kez).
+ * -> { kapat() }. Çizim stilleri (CIZIM_CSS + BEBEK_CSS) sayfada olmalı.
+ */
+export function buyumeSahnesi(kok, { renk = 1, kisilik = '', giyim = null, ad = '', onBitti } = {}) {
+  const c = renkNo(renk);
+  const ciz = buyumeCizimleri({ renk: c, kisilik, giyim });
+  const sahne = yap('div', 'yv-bs-sahne');
+  sahne.setAttribute('aria-hidden', 'true');
+  sahne.append(yap('span', 'yv-bs-hale'), yap('span', 'yv-bs-kucuk', ciz.kucuk), yap('span', 'yv-bs-isik'), yap('span', 'yv-bs-buyuk', ciz.buyuk));
+  yildizlar(sahne);
+  const metin = yap('p', 'yv-bs-metin');
+  metin.setAttribute('role', 'status');
+  return sahneKabugu(kok, {
+    sahne, c, etiket: buyumeMetni(ad), metinler: [metin], yazilar: [[metin, buyumeMetni(ad), 1900]],
+    sure: BUYUME_SURE, sureAz: BUYUME_SURE_AZ, onBitti,
+  });
+}
+
+/**
+ * Kısa kutlama: bebek mutlu zıplar, parıltı, konfeti, başlık ve alt satır.
+ * asama: 'kucuk'|'buyuk'; emoji: bebeğin yanında (ör. 🎂); baslik zorunlu, alt isteğe bağlı. -> { kapat() }
+ */
+export function kutlamaSahnesi(kok, { asama = 'buyuk', renk = 1, kisilik = '', giyim = null, emoji = '', baslik, alt = '', onBitti } = {}) {
+  const c = renkNo(renk);
+  const sahne = yap('div', 'yv-bs-sahne');
+  sahne.setAttribute('aria-hidden', 'true');
+  sahne.append(yap('span', 'yv-bs-hale'), yap('span', 'yv-bs-buyuk', bebekSvg({ asama, ruh: 'mutlu', renk: c, kisilik, giyim })));
+  if (emoji) {
+    const e = yap('span', 'yv-bs-emoji');
+    e.textContent = emoji;
+    sahne.append(e);
+  }
+  yildizlar(sahne);
+  const metin = yap('p', 'yv-bs-metin');
+  metin.setAttribute('role', 'status');
+  const altEl = yap('p', 'yv-bs-alt');
+  return sahneKabugu(kok, {
+    sahne, sinif: 'kutlama', c, etiket: baslik, metinler: [metin, altEl], yazilar: [[metin, baslik, 100], [altEl, alt, 100]], // görünme zamanını CSS verir
+    sure: KUTLAMA_SURE, sureAz: KUTLAMA_SURE, onBitti,
+  });
 }
 
 /**
@@ -180,6 +221,17 @@ export const BUYUME_CSS = `
   font-weight: 600; font-variation-settings: 'SOFT' 100; letter-spacing: -0.01em; line-height: 1.3;
   text-align: center; text-wrap: balance;
 }
+.yv-bs.kutlama { gap: 10px; }
+.yv-bs.kutlama .yv-bs-metin { min-height: 1.3em; }
+.yv-bs.kutlama .yv-bs-sahne { width: min(260px, 66vw); }
+.yv-bs-emoji {
+  position: absolute; right: 4%; bottom: 6%; font-size: clamp(2.75rem, 14vw, 3.75rem); line-height: 1;
+  filter: drop-shadow(0 4px 8px color-mix(in srgb, var(--text) 22%, transparent));
+}
+.yv-bs-alt {
+  max-width: 30ch; min-height: 2.8em; margin: 0; color: var(--muted); font-weight: 700; line-height: 1.4;
+  text-align: center; text-wrap: balance;
+}
 .yv-bs-gec {
   min-height: 44px; padding: 0 20px; border: 1.5px solid var(--line); border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--surface) 70%, transparent); color: var(--muted);
@@ -205,6 +257,12 @@ export const BUYUME_CSS = `
   .yv-bs-yildiz { animation: yv-bs-yildiz 0.9s calc(1.6s + var(--gecik, 0s)) ease-out both; }
   .yv-bs-metin { animation: yv-bs-metin 0.45s 1.9s cubic-bezier(0.16, 1, 0.3, 1) both; }
   .yv-bs-gec { animation: yv-bs-gir 0.4s 0.6s both; }
+  .yv-bs.kutlama .yv-bs-buyuk { animation-delay: 0.05s; }
+  .yv-bs.kutlama .yv-bs-yildiz { animation-delay: calc(0.3s + var(--gecik, 0s)); }
+  .yv-bs.kutlama .yv-bs-metin { animation-delay: 0.5s; }
+  .yv-bs.kutlama .yv-bs-alt { animation: yv-bs-metin 0.45s 0.9s cubic-bezier(0.16, 1, 0.3, 1) both; }
+  .yv-bs.kutlama .yv-bs-emoji { animation: yv-bs-buyuk 0.7s 0.45s cubic-bezier(0.16, 1, 0.3, 1) both; }
+  .yv-bs.kutlama .yv-bs-k { animation-delay: calc(0.35s + var(--gecik)); }
   .yv-bs-k { animation: yv-bs-dus var(--sure) calc(1.85s + var(--gecik)) cubic-bezier(0.3, 0.6, 0.5, 1) both; }
 }
 @keyframes yv-bs-gir { from { opacity: 0; } }

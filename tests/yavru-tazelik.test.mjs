@@ -23,7 +23,7 @@ function veri() {
   };
 }
 const yv = (data) => ({ ...oku(data), tuvalet: data.tuvalet });
-const KAZA_SONRASI = T0 + 2 * SAAT + 5 * DK;
+const KAZA_SONRASI = T0 + 6 * SAAT + 5 * DK;
 const bekle = () => new Promise((r) => setTimeout(r, 0));
 
 test('otoYazimIzinli: yalnız tazelenmiş ve çevrimiçiyken', () => {
@@ -43,7 +43,7 @@ test('tazelenmeden kaza yazılmaz (önbellek kazayı gösterse de)', () => {
 test('tazelenince kaza gerçekten olmuşsa yazılır', () => {
   const r = kazaKarari({ tazelendi: true, y: yv(veri()), kim: BEN, simdi: KAZA_SONRASI });
   assert.ok(r);
-  assert.equal(r.kayitId, `kaza-${T0 + 2 * SAAT}`);
+  assert.equal(r.kayitId, `kaza-${T0 + 6 * SAAT}`);
   assert.equal(r.yama.tuvalet.v, 0);
 });
 

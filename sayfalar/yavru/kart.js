@@ -12,6 +12,8 @@ import {
 import { keyifsizMi } from './saglik.js';
 import { tuvaletDurumu } from './tuvalet.js';
 import { giyimOku } from './giyim.js';
+import { seriDurumu } from './seri.js';
+import { toDay } from '../../js/core/gunler.js';
 import { yavruSvg, CIZIM_CSS } from './cizim.js';
 import { BEBEK_CSS } from './bebek.js';
 
@@ -27,6 +29,9 @@ const CSS = `
   background: radial-gradient(90% 80% at 50% 100%, color-mix(in oklab, var(--yv-govde) 55%, var(--surface)), var(--surface-2)); }
 .yvk-gorsel svg { width: 100%; height: 100%; }
 .yvk-govde { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.yvk-bas { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.yvk-seri { flex: none; color: var(--accent-strong); font-size: .875rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.yvk-seri[hidden] { display: none; }
 .yvk-ad { margin: 0; overflow: hidden; font-family: var(--font-display); font-size: 1.1875rem; font-weight: 600;
   font-variation-settings: 'SOFT' 100; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
 .yvk-durum { margin: 0; color: var(--muted); font-size: .9375rem; font-weight: 700; line-height: 1.35; }
@@ -53,9 +58,10 @@ export async function mountYavruKart(el, { room } = {}) {
   const col = await openCollection(room, TUR);
   const gorsel = h('span', { class: 'yvk-gorsel', 'aria-hidden': 'true' });
   const ad = h('p', { class: 'yvk-ad' });
+  const seri = h('span', { class: 'yvk-seri', hidden: true });
   const durum = h('p', { class: 'yvk-durum' });
   const kart = h('a', { class: 'yvk', href: pageUrl('sayfalar/yavru/') },
-    h('style', {}, CSS), gorsel, h('span', { class: 'yvk-govde' }, ad, durum),
+    h('style', {}, CSS), gorsel, h('span', { class: 'yvk-govde' }, h('span', { class: 'yvk-bas' }, ad, seri), durum),
     h('span', { class: 'yvk-git', 'aria-hidden': 'true' }, icon('chevron')));
   el.replaceChildren(kart);
 
@@ -77,7 +83,8 @@ export async function mountYavruKart(el, { room } = {}) {
     const baslik = asama === 'yumurta' ? 'Yavrumuz' : y.ad || 'Yavrumuz';
     const kisilik = y?.kisilik || '';
     const giyim = giyimOku(y);
-    const k = [asama, renk, ruh, hazir, metin, baslik, kisilik, JSON.stringify(giyim)].join('|');
+    const seriN = y ? seriDurumu(y, toDay(new Date(simdi))).n : 0;
+    const k = [asama, renk, ruh, hazir, metin, baslik, kisilik, JSON.stringify(giyim), seriN].join('|');
     if (k === anahtar) return;
     anahtar = k;
     kart.style.setProperty('--yv-govde', `var(--yv-r${renk})`);
@@ -85,9 +92,11 @@ export async function mountYavruKart(el, { room } = {}) {
     gorsel.innerHTML = yavruSvg({ asama, ruh, renk, hazir, kisilik, giyim, kucukBoy: true });
     ad.textContent = baslik;
     durum.textContent = metin;
+    seri.hidden = !seriN;
+    seri.textContent = seriN ? `🔥 ${seriN} gün` : '';
     kart.dataset.dogumgunu = String(dogumGunu);
     kart.dataset.ihtiyac = String(!dogumGunu && asama !== 'yumurta' && (keyifsiz || tuvalet?.cisVar || tuvalet?.yeniKaza || ozledi(y, simdi) || ['ac', 'kirli', 'uykulu', 'uzgun'].includes(ruh)));
-    kart.setAttribute('aria-label', `${baslik}: ${metin}`);
+    kart.setAttribute('aria-label', `${baslik}: ${metin}${seriN ? `, ${seriN} günlük görev serisi` : ''}`);
   };
   const off = col.on('change', ciz);
   const zaman = setInterval(ciz, DK);

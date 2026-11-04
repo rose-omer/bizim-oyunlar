@@ -10,11 +10,12 @@
 // Eski belgede alan yoksa { v: 0, t: null }: ilk yemek ya da lazımlık yazana dek artmaz. Yumurtada yok.
 // y: mantik.js oku() sonucu (ham 'tuvalet' alanını taşır) ya da ham belge verisi.
 // Yazım alan düzeyinde yama: 'tuvalet', 'ihtiyac.temizlik', 'son.<clientId>', 'puan.<clientId>'.
-import { DK, SAAT, ihtiyacDegeri, uyuyorMu, LAZIMLIK, CIS_VAR, KAZA_METNI } from './mantik.js';
+import { DK, SAAT, ihtiyacDegeri, uyuyorMu, gunduzeKaydir, LAZIMLIK, CIS_VAR, KAZA_METNI } from './mantik.js';
 
 export const TUVALET_ARTIS = 2; // saatlik (uykuda yarı)
 export const ESIK = 70; // bu ve üstü "Çişi var"
-export const KAZA_SURE = 2 * SAAT; // eşikten sonra kazaya kadar
+export const KAZA_SURE = 6 * SAAT; // eşikten sonra kazaya kadar (çalışan çift gün içinde yetişsin)
+export const SON_UYARI = SAAT; // kazadan bu kadar önce son hatırlatma
 export const KAZA_TEMIZLIK = 20; // kazada temizlik düşüşü
 export const KAZA_GOSTER = 60 * DK; // "ufak bir kaza" mesajı bu kadar görünür
 export const KAZA_MAX = 10; // bir hesapta en çok bu kadar kaza (uzun yoklukta)
@@ -141,6 +142,23 @@ export function tuvaletDurumu(y, simdi) {
     sonKaza,
     yeniKaza: !!sonKaza && simdi - zaman(sonKaza) < KAZA_GOSTER,
   };
+}
+
+/**
+ * Yerel hatırlatıcılar (app.js hatirlaticiPlanla ekler): eşikte ve kazadan SON_UYARI önce.
+ * Geçmiş an ve geceden kazadan sonraya kayan an gönderilmez. Alanı olmayan eski belgede yok.
+ */
+export function tuvaletOlaylari(y, simdi) {
+  if (!y || y.asama === 'yumurta') return [];
+  const { kayit } = ilerlet(y, simdi);
+  const esik = esikAni(kayit, y.uyku);
+  const kaza = kazaAni(kayit, y.uyku);
+  if (esik == null || kaza == null) return [];
+  return [
+    { id: 'cis', an: gunduzeKaydir(esik), metin: 'Yavrunuzun çişi var 🚽' },
+    { id: 'cis-son', an: gunduzeKaydir(kaza - SON_UYARI), metin: 'Çişi iyice sıkıştı, lazımlığa götürelim 🚽' },
+  ].filter((o) => o.an > simdi && o.an < kaza)
+    .map((o) => ({ id: o.id, baslik: 'Yavrumuz', metin: o.metin, zaman: iso(o.an) }));
 }
 
 /**

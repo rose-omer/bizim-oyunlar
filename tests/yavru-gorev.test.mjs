@@ -2,10 +2,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  GOREVLER, GOREV_BONUS, GOREV_TUT, gununGorevi, gorevDurumu, odulYamasi, odullendiMi, gorevOzeti,
+  GOREVLER, GOREV_TUT, gununGorevi, gorevDurumu, odulYamasi, odullendiMi, gorevOzeti,
   gorevOdalari, GOREV_ODA_SINIR,
 } from '../sayfalar/yavru/gorev.js';
 import { EYLEMLER, LAZIMLIK, oku } from '../sayfalar/yavru/mantik.js';
+import { GOREV_JETON } from '../sayfalar/yavru/seri.js';
 import { applyPatch } from '../js/core/veri.js';
 import { toDay, addDays } from '../js/core/gunler.js';
 
@@ -138,29 +139,29 @@ test('gorevDurumu: partner yoksa (tek kişi) görev tamamlanmaz', () => {
   assert.equal(gorevDurumu(null, [], { gun: GUN, kisiler: KISILER }), null);
 });
 
-test('odulYamasi: iki kişiye bonus + gün işareti; yama iki düzeyi geçmez', () => {
+test('odulYamasi: gün işareti + jeton kaydı + seri; puan değişmez; yama iki düzeyi geçmez', () => {
   const veri = kucukVeri();
   const yama = odulYamasi(veri, GUN, KISILER, { gorevId: 'ikisi-besle', simdi: Date.parse(an(GUN, 13)) });
   assert.deepEqual(yama, {
-    [`puan.${A}`]: 10 + GOREV_BONUS,
-    [`puan.${B}`]: 7 + GOREV_BONUS,
-    [`gorev.${GUN}`]: { id: 'ikisi-besle', at: an(GUN, 13) },
+    [`gorev.${GUN}`]: { id: 'ikisi-besle', at: an(GUN, 13), jeton: GOREV_JETON },
+    gorevSeri: { n: 1, son: GUN, en: 1 },
   });
   for (const anahtar of Object.keys(yama)) assert.ok(anahtar.split('.').length <= 2, anahtar);
   const sonra = applyPatch(veri, yama);
   assert.equal(odullendiMi(sonra, GUN), true);
   assert.equal(odulYamasi(sonra, GUN, KISILER), null, 'aynı gün ikinci ödül yok');
   assert.ok(odulYamasi(sonra, addDays(GUN, 1), KISILER), 'ertesi gün yeni ödül');
-  assert.deepEqual(oku(sonra).puan, { [A]: 10 + GOREV_BONUS, [B]: 7 + GOREV_BONUS }, 'mantik.js oku puanı görür');
+  assert.deepEqual(oku(sonra).puan, oku(veri).puan, 'puan artmaz');
 });
 
-test('odulYamasi: çift cihaz yarışında puan bir kez artar (mutlak değer, aynı taban)', () => {
+test('odulYamasi: çift cihaz yarışında tek gün kaydı (mutlak değer, aynı taban)', () => {
   const veri = kucukVeri({ puan: {} });
   const y1 = odulYamasi(veri, GUN, KISILER, { gorevId: 'x', simdi: Date.parse(an(GUN, 13)) });
   const y2 = odulYamasi(veri, GUN, [B, A], { gorevId: 'x', simdi: Date.parse(an(GUN, 13, 1)) });
   const son = applyPatch(applyPatch(veri, y1), y2);
-  assert.deepEqual(son.puan, { [A]: GOREV_BONUS, [B]: GOREV_BONUS });
+  assert.deepEqual(son.puan, {});
   assert.equal(Object.keys(son.gorev).length, 1);
+  assert.equal(son.gorevSeri.n, 1);
 });
 
 test('odulYamasi: yumurta, eksik kişi, bozuk gün -> null', () => {

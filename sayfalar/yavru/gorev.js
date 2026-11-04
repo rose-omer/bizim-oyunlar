@@ -1,15 +1,20 @@
 // Yavrumuz günlük ortak görev: saf mantık (DOM yok, Node'da test edilir).
 // Görev: oda + yerel günden tohumlu seçim (iki cihaz aynı görevi görür). Yumurtada görev yok.
 // İlerleme bakım günlüğünden ('yavrubakim' { eylem, kim, at }) yalnız o yerel günün kayıtlarıyla hesaplanır.
-// Ödül: iki kişiye GOREV_BONUS puan + gün işareti. Belgede alan: gorev: { [gün]: { id, at } } (son GOREV_TUT gün).
+// Ödül: gün işareti + kişi başı jeton kaydı + seri. Belgede alan: gorev: { [gün]: { id, at, jeton?, seri?, kiyafet? } } (son GOREV_TUT gün).
+// Jetonu her kişi kendi sayacına kendi cihazında alır (gorevJetonTopla, jeton.js jetonKazan, kaynak 'gorev'); 'jeton.<clientId>.gorevGun' çift almayı önler.
+// jeton alanı olmayan eski kayıt +2 puan döneminden: yeniden ödenmez. Özel günde (mantik.js ozelGun) görev mum üflemedir.
 // Görev kartı ilgili odaya geçiş düğmesi gösterir (gorevOdalari: eylemlerden türetilir; genel bakım görevinde yok).
-// Yama anahtarları en çok iki düzey: 'puan.<clientId>', 'gorev.<YYYY-MM-DD>'.
+// Yama anahtarları en çok iki düzey: 'gorev.<YYYY-MM-DD>', 'gorevSeri', 'dolap.<ürün>', 'jeton.<clientId>'.
 // veri: ham belge verisi (doc.data) ya da mantik.js oku() sonucu (oku 'gorev' alanını taşır).
 import { toDay, parseDay } from '../../js/core/gunler.js';
 import { gunNo, soruSecici } from '../gunun-sorusu/mantik.js';
 import { eylemOdasi } from './odalar.js';
+import { ozelGun } from './mantik.js';
+import { jetonKazan, jetonKaydi, gunlukKalan } from './jeton.js';
+import { GOREV_JETON, seriOku, seriIlerle, seriOdulu } from './seri.js';
 
-export const GOREV_BONUS = 2; // kişi başı
+export const MUM_JETON = 20; // özel gün görevinin kişi başı eki
 export const GOREV_TUT = 7; // belgede tutulan gün işareti
 
 const BESLE = ['mama', 'meyve', 'tatli'];
@@ -40,6 +45,9 @@ export const GOREVLER = [
   { id: 'ikisi-yika', metin: 'İkiniz de banyoda bir kez yıkayın', emoji: '🛀', kosul: { tur: 'herkes', eylemler: ['yika'], adet: 1 } },
 ];
 
+/** Özel günün görevi: ikisi de kendi mumunu üfler (bakım günlüğü 'mum'). */
+export const MUM_GOREV = Object.freeze({ id: 'mum', metin: 'İkiniz de mumunuzu üfleyin', emoji: '🎂', kosul: Object.freeze({ tur: 'herkes', eylemler: Object.freeze(['mum']), adet: 1 }) });
+
 export const GOREV_ODA_SINIR = 2; // daha çok odaya yayılan görev (genel bakım) oda düğmesi göstermez
 
 /** Görevin odaları (rol sırasıyla, tekil). Eylemleri GOREV_ODA_SINIR'dan çok odaya yayılıyorsa []. */
@@ -53,7 +61,7 @@ export function gorevOdalari(gorev) {
 
 const secici = (roomId) => soruSecici(GOREVLER, `yavrugorev:${roomId ?? ''}`);
 
-/** Odanın o günkü görevi (iki cihazda aynı). gun: 'YYYY-MM-DD' ya da Date (yerel gün). Geçersizse null. */
+/** Odanın o günkü tohumlu görevi (iki cihazda aynı). gun: 'YYYY-MM-DD' ya da Date (yerel gün). Geçersizse null. */
 export function gununGorevi(roomId, gun) {
   const no = gunNo(gun);
   return Number.isFinite(no) ? secici(roomId)(no) : null;
@@ -122,23 +130,54 @@ export function odullendiMi(veri, gun) {
 }
 
 /**
- * Görev ödülü yaması (görev tamamlandıktan sonra çağrılır). veri: ham belge verisi (doc.data).
- * -> { 'puan.<A>', 'puan.<B>', 'gorev.<gün>': { id, at }, 'gorev.<eski gün>': null ... } | null
+ * Görev ödülü yaması (görev tamamlandıktan sonra çağrılır). veri: ham belge verisi (doc.data) ya da oku() sonucu.
+ * -> { 'gorev.<gün>': { id, at, jeton, seri?, kiyafet? }, gorevSeri, 'dolap.<ürün>'?, 'gorev.<eski gün>': null ... } | null
  * null: yumurta, belge yok, iki kişi yok, gün geçersiz ya da o gün zaten ödüllendi.
- * Çift cihaz yarışı: puan mutlak değerle yazılır; aynı tabandan iki yama aynı sonucu verir (bonus bir kez).
+ * Çift cihaz yarışı: hepsi mutlak ve aynı tabandan aynı; jeton kişi başına kendi sayacında bir kez alınır (seri bir kez artar).
+ * Seri ödülü yalnız rekorda: kırılıp yeniden aynı güne varmak yeniden ödül vermez.
  */
 export function odulYamasi(veri, gun, kisiler, { gorevId = null, simdi = Date.now() } = {}) {
   const v = nesne(veri);
   const kim = kisiListesi(kisiler);
   if (!veri || !v.asama || v.asama === 'yumurta' || kim.length < 2 || !parseDay(gun)) return null;
   if (odullendiMi(v, gun)) return null;
-  const yama = {};
-  const puan = nesne(v.puan);
-  for (const id of kim) yama[`puan.${id}`] = (Number.isFinite(puan[id]) && puan[id] > 0 ? puan[id] : 0) + GOREV_BONUS;
-  yama[`gorev.${gun}`] = { id: gorevId, at: new Date(simdi).toISOString() };
+  const at = new Date(simdi).toISOString();
+  const onceki = seriOku(v.gorevSeri);
+  const gorevSeri = seriIlerle(v, gun);
+  const odul = gorevSeri.n > onceki.en ? seriOdulu(gorevSeri.n, v.dolap) : null;
+  const kayit = { id: gorevId, at, jeton: GOREV_JETON + (gorevId === MUM_GOREV.id ? MUM_JETON : 0) + (odul?.jeton || 0) };
+  if (odul) kayit.seri = gorevSeri.n;
+  if (odul?.kiyafet) kayit.kiyafet = odul.kiyafet;
+  const yama = { [`gorev.${gun}`]: kayit, gorevSeri };
+  if (odul?.kiyafet) yama[`dolap.${odul.kiyafet}`] = { at, kim: kim[0], fiyat: 0 };
   const eski = Object.keys(nesne(v.gorev)).sort();
   for (const g of eski.slice(0, Math.max(0, eski.length - (GOREV_TUT - 1)))) yama[`gorev.${g}`] = null;
   return yama;
+}
+
+/**
+ * Kişinin henüz almadığı görev jetonu (kendi sayacına). y: oku() sonucu ya da ham veri.
+ * -> null | { yama: { 'jeton.<kim>' }, eklenen, gunler: [{ gun, id, jeton, seri?, kiyafet? }] }
+ * Günlük sınıra sığmayan gün sonraya kalır (işaret ilerlemez, jeton kaybolmaz).
+ */
+export function gorevJetonTopla(y, { kim, simdi }) {
+  const gorev = nesne(y?.gorev);
+  const isaret = jetonKaydi(y, kim).gorevGun || '';
+  let kalan = gunlukKalan(y, kim, simdi);
+  const gunler = [];
+  for (const gun of Object.keys(gorev).sort()) {
+    const j = nesne(gorev[gun]).jeton;
+    if (gun <= isaret || !Number.isInteger(j) || j <= 0) continue;
+    if (j > kalan) break;
+    kalan -= j;
+    gunler.push({ ...gorev[gun], gun });
+  }
+  if (!gunler.length) return null;
+  const miktar = gunler.reduce((t, g) => t + g.jeton, 0);
+  const r = jetonKazan(y, { kim, kaynak: 'gorev', miktar, simdi });
+  if (r.hata) return null;
+  const anahtar = `jeton.${kim}`;
+  return { yama: { [anahtar]: { ...r.yama[anahtar], gorevGun: gunler[gunler.length - 1].gun } }, eklenen: r.eklenen, gunler };
 }
 
 /**
@@ -148,7 +187,7 @@ export function odulYamasi(veri, gun, kisiler, { gorevId = null, simdi = Date.no
 export function gorevOzeti(veri, { roomId, gun, kayitlar, kisiler }) {
   const v = nesne(veri);
   if (!veri || !v.asama || v.asama === 'yumurta') return null;
-  const gorev = gununGorevi(roomId, gun);
+  const gorev = ozelGun(v, gun) ? MUM_GOREV : gununGorevi(roomId, gun);
   const d = gorevDurumu(gorev, kayitlar, { gun, kisiler });
   if (!d) return null;
   return { gorev, ...d, odullendi: odullendiMi(v, gun) };

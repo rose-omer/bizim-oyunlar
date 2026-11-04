@@ -1,6 +1,6 @@
 // Yavrumuz: otomatik yazımların tazelik kapısı (saf mantık, DOM yok, Node'da test edilir).
 // Sorun: veri.js önbellekle hemen açılır; app.js ciz() eski veriyle mutlak yama yazıp partnerin bakımını silebilir.
-// Kural: kaza, çatlama, büyüme ve görev ödülü yalnız bu görünümde başarılı bir tazelemeden sonra yazılır.
+// Kural: kaza, çatlama, büyüme, görev ödülü, görev jetonu ve evre yalnız bu görünümde başarılı bir tazelemeden sonra yazılır.
 // Arka plana gidince kapı kapanır, öne gelince önce tazelenir. Tazeleme başarısızsa kapı kapalı kalır; yeniden deneme
 // aralıklıdır (dene: en çok 30 sn'de bir, hemenDene: bağlantı olaylarında en çok 5 sn'de bir). Düğmeler bu kapıya bakmaz.
 import { kazaYamasi } from './tuvalet.js';

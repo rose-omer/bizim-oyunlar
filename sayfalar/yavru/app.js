@@ -14,7 +14,7 @@ import { openProfil } from '../../js/core/profil.js';
 import { bildir } from '../../js/core/bildirim.js';
 import { partnerGoruyor } from '../../js/core/room.js';
 import { readStore, writeStore, isLocalMode } from '../../js/core/identity.js';
-import { h, toast, knownPartner, formatDay, celebrate, ICONS } from '../../js/core/ui.js';
+import { h, toast, knownPartner, formatDay, celebrate, shareInvite, ICONS } from '../../js/core/ui.js';
 import { sfx } from '../../js/core/sound.js';
 import { titret, yerelHatirlaticilar } from '../../js/core/mobil.js';
 import * as M from './mantik.js';
@@ -24,7 +24,9 @@ import { KISILIKLER, favoriBonus } from './kisilik.js';
 import { toDay } from '../../js/core/gunler.js';
 import * as T from './tuvalet.js';
 import * as D from './dokunma.js';
-import { jetonBakiye, jetonKazan, GUNLUK_SINIR, URUNLER } from './jeton.js';
+import { jetonBakiye, jetonKazan, satinAl, pastaBedavaMi, GUNLUK_SINIR, URUNLER } from './jeton.js';
+import * as E from './evre.js';
+import { GOREV_JETON, seriDurumu } from './seri.js';
 import { yavruSvg, catlamaSvg, CIZIM_CSS } from './cizim.js';
 import { BEBEK_CSS } from './bebek.js';
 import * as O from './odalar.js';
@@ -33,7 +35,7 @@ import { OYUNLAR, oyunAc } from './oyunlar/cerceve.js';
 import { taklitBaslat, taklitDestegi, mikrofonAcikMi } from './taklit.js';
 import { giyimOku } from './giyim.js';
 import { magazaAc as magazaKatmani } from './magaza.js';
-import { buyumeSahnesi, buyumeSahnesiGerekli } from './buyume-sahne.js';
+import { buyumeSahnesi, buyumeSahnesiGerekli, kutlamaSahnesi } from './buyume-sahne.js';
 import { ninniCal, ninniRuhu } from './ninni.js';
 import { tazelikIzleyici, otoYazimIzinli, kazaKarari } from './tazelik.js';
 
@@ -119,7 +121,7 @@ let taklit = null; // ses taklidi denetimi (taklit.js) | null
 let taklitDurum = null;
 let ninni = null; // çalan ninni denetimi (ninni.js ninniCal) | null
 
-// Otomatik yazımlar (kaza, çatlama, büyüme, görev ödülü) sunucudan tazelenmeden çalışmaz (tazelik.js). Ekran ve düğmeler beklemez.
+// Otomatik yazımlar (kaza, çatlama, büyüme, görev ödülü, görev jetonu, evre) sunucudan tazelenmeden çalışmaz (tazelik.js). Ekran ve düğmeler beklemez.
 const tazelik = tazelikIzleyici({
   tazele: async () => (await Promise.all([col.refresh(), bakim.refresh()])).every(Boolean),
   tazelenince: () => ciz(),
@@ -176,8 +178,13 @@ const adGirdi = h('input', {
 });
 const adVazgec = h('button', { type: 'button', class: 'btn ghost', onclick: () => { adDuzenle = false; ciz(); adBtn.focus(); } }, 'Vazgeç');
 const adBaslikForm = h('label', { class: 'yv-adform-baslik', for: 'yv-ad-girdi' });
+// İlk ad için öneriler: dokununca girdiye yazar, kaydetmek yine kişinin elinde.
+const adOneriEl = h('div', { class: 'yv-ad-oneri', role: 'group', 'aria-label': 'Ad önerileri' },
+  M.adOnerileri(roomId).map((ad) => h('button', {
+    type: 'button', class: 'btn small ghost', onclick: () => { adGirdi.value = ad; adGirdi.removeAttribute('aria-invalid'); adGirdi.focus({ preventScroll: true }); },
+  }, ad)));
 const adForm = h('form', { class: 'yv-adform', novalidate: true, onsubmit: adKaydet },
-  adBaslikForm, adGirdi,
+  adBaslikForm, adGirdi, adOneriEl,
   h('div', { class: 'yv-adform-dugmeler' }, adVazgec, h('button', { type: 'submit', class: 'btn primary' }, 'Kaydet')));
 const metaEl = h('p', { class: 'yv-meta' });
 const buyumeEl = h('p', { class: 'yv-buyume' });
@@ -249,6 +256,21 @@ const oyunSecEl = h('div', { class: 'yv-oyun-sec', role: 'group', 'aria-label': 
   oyunGeri);
 const eylemlerEl = h('div', { class: 'yv-eylemler' }, ilacGrup, ipucuEl, odaGrup, oyunSecEl);
 
+// İlk gün rehberi: üç adım (mantik.js yumurtaRehberi) ve sevgili yoksa davet. Kalıcı öğeler: odak kaybolmasın.
+const rehberAdim = {};
+const davetBtn = h('button', { type: 'button', class: 'btn small primary yv-davet', onclick: () => shareInvite(roomId) }, 'Sevgilini davet et');
+const rehberEl = h('section', { class: 'yv-rehber', 'aria-labelledby': 'yv-rehber-baslik', hidden: true },
+  h('h2', { class: 'yv-gorev-baslik', id: 'yv-rehber-baslik' }, 'İlk gününüz'),
+  h('ol', { class: 'yv-adimlar' }, ['isit', 'sure', 'ad'].map((id, i) => {
+    const baslik = h('strong', { class: 'yv-adim-baslik' });
+    const alt = h('span', { class: 'yv-adim-alt' });
+    const el = h('li', { class: 'yv-adim' },
+      h('span', { class: 'yv-adim-no', 'aria-hidden': 'true' }, String(i + 1)),
+      h('span', { class: 'yv-adim-govde' }, baslik, alt, id === 'isit' ? davetBtn : null));
+    rehberAdim[id] = { el, baslik, alt, no: el.firstChild, sira: String(i + 1) };
+    return el;
+  })));
+
 const ilerlemeEl = h('p', { class: 'yv-ilerleme' });
 const isitAd = h('span', {}, 'Isıt');
 const isitBtn = h('button', { type: 'button', class: 'btn primary wide yv-isit', onclick: isitTikla },
@@ -267,15 +289,19 @@ const gorevSayi = h('span', { class: 'yv-gorev-sayi' });
 const gorevDolu = h('span', { class: 'yv-cubuk-dolu' });
 const gorevCubuk = h('span', { class: 'yv-cubuk', role: 'meter', 'aria-valuemin': '0', 'aria-labelledby': 'yv-gorev-baslik' }, gorevDolu);
 const gorevDurum = h('p', { class: 'yv-gorev-durum' });
+const gorevSeriEl = h('p', { class: 'yv-gorev-seri', hidden: true }); // telafi ve sonraki ödül
 const gorevOdaEl = h('div', { class: 'yv-gorev-odalar', hidden: true }); // "Banyoya git" (gorev.js gorevOdalari)
+const mumBtn = h('button', { type: 'button', class: 'btn small primary', hidden: true, onclick: mumUfle }, h('span', { 'aria-hidden': 'true' }, '🕯️'), 'Mumunu üfle');
+const pastaBtn = h('button', { type: 'button', class: 'btn small', hidden: true, onclick: pastaVer }, h('span', { 'aria-hidden': 'true' }, '🎂'), 'Bedava pastasını ver');
+const gorevOzelEl = h('div', { class: 'yv-gorev-odalar', hidden: true }, mumBtn, pastaBtn);
 let gorevOdaAnahtar = '';
 const gorevSec = h('section', { class: 'yv-gorev', 'aria-labelledby': 'yv-gorev-baslik', hidden: true },
   h('div', { class: 'yv-gorev-bas' }, gorevEmoji,
     h('div', { class: 'yv-gorev-govde' }, h('h2', { class: 'yv-gorev-baslik', id: 'yv-gorev-baslik' }, 'Günün görevi'), gorevMetin),
     gorevSayi),
-  gorevCubuk, gorevDurum, gorevOdaEl);
+  gorevCubuk, gorevDurum, gorevSeriEl, gorevOzelEl, gorevOdaEl);
 
-const kok = h('div', { class: 'yv' }, odaSekmeEl, sahne, bilgi, ihtiyacEl, gorevSec, panel, bakimSec);
+const kok = h('div', { class: 'yv' }, odaSekmeEl, sahne, bilgi, ihtiyacEl, rehberEl, gorevSec, panel, bakimSec);
 app.replaceChildren(kok);
 
 // ---------- Çizim ----------
@@ -422,6 +448,7 @@ function cizBilgi() {
   adSatir.hidden = formAcik;
   adForm.hidden = !formAcik;
   adVazgec.hidden = adYok;
+  adOneriEl.hidden = !adYok;
   adBaslik.textContent = yumurta ? 'Yumurtamız' : y.ad || 'Yavrumuz';
   adBtn.hidden = yumurta;
   if (formAcik) {
@@ -434,18 +461,20 @@ function cizBilgi() {
     }
   }
   const kisilik = !yumurta && Object.hasOwn(KISILIKLER, y.kisilik ?? '') ? KISILIKLER[y.kisilik] : null;
+  const seriN = yumurta ? 0 : seriDurumu(y, toDay(new Date(simdi))).n;
   metaEl.replaceChildren(
-    M.dogumGunuMu(y, simdi)
-      ? h('span', { style: { color: 'var(--accent-strong)' } }, M.DOGUM_GUNU_METNI)
+    M.ozelGun(y, toDay(new Date(simdi)))
+      ? h('span', { style: { color: 'var(--accent-strong)' } }, M.dogumGunuMu(y, simdi) ? M.DOGUM_GUNU_METNI : `${M.ozelGunMetni(M.ozelGun(y, toDay(new Date(simdi))), y.ad)} 🎂`)
       : h('span', {}, y ? M.yasMetni(y, simdi) : 'Yeni yumurta'),
-    h('span', { class: 'chip yv-asama' }, ASAMA_ADI[y?.asama || 'yumurta']),
+    h('span', { class: 'chip yv-asama' }, E.evreSon(y)?.unvan || ASAMA_ADI[y?.asama || 'yumurta']),
     ...(kisilik ? [h('span', { class: 'chip yv-kisilik', title: kisilik.aciklama },
       h('span', { 'aria-hidden': 'true' }, kisilik.emoji), kisilik.ad,
       h('span', { class: 'sr-only' }, `: ${kisilik.aciklama}`))] : []),
     // Ortak jeton bakiyesi (mağaza sonra); eşzamanlı harcamada kısa süre eksi olabilir, 0 gösterilir.
     ...(y ? [h('span', { class: 'chip yv-jeton', title: 'Ortak jeton' },
       h('span', { 'aria-hidden': 'true' }, '🪙'), h('span', { class: 'sr-only' }, 'Ortak jeton: '),
-      String(Math.max(0, jetonBakiye(y))))] : []));
+      String(Math.max(0, jetonBakiye(y))))] : []),
+    ...(seriN ? [h('span', { class: 'chip yv-seri' }, `🔥 ${seriN} gün`, h('span', { class: 'sr-only' }, ' görev serisi'))] : []));
 
   let buyume = '';
   if (y?.asama === 'kucuk') {
@@ -494,6 +523,7 @@ function cizPanel() {
   yumurtaEl.hidden = !yumurta;
   eylemlerEl.hidden = yumurta;
   panel.dataset.asama = yumurta ? 'yumurta' : 'yavru';
+  cizRehber(yumurta);
   if (yumurta) {
     const d = y ? M.yumurtaDurumu(y, { benId: me.clientId, simdi }) : { ben: 0, partner: 0, partnerId: null, gerek: 3, kalan: M.YUMURTA_SURE, hazir: false };
     const kalan = d.kalan > 0 ? M.saatKalanMetni(d.kalan) : '24 saat doldu';
@@ -583,6 +613,21 @@ function cizPanel() {
   ipucuEl.hidden = !ipucuEl.textContent || liste;
 }
 
+/** İlk gün rehberi: adım durumları ve sevgili henüz yoksa davet düğmesi. */
+function cizRehber(yumurta) {
+  rehberEl.hidden = !yumurta;
+  if (!yumurta) return;
+  const r = M.yumurtaRehberi(y, { benId: me.clientId, simdi, partnerVar: !!partnerId(), partnerAd: partnerAdi() });
+  for (const a of r.adimlar) {
+    const k = rehberAdim[a.id];
+    k.el.dataset.durum = a.durum;
+    k.baslik.textContent = a.baslik;
+    k.alt.textContent = a.alt;
+    k.no.textContent = a.durum === 'tamam' ? '✓' : k.sira;
+  }
+  davetBtn.hidden = !r.davet;
+}
+
 function cizBakimlar() {
   const docs = bakim.all().filter((d) => d.data && M.bakimSatiri({ eylem: d.data.eylem, ad: 'x' })).slice(-10).reverse();
   const bugun = new Date();
@@ -604,8 +649,10 @@ function cizBakimlar() {
     : 'Henüz bakım yok. İlk ilgiyi siz gösterin 💛';
 }
 
-// ---------- Günün görevi: iki kişinin bugünkü bakımları; tamamlanınca ikisine +2 puan (bir kez) ----------
+// ---------- Günün görevi: iki kişinin bugünkü bakımları; tamamlanınca seri ve kişi başı jeton (bir kez) ----------
 let gorevOdulGun = null; // bu cihazın ödül yazdığı gün (yazım sürerken yinelenmesin)
+let jetonYazilan = null; // yazımı süren görev jetonu yaması
+let evreYazilan = null; // yazımı süren evre
 
 function cizGorev() {
   const pid = partnerId();
@@ -616,7 +663,8 @@ function cizGorev() {
   const { gorev, tamam, odullendi, kisiBasi, ilerleme: { n, gerek } } = oz;
   const bitti = tamam || odullendi;
   gorevEmoji.textContent = gorev.emoji;
-  gorevMetin.textContent = gorev.metin;
+  const ozel = M.ozelGun(y, gun);
+  gorevMetin.textContent = gorev.id === G.MUM_GOREV.id && ozel ? `${M.ozelGunMetni(ozel, y.ad)} ${gorev.metin}` : gorev.metin;
   gorevSec.dataset.tamam = String(bitti);
   const goster = bitti ? gerek : n;
   gorevSayi.textContent = `${goster}/${gerek}`;
@@ -627,7 +675,7 @@ function cizGorev() {
   if (!pid) {
     gorevDurum.textContent = 'Sevgilin katılınca başlar 💛';
   } else if (bitti) {
-    gorevDurum.textContent = `Tamamlandı! İkiniz de +${G.GOREV_BONUS} puan kazandınız ✨`;
+    gorevDurum.textContent = `Tamamlandı! İkinize de +${y.gorev?.[gun]?.jeton || GOREV_JETON} jeton ✨`;
   } else {
     // herkes: kişi başı "1/3"; toplam ve ayri: katkı var mı.
     const adet = gorev.kosul.tur === 'herkes' ? gorev.kosul.adet : 0;
@@ -639,8 +687,53 @@ function cizGorev() {
     };
     gorevDurum.replaceChildren(kisi(me.clientId), ' · ', kisi(pid));
   }
+  cizGorevSeri(gun);
+  cizGorevOzel(gun, gorev, kisiBasi, ozel);
   cizGorevOdalari(bitti ? [] : G.gorevOdalari(gorev).filter((o) => o !== oda));
   if (otoIzin() && tamam && !odullendi && pid && gorevOdulGun !== gun) gorevOdul(gun, pid, gorev.id);
+}
+
+/** Seri notu: dün kaçtıysa telafi, yoksa sonraki ödüle kalan. */
+function cizGorevSeri(gun) {
+  const s = seriDurumu(y, gun);
+  const metin = s.telafiBekliyor ? `Dün kaçtı, sorun değil: bugün tamamlarsanız 🔥 ${s.n} gün sürer 💛`
+    : s.n && s.sonraki ? `🔥 ${s.n} gün · ${s.sonraki.gun}. günde hediye var, ${s.sonraki.kalan} gün kaldı` : s.n ? `🔥 ${s.n} gün` : '';
+  gorevSeriEl.hidden = !metin;
+  gorevSeriEl.textContent = metin;
+}
+
+/** Özel gün düğmeleri: kendi mumun (üflemediysen) ve kendi bedava pasta hakkın. */
+function cizGorevOzel(gun, gorev, kisiBasi, ozel) {
+  mumBtn.hidden = !(gorev.id === G.MUM_GOREV.id && !kisiBasi[me.clientId]);
+  pastaBtn.hidden = !(ozel && pastaBedavaMi(y, me.clientId, simdi));
+  gorevOzelEl.hidden = mumBtn.hidden && pastaBtn.hidden;
+}
+
+/** Mum: bakım günlüğüne tek kayıt (id gün ve kişiye bağlı, iki kez sayılmaz); belgeye yazılmaz, görev bitince ödül gelir. */
+function mumUfle() {
+  if (!y || y.asama === 'yumurta') return;
+  const at = new Date().toISOString();
+  bakim.put({ eylem: 'mum', kim: me.clientId, at }, `mum-${toDay(new Date())}-${me.clientId}`).catch(() => {});
+  sfx('pop');
+  titret(15);
+  tepki('sev');
+  partnerBildir('mum');
+  simdi = Date.now();
+  cizGorev();
+}
+
+/** Özel gün pastası: mağazayı açmadan aynı satın alma yolu (fiyat düşmez). */
+function pastaVer() {
+  if (!y) return;
+  const t = Date.now();
+  const r = satinAl(y, { kim: me.clientId, urun: 'pasta', simdi: t });
+  if (r.hata === 'uyuyor') { toast('Şşş, uyuyor 🌙 Uyanınca verelim.'); return; }
+  if (r.hata) return;
+  sfx('pop');
+  titret(15);
+  tepki('tatli');
+  yaz(r.yama, r.kayit, 'satinal', { deger: 'pasta' });
+  toast('Afiyet olsun 🎂');
 }
 
 /** Görev kartında ilgili odaya tek dokunuşla geçiş ("Banyoya git"). Bulunduğum oda listede yok. */
@@ -661,7 +754,7 @@ function cizGorevOdalari(odalar) {
   }));
 }
 
-/** Ödül yaması mutlak puanla yazılır: iki cihaz aynı anda yazsa da bonus bir kez (gorev.js odulYamasi). */
+/** Ödül yaması mutlak: iki cihaz aynı anda yazsa da gün kaydı ve seri tek (gorev.js odulYamasi). Jetonu gorevJetonuAl alır. */
 async function gorevOdul(gun, pid, gorevId) {
   const yama = G.odulYamasi(y, gun, [me.clientId, pid], { gorevId, simdi: Date.now() });
   if (!yama) return;
@@ -673,8 +766,56 @@ async function gorevOdul(gun, pid, gorevId) {
     console.warn('[yavru] görev ödülü yazılamadı', e);
     return;
   }
-  sfx('win');
-  toast(`Günün görevi tamam! İkinize +${G.GOREV_BONUS} puan 💛`);
+}
+
+/** Bana düşen görev jetonu kendi sayacıma; ödül her cihazda bir kez kutlanır. Seri ve mum sahneli. */
+function gorevJetonuAl() {
+  if (!otoIzin() || !y) return;
+  const r = G.gorevJetonTopla(y, { kim: me.clientId, simdi });
+  if (!r) return;
+  const anahtar = JSON.stringify(r.yama);
+  if (anahtar === jetonYazilan) return;
+  jetonYazilan = anahtar;
+  col.patch(M.BELGE_ID, r.yama).then(() => {
+    jetonYazilan = null; // bekçi yalnız yazım sürerken: yazım kaybolursa sonraki tazelemede yeniden alınır
+    sfx('win');
+    const son = r.gunler[r.gunler.length - 1];
+    const urun = son.kiyafet ? URUNLER[son.kiyafet] : null;
+    const alt = `İkinize de +${son.jeton} jeton 🪙${urun ? ` · ${urun.ad} dolabınızda` : ''}`;
+    if (son.seri) kutla({ emoji: '🔥', baslik: `${son.seri} gün üst üste!`, alt });
+    else if (son.id === G.MUM_GOREV.id) kutla({ emoji: '🎂', baslik: 'Mumlar söndü!', alt });
+    else toast(`Günün görevi tamam! +${r.eklenen} jeton 🪙`);
+  }).catch((e) => {
+    jetonYazilan = null;
+    console.warn('[yavru] görev jetonu yazılamadı', e);
+  });
+}
+
+/** Evre geldiyse (büyükte; 1, 3, 6, 12. ay) tek yamayla yazar: unvan ve kıyafet. İki cihaz aynı yamayı yazar. */
+function evreYaz() {
+  if (!otoIzin() || !y) return;
+  const r = E.evreYamasi(y, { kim: me.clientId, simdi });
+  if (!r || evreYazilan === r.evre.id) return;
+  evreYazilan = r.evre.id;
+  col.patch(M.BELGE_ID, r.yama).then(() => { evreYazilan = null; }).catch((e) => {
+    evreYazilan = null;
+    console.warn('[yavru] evre yazılamadı', e);
+  });
+  bakim.put({ eylem: 'evre', kim: me.clientId, at: new Date(simdi).toISOString(), deger: r.evre.unvan }, `evre-${r.evre.id}`).catch(() => {});
+  partnerBildir('evre', { deger: r.evre.unvan });
+}
+
+/** Kısa kutlama sahnesi; başka sahne oynuyorsa yalnız toast. */
+function kutla({ emoji, baslik, alt, onBitti }) {
+  if (sahneOynuyor) {
+    toast(`${baslik} ${alt}`);
+    return;
+  }
+  sahneOynuyor = true;
+  kutlamaSahnesi(document.body, {
+    asama: y.asama, renk: y.renk, kisilik: y.kisilik, giyim: giyimOku(y), emoji, baslik, alt,
+    onBitti: () => { sahneOynuyor = false; onBitti?.(); ciz(); },
+  });
 }
 
 function cizPartner() {
@@ -711,6 +852,8 @@ function ciz() {
   hatirlaticiPlanla();
   zamanla();
   kazaYaz();
+  gorevJetonuAl();
+  evreYaz();
   tazelik.dene();
 }
 
@@ -727,6 +870,7 @@ function kazaYaz() {
     console.warn('[yavru] kaza yazılamadı', e);
   });
   bakim.put(r.kayit, r.kayitId).catch(() => {});
+  partnerBildir('kaza');
 }
 
 /** Sonraki yeniden hesap: en geç 1 dk; bir bekleme ya da dakika metni daha önce değişiyorsa o an. */
@@ -759,6 +903,18 @@ function gecisler() {
       renk: y.renk, kisilik: y.kisilik, giyim: giyimOku(y), ad: y.ad,
       onBitti: () => { sahneOynuyor = false; },
     });
+  } else if (!sahneOynuyor && E.evreSahnesiGerekli(y, readStore(sahneDepo(), EVRE_KEY), simdi)) {
+    const e = E.evreSahnesiGerekli(y, readStore(sahneDepo(), EVRE_KEY), simdi);
+    writeStore(sahneDepo(), EVRE_KEY, e.id);
+    writeStore(sahneDepo(), OZEL_KEY, toDay(new Date(simdi))); // aynı gün ikinci sahne olmasın
+    sfx('win');
+    const yas = e.ay === 12 ? '1 yaşına bastı' : `${e.ay} aylık oldu`;
+    kutla({ emoji: URUNLER[e.urun].emoji, baslik: `${y.ad || 'Yavrumuz'} artık ${e.unvan}!`, alt: `${yas}. ${URUNLER[e.urun].ad} dolabınızda ✨` });
+  } else if (!sahneOynuyor && M.ozelGun(y, toDay(new Date(simdi))) && readStore(sahneDepo(), OZEL_KEY) !== toDay(new Date(simdi))
+    && !E.evreYamasi(y, { kim: me.clientId, simdi })) { // evre yazılacaksa o günün sahnesi evre sahnesidir
+    writeStore(sahneDepo(), OZEL_KEY, toDay(new Date(simdi)));
+    sfx('win');
+    kutla({ emoji: '🎂', baslik: M.ozelGunMetni(M.ozelGun(y, toDay(new Date(simdi))), y.ad), alt: 'Bugün pasta bedava. İkiniz de mumunuzu üfleyin 🕯️' });
   } else if (degisti && !sahneOynuyor) {
     olay(y.asama === 'buyuk' ? 'buyudu' : 'dogdu', 1600);
     sfx('win');
@@ -801,6 +957,8 @@ async function catla() {
 // Yerel modda (?yerel=1) iki sekme iki ayrı kişi: kimlik gibi sekmeye özel depo. Gerçekte cihazın localStorage'ı.
 const SAHNE_KEY = `bizim.yavru.catlamaGoruldu.${roomId}`;
 const BUYUME_KEY = `bizim.yavru.buyumeGoruldu.${roomId}`;
+const EVRE_KEY = `bizim.yavru.evreGoruldu.${roomId}`;
+const OZEL_KEY = `bizim.yavru.ozelGoruldu.${roomId}`;
 const sahneDepo = () => (isLocalMode() ? 'session' : 'local');
 let sahneOynuyor = false;
 
@@ -1507,17 +1665,18 @@ function partnerBildir(eylem, { deger = '' } = {}) {
   const t = Date.now();
   const son = Number(readStore('local', BILDIRIM_KEY)) || null;
   if (!M.bildirimGerekli({ son, simdi: t, eylem })) return;
-  if (!['catlama', 'buyume', 'ad'].includes(eylem)) writeStore('local', BILDIRIM_KEY, String(t));
+  if (!M.ONEMLI.has(eylem)) writeStore('local', BILDIRIM_KEY, String(t));
   const metin = M.bildirimMetni({ ad: benAdi(), eylem, deger, yavruAd: y?.ad });
   bildir(roomId, { tur: 'oyun', baslik: 'Yavrumuz', metin, url: 'sayfalar/yavru/' })
     .catch((e) => console.warn('[yavru] bildirim gönderilemedi', e));
 }
 
-/** Android uygulamasında yerel hatırlatıcı (acıkma, uyanma, doğum günü). Her ziyarette ve değişimde yeniden planlanır. */
+/** Android uygulamasında yerel hatırlatıcı (acıkma, uyanma, çişi var, çatlama, ay dönümü, doğum günü). Her ziyarette ve değişimde yeniden planlanır. */
 function hatirlaticiPlanla() {
   if (!y) return;
   const dogumGunu = M.dogumGunuOlayi(y, simdi);
-  const olaylar = [...M.hatirlaticiOlaylari(y, simdi), ...(dogumGunu ? [dogumGunu] : [])];
+  const ay = M.ozelGunOlayi(y, simdi);
+  const olaylar = [...M.hatirlaticiOlaylari(y, simdi), ...T.tuvaletOlaylari(y, simdi), ...(ay ? [ay] : []), ...(dogumGunu ? [dogumGunu] : [])];
   const key = JSON.stringify(olaylar);
   if (key === hatKey) return;
   hatKey = key;
@@ -1533,7 +1692,10 @@ function yeniBakimlar() {
     gorulenBakim.add(d.id);
     const { eylem, kim, at } = d.data || {};
     if (!kim || kim === me.clientId || Date.now() - Date.parse(at) > 2 * M.DK) continue;
-    if (eylem in M.EYLEMLER || eylem === 'isit' || eylem === 'lazimlik') {
+    if (eylem === 'mum') {
+      tepki('sev');
+      sfx('pop');
+    } else if (eylem in M.EYLEMLER || eylem === 'isit' || eylem === 'lazimlik') {
       tepki(eylem);
       sfx('pop');
     }

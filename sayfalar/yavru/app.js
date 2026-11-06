@@ -13,9 +13,9 @@ import { openCollection } from '../../js/core/veri.js';
 import { openProfil } from '../../js/core/profil.js';
 import { bildir } from '../../js/core/bildirim.js';
 import { partnerGoruyor } from '../../js/core/room.js';
-import { readStore, writeStore, isLocalMode } from '../../js/core/identity.js';
+import { readStore, writeStore, isLocalMode, lobbyUrl } from '../../js/core/identity.js';
 import { h, toast, knownPartner, formatDay, celebrate, shareInvite, ICONS } from '../../js/core/ui.js';
-import { sfx } from '../../js/core/sound.js';
+import { sfx, isMuted, setMuted } from '../../js/core/sound.js';
 import { titret, yerelHatirlaticilar } from '../../js/core/mobil.js';
 import * as M from './mantik.js';
 import * as S from './saglik.js';
@@ -24,13 +24,13 @@ import { KISILIKLER, favoriBonus } from './kisilik.js';
 import { toDay } from '../../js/core/gunler.js';
 import * as T from './tuvalet.js';
 import * as D from './dokunma.js';
-import { jetonBakiye, jetonKazan, satinAl, pastaBedavaMi, GUNLUK_SINIR, URUNLER } from './jeton.js';
+import { jetonBakiye, jetonKazan, satinAl, pastaBedavaMi, gunlukKalan, GUNLUK_SINIR, URUNLER } from './jeton.js';
 import * as E from './evre.js';
 import { GOREV_JETON, seriDurumu } from './seri.js';
 import { yavruSvg, catlamaSvg, CIZIM_CSS } from './cizim.js';
 import { BEBEK_CSS } from './bebek.js';
 import * as O from './odalar.js';
-import { odaSvg, KUVET_SVG, LAZIMLIK_SVG, SABUN_SVG } from './oda-cizim.js';
+import { odaSvg, KUVET_SVG, LAZIMLIK_SVG, SABUN_SVG, ODA_CSS } from './oda-cizim.js';
 import { OYUNLAR, oyunAc } from './oyunlar/cerceve.js';
 import { taklitBaslat, taklitDestegi, mikrofonAcikMi } from './taklit.js';
 import { giyimOku } from './giyim.js';
@@ -38,10 +38,15 @@ import { magazaAc as magazaKatmani } from './magaza.js';
 import { buyumeSahnesi, buyumeSahnesiGerekli, kutlamaSahnesi } from './buyume-sahne.js';
 import { ninniCal, ninniRuhu } from './ninni.js';
 import { tazelikIzleyici, otoYazimIzinli, kazaKarari } from './tazelik.js';
+import { ikon, paraIkon, ODA_IKON, EYLEM_IKON } from './ikonlar.js';
+import { altSayfaAc } from './alt-sayfa.js';
+import { oyunSecKur, CSS as OYUN_SEC_CSS } from './oyun-sec.js';
+import { bilgeKartiKur, CSS as KART_CSS } from './bilge-karti.js';
+import { gorevSeritKur, seriNoktaKur, CSS as GOREV_CSS } from './gorev-sayfa.js';
 
 const { room, roomId, me } = await bootPage({ ns: 'yavru', title: 'Yavrumuz', tab: 'daha' });
 const app = document.getElementById('app');
-document.head.append(h('style', { id: 'yv-cizim-stil' }, CIZIM_CSS + BEBEK_CSS));
+document.head.append(h('style', { id: 'yv-cizim-stil' }, CIZIM_CSS + BEBEK_CSS + ODA_CSS + OYUN_SEC_CSS + KART_CSS + GOREV_CSS));
 app.replaceChildren(h('div', { class: 'yv' }, h('p', { class: 'yv-yukleniyor muted', role: 'status' }, 'Yavrunuz geliyor…')));
 
 const [col, bakim, profil] = await Promise.all([
@@ -59,6 +64,12 @@ const tanim = (eylem) => (eylem === 'ilac' ? S.ILAC : eylem === 'lazimlik' ? T.L
 const puanMetni = (n) => n.toLocaleString('tr-TR', { maximumFractionDigits: 1 });
 const ASAMA_ADI = { yumurta: 'Yumurta', kucuk: 'Küçük', buyuk: 'Büyük' };
 const IHTIYAC_ADI = { tokluk: 'Tokluk', mutluluk: 'Mutluluk', temizlik: 'Temizlik', enerji: 'Enerji' };
+/** Sekme ve düğme ikonu: yalnız değişince yazılır. */
+function ikonYaz(el, ad, boy = 28) {
+  if (el.dataset.ikon === ad) return;
+  el.dataset.ikon = ad;
+  el.innerHTML = ikon(ad, boy);
+}
 const IKON = 'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"';
 const IHTIYAC_IKON = {
   tokluk: `<svg ${IKON}><path d="M3.5 11.5h17a8.5 8.5 0 0 1-17 0z"/><path d="M9.5 7.5c0-1.6 1.2-2 1.2-3.6M13.8 7.5c0-1.6 1.2-2 1.2-3.6"/></svg>`,
@@ -113,7 +124,6 @@ let kisayolAnahtar = '';
 // Odalar: seçim cihaz başı (belgeye yazılmaz).
 const ODA_KEY = `bizim.yavru.oda.${roomId}`;
 let oda = O.odaOku(readStore('local', ODA_KEY));
-let oyunSecAcik = false; // Oyun odasında mini oyun listesi açık
 let agizAcik = false; // sürüklenen yiyecek ağza yaklaştı: ağız açılır
 let kopuk = O.kopukBaslat(); // banyo: sabun köpüğü (geçici)
 let tikEngel = false; // sürükleme ya da kaydırma bitti: ardından gelen tık eylem saymasın
@@ -138,31 +148,38 @@ const dokunBtn = h('button', { type: 'button', class: 'yv-dokun', onclick: sahne
 const kisayolEl = h('div', { class: 'yv-kisayol', role: 'group', 'aria-label': 'Dokun', hidden: true });
 const parcaEl = h('div', { class: 'yv-parca', 'aria-hidden': 'true' });
 const sozEl = h('p', { class: 'yv-soz', 'aria-live': 'polite' });
-const buradaEl = h('span', { class: 'yv-burada', hidden: true });
 // Oda sahnesi: arka plan (en altta) ve sürüklenen eşyalar. Eşyalar yalnız işaretçi içindir; aynı eylemler düğmelerde.
 const odaZeminEl = h('span', { class: 'yv-oda-zemin', 'aria-hidden': 'true' });
 const lazimlikEl = h('span', { class: 'yv-lazimlik', 'aria-hidden': 'true', html: LAZIMLIK_SVG, hidden: true, onclick: () => eylemTikla('lazimlik') });
-const sabunEl = h('span', { class: 'yv-sabun', 'aria-hidden': 'true', html: SABUN_SVG, hidden: true });
-const dusBtn = h('button', { type: 'button', class: 'btn primary yv-dus', hidden: true, onclick: durula },
-  h('span', { 'aria-hidden': 'true' }, '🚿'), 'Durula');
 const mikEl = h('span', { class: 'yv-mik', hidden: true }, 'Mikrofon açık');
 // Ağlarken: Salla (sağ-sol sallama hareketiyle aynı; klavyeyle erişilir).
-const sallaBtn = h('button', { type: 'button', class: 'btn primary small yv-salla', hidden: true, onclick: () => sakinlestir() },
-  h('span', { 'aria-hidden': 'true' }, '🤲'), 'Salla');
+const sallaBtn = h('button', { type: 'button', class: 'btn primary small yv-salla', hidden: true, onclick: () => sakinlestir() }, 'Salla');
+// Başlık sahnenin üstünde: geri, ad (kartı açar), jeton (mağazayı açar). Genel kabuk bu sayfada gizli; geri onun yolunu kullanır.
+const ustAd = h('span', { class: 'yv-ust-ad' });
+const ustAlt = h('span', { class: 'yv-ust-alt' });
+const jetonSayi = h('span', { class: 'yv-ust-sayi' });
+const ustJeton = h('button', { type: 'button', class: 'yv-ust-jeton', onclick: () => magazaAc() }, h('span', { html: paraIkon(20) }), jetonSayi);
+const ustEl = h('header', { class: 'yv-ust' },
+  h('button', { type: 'button', class: 'yv-ust-geri', 'aria-label': 'Geri dön', html: ikon('geri'), onclick: () => document.querySelector('#shell .shell-back')?.click() }),
+  h('button', { type: 'button', class: 'yv-ust-kart', onclick: () => kartAc() }, ustAd, ustAlt),
+  ustJeton);
 const sahne = h('section', { class: 'yv-sahne', 'aria-label': 'Yavrumuz' },
-  odaZeminEl, h('span', { class: 'yv-gok', 'aria-hidden': 'true' }), buradaEl, mikEl, lazimlikEl, dokunBtn, sabunEl, dusBtn,
-  sallaBtn, kisayolEl, parcaEl, sozEl);
+  odaZeminEl, h('span', { class: 'yv-gok', 'aria-hidden': 'true' }), ustEl, mikEl, lazimlikEl, dokunBtn, sallaBtn, kisayolEl, parcaEl);
+const durumAltEl = h('p', { class: 'yv-durum-alt' });
+const durumEl = h('div', { class: 'yv-durum' }, sozEl, durumAltEl);
 
 // Oda sekmeleri: otomatik etkinleşen sekme listesi (oklar, Home, End); sekme paneli odanın eylem düğmeleri.
 const odaSekme = {};
+const HALKA_C = Math.round(2 * Math.PI * 22 * 10) / 10;
 const odaSekmeEl = h('div', { class: 'yv-odalar', role: 'tablist', 'aria-label': 'Odalar', hidden: true, onkeydown: sekmeTus },
   O.ODALAR.map((o) => {
     const nokta = h('span', { class: 'yv-oda-nokta', 'aria-hidden': 'true', hidden: true });
+    const halka = h('span', { class: 'yv-halka', 'aria-hidden': 'true', html: `<svg viewBox="0 0 52 52" focusable="false"><circle class="yv-halka-iz" cx="26" cy="26" r="22"/><circle class="yv-halka-dolu" cx="26" cy="26" r="22" stroke-dasharray="0 ${HALKA_C}"/></svg><span class="yv-halka-ikon">${ikon(ODA_IKON[o.id], 23)}</span>` }, nokta);
     const btn = h('button', {
       type: 'button', role: 'tab', id: `yv-oda-${o.id}`, class: 'yv-oda-sekme', 'aria-controls': 'yv-oda-panel',
       dataset: { oda: o.id }, onclick: () => odaSec(o.id),
-    }, h('span', { class: 'yv-oda-emoji', 'aria-hidden': 'true' }, o.emoji), h('span', { class: 'yv-oda-ad' }, o.kisa), nokta);
-    odaSekme[o.id] = { btn, nokta };
+    }, halka, h('span', { class: 'yv-oda-ad' }, o.kisa));
+    odaSekme[o.id] = { btn, nokta, dolu: halka.querySelector('.yv-halka-dolu') };
     return btn;
   }));
 
@@ -186,9 +203,7 @@ const adOneriEl = h('div', { class: 'yv-ad-oneri', role: 'group', 'aria-label': 
 const adForm = h('form', { class: 'yv-adform', novalidate: true, onsubmit: adKaydet },
   adBaslikForm, adGirdi, adOneriEl,
   h('div', { class: 'yv-adform-dugmeler' }, adVazgec, h('button', { type: 'submit', class: 'btn primary' }, 'Kaydet')));
-const metaEl = h('p', { class: 'yv-meta' });
-const buyumeEl = h('p', { class: 'yv-buyume' });
-const bilgi = h('section', { class: 'yv-bilgi', 'aria-labelledby': 'yv-ad' }, adSatir, adForm, metaEl, buyumeEl);
+const bilgi = h('section', { class: 'yv-bilgi', 'aria-labelledby': 'yv-ad' }, adSatir, adForm);
 
 const ihtiyacHucre = {};
 const ihtiyacEl = h('div', { class: 'yv-ihtiyaclar', role: 'group', 'aria-label': 'İhtiyaçlar' },
@@ -223,38 +238,33 @@ ihtiyacEl.append(tuvaletEl);
 
 /** Eylem düğmesi: kalıcı öğe (odak yeniden çizimde kaybolmasın); içerik ciz() ile güncellenir. */
 function eylemDugmesi(eylem) {
-  const emoji = h('span', { class: 'yv-eylem-emoji', 'aria-hidden': 'true' });
+  const emoji = h('span', { class: 'yv-eylem-ikon', 'aria-hidden': 'true' });
   const ad = h('span', { class: 'yv-eylem-ad' });
-  const fav = h('span', { class: 'yv-eylem-favori', 'aria-hidden': 'true', hidden: true }, '💛');
-  const btn = h('button', { type: 'button', class: 'yv-eylem', dataset: { eylem }, onclick: () => eylemTikla(btn.dataset.eylem) }, emoji, ad, fav);
-  return { btn, emoji, ad, fav };
+  const alt = h('span', { class: 'yv-eylem-alt' });
+  const fav = h('span', { class: 'yv-eylem-favori', 'aria-hidden': 'true', hidden: true, html: ikon('kalp', 16) });
+  const btn = h('button', { type: 'button', class: 'yv-eylem', dataset: { eylem }, onclick: () => eylemTikla(btn.dataset.eylem) }, emoji, ad, alt, fav);
+  return { btn, emoji, ad, alt, fav };
 }
 const dugmeler = [...YEMEK, 'lazimlik', ...BAKIM].map(eylemDugmesi);
 const ilacDugme = eylemDugmesi('ilac'); // yalnız keyifsizken görünür (her odada)
 const ilacGrup = h('div', { class: 'yv-eylem-grup ilac', role: 'group', 'aria-label': 'Sağlık', hidden: true }, ilacDugme.btn);
 /** Oyun odasının ek düğmeleri (bakım eylemi değil): aynı görünüm, kendi işleyicisi. */
-function ekDugme(ad, emojiMetni, adMetni, onclick) {
-  const emoji = h('span', { class: 'yv-eylem-emoji', 'aria-hidden': 'true' }, emojiMetni);
+function ekDugme(ad, ikonAd, adMetni, altMetni, onclick) {
+  const emoji = h('span', { class: 'yv-eylem-ikon', 'aria-hidden': 'true' });
+  ikonYaz(emoji, ikonAd);
   const yazi = h('span', { class: 'yv-eylem-ad' }, adMetni);
-  const btn = h('button', { type: 'button', class: 'yv-eylem', dataset: { ek: ad }, onclick }, emoji, yazi);
-  return { btn, emoji, ad: yazi };
+  const alt = h('span', { class: 'yv-eylem-alt' }, altMetni);
+  const btn = h('button', { type: 'button', class: 'yv-eylem', dataset: { ek: ad }, onclick }, emoji, yazi, alt);
+  return { btn, emoji, ad: yazi, alt };
 }
-const oyunlarDugme = ekDugme('oyunlar', '🎮', 'Oyunlar', () => { oyunSecAcik = true; cizPanel(); oyunSecEl.querySelector('button')?.focus({ preventScroll: true }); });
-const konusDugme = ekDugme('konus', '🎤', 'Konuş', konusTikla);
-const magazaDugme = ekDugme('magaza', '🛍️', 'Mağaza', () => magazaAc());
-const ninniDugme = ekDugme('ninni', '🎵', 'Ninni çal', ninniTikla); // yatak odası
+const oyunlarDugme = ekDugme('oyunlar', EYLEM_IKON.oyunlar, 'Oyunlar', `${Object.keys(OYUNLAR).length} oyun`, () => oyunlarAc());
+const konusDugme = ekDugme('konus', EYLEM_IKON.konus, 'Konuş', 'Taklit', konusTikla);
+const magazaDugme = ekDugme('magaza', EYLEM_IKON.magaza, 'Mağaza', `${Object.keys(URUNLER).length} ürün`, () => magazaAc());
+const ninniDugme = ekDugme('ninni', EYLEM_IKON.ninni, 'Ninni', 'Bizim bestemiz', ninniTikla); // yatak odası
+const durulaDugme = ekDugme('durula', EYLEM_IKON.durula, 'Durula', 'Önce sabun', durula); // banyo
 const odaGrup = h('div', { class: 'yv-eylem-grup yv-oda-grup', id: 'yv-oda-panel', role: 'tabpanel' },
-  dugmeler.map((d) => d.btn), ninniDugme.btn, oyunlarDugme.btn, konusDugme.btn, magazaDugme.btn);
-const ipucuEl = h('p', { class: 'yv-oda-ipucu' });
-const OYUN_EMOJI = { balon: '🎈', top: '🧺', cee: '🙈', ninni: '⭐', giydir: '👗', tarif: '🍲', salla: '💞' };
-const oyunGeri = h('button', { type: 'button', class: 'btn ghost small yv-oyun-geri', onclick: () => { oyunSecAcik = false; cizPanel(); oyunlarDugme.btn.focus({ preventScroll: true }); } }, 'Geri');
-const oyunSecEl = h('div', { class: 'yv-oyun-sec', role: 'group', 'aria-label': 'Mini oyunlar', hidden: true },
-  h('div', { class: 'yv-oyun-liste' }, Object.entries(OYUNLAR).map(([id, o]) => h('button', {
-    type: 'button', class: 'yv-oyun', dataset: { oyun: id }, onclick: (e) => oyunBaslat(id, e.currentTarget),
-  }, h('span', { class: 'yv-oyun-emoji', 'aria-hidden': 'true' }, OYUN_EMOJI[id] || '🎲'),
-  h('span', { class: 'yv-oyun-govde' }, h('b', {}, o.ad), h('span', {}, o.ozet))))),
-  oyunGeri);
-const eylemlerEl = h('div', { class: 'yv-eylemler' }, ilacGrup, ipucuEl, odaGrup, oyunSecEl);
+  dugmeler.map((d) => d.btn), ninniDugme.btn, oyunlarDugme.btn, konusDugme.btn, magazaDugme.btn, durulaDugme.btn);
+const eylemlerEl = h('div', { class: 'yv-eylemler' }, ilacGrup, odaGrup);
 
 // İlk gün rehberi: üç adım (mantik.js yumurtaRehberi) ve sevgili yoksa davet. Kalıcı öğeler: odak kaybolmasın.
 const rehberAdim = {};
@@ -274,7 +284,7 @@ const rehberEl = h('section', { class: 'yv-rehber', 'aria-labelledby': 'yv-rehbe
 const ilerlemeEl = h('p', { class: 'yv-ilerleme' });
 const isitAd = h('span', {}, 'Isıt');
 const isitBtn = h('button', { type: 'button', class: 'btn primary wide yv-isit', onclick: isitTikla },
-  h('span', { class: 'yv-isit-emoji', 'aria-hidden': 'true' }, '🤲'), isitAd);
+  h('span', { class: 'yv-isit-emoji', 'aria-hidden': 'true', html: ikon('kalp', 22) }), isitAd);
 const yumurtaEl = h('div', { class: 'yv-yumurta-panel' }, ilerlemeEl, isitBtn);
 const panel = h('div', { class: 'yv-panel' }, yumurtaEl, eylemlerEl);
 
@@ -283,25 +293,60 @@ const bakimBos = h('p', { class: 'yv-bos' });
 const bakimSec = h('section', { class: 'yv-son', 'aria-labelledby': 'yv-son-baslik' },
   h('h2', { id: 'yv-son-baslik' }, 'Son bakımlar'), bakimListe, bakimBos);
 
-const gorevEmoji = h('span', { class: 'yv-gorev-emoji', 'aria-hidden': 'true' });
+const gorevEmoji = h('span', { class: 'yv-gorev-emoji', 'aria-hidden': 'true', html: ikon('yildiz', 22) });
 const gorevMetin = h('p', { class: 'yv-gorev-metin' });
 const gorevSayi = h('span', { class: 'yv-gorev-sayi' });
 const gorevDolu = h('span', { class: 'yv-cubuk-dolu' });
 const gorevCubuk = h('span', { class: 'yv-cubuk', role: 'meter', 'aria-valuemin': '0', 'aria-labelledby': 'yv-gorev-baslik' }, gorevDolu);
 const gorevDurum = h('p', { class: 'yv-gorev-durum' });
+const gorevOdulEl = h('p', { class: 'yv-gorev-durum yv-gorev-odul', hidden: true });
 const gorevSeriEl = h('p', { class: 'yv-gorev-seri', hidden: true }); // telafi ve sonraki ödül
 const gorevOdaEl = h('div', { class: 'yv-gorev-odalar', hidden: true }); // "Banyoya git" (gorev.js gorevOdalari)
-const mumBtn = h('button', { type: 'button', class: 'btn small primary', hidden: true, onclick: mumUfle }, h('span', { 'aria-hidden': 'true' }, '🕯️'), 'Mumunu üfle');
-const pastaBtn = h('button', { type: 'button', class: 'btn small', hidden: true, onclick: pastaVer }, h('span', { 'aria-hidden': 'true' }, '🎂'), 'Bedava pastasını ver');
+const mumBtn = h('button', { type: 'button', class: 'btn small primary', hidden: true, onclick: mumUfle }, 'Mumunu üfle');
+const pastaBtn = h('button', { type: 'button', class: 'btn small', hidden: true, onclick: pastaVer }, 'Bedava pastasını ver');
 const gorevOzelEl = h('div', { class: 'yv-gorev-odalar', hidden: true }, mumBtn, pastaBtn);
 let gorevOdaAnahtar = '';
+const seriNokta = seriNoktaKur();
 const gorevSec = h('section', { class: 'yv-gorev', 'aria-labelledby': 'yv-gorev-baslik', hidden: true },
   h('div', { class: 'yv-gorev-bas' }, gorevEmoji,
     h('div', { class: 'yv-gorev-govde' }, h('h2', { class: 'yv-gorev-baslik', id: 'yv-gorev-baslik' }, 'Günün görevi'), gorevMetin),
     gorevSayi),
-  gorevCubuk, gorevDurum, gorevSeriEl, gorevOzelEl, gorevOdaEl);
+  gorevOdulEl, gorevCubuk, gorevDurum, seriNokta.el, gorevSeriEl, gorevOzelEl, gorevOdaEl);
 
-const kok = h('div', { class: 'yv' }, odaSekmeEl, sahne, bilgi, ihtiyacEl, rehberEl, gorevSec, panel, bakimSec);
+// Alt sayfalar: kalıcı öğeler alt sayfaya taşınır, ciz() onları kapalıyken de güncel tutar.
+const bilgeKarti = bilgeKartiKur({ adAlani: bilgi, ihtiyacAlani: ihtiyacEl, bakimAlani: bakimSec });
+const gorevSerit = gorevSeritKur({ onAc: () => gorevAc() });
+const oyunSec = oyunSecKur({
+  lobiUrl: lobbyUrl(),
+  onOyun: (id) => {
+    oyunSayfa?.kapat();
+    oyunBaslat(id, oyunlarDugme.btn);
+  },
+});
+let kartSayfa = null;
+let gorevSayfa = null;
+let oyunSayfa = null;
+
+function kartAc() {
+  if (kartSayfa) return;
+  kartSayfa = altSayfaAc(document.body, { icerik: bilgeKarti.el, onKapat: () => { kartSayfa = null; } });
+  kartCiz();
+}
+function gorevAc() {
+  if (gorevSayfa) return;
+  gorevSayfa = altSayfaAc(document.body, { baslik: 'Günün görevi', icerik: gorevSec, onKapat: () => { gorevSayfa = null; } });
+}
+function oyunlarAc() {
+  if (oyunSayfa || !y) return;
+  if (!uyanikYavru()) {
+    toast('Şşş, uyuyor 🌙 Uyanınca oynayalım.');
+    return;
+  }
+  oyunSec.guncelle({ bugun: GUNLUK_SINIR - gunlukKalan(y, me.clientId, Date.now()), sinir: GUNLUK_SINIR, partnerVar: !!partner });
+  oyunSayfa = altSayfaAc(document.body, { baslik: 'Oyunlar', icerik: oyunSec.el, onKapat: () => { oyunSayfa = null; } });
+}
+
+const kok = h('div', { class: 'yv' }, sahne, h('div', { class: 'yv-alt' }, durumEl, panel, rehberEl, gorevSerit.el), odaSekmeEl);
 app.replaceChildren(kok);
 
 // ---------- Çizim ----------
@@ -333,15 +378,15 @@ function cizSahne() {
   cizKisayol(gercekRuh === 'yumurta' || gercekRuh === 'uyuyor' ? '' : asama);
   kok.style.setProperty('--yv-govde', `var(--yv-r${renk})`);
   sahne.dataset.asama = asama;
+  kok.dataset.asama = asama;
   const uyuyor = ruh === 'uyuyor';
   sahne.toggleAttribute('data-gece', uyuyor);
   dokunBtn.setAttribute('aria-label', asama === 'yumurta' ? 'Yumurtayı ısıt' : `${y?.ad || 'Yavrunuzu'} sev`);
-  let soz = (uyanik && odaSozu()) || (tepkide ? gecici.metin : M.durumMetni(y, simdi, keyifsiz, tuvalet));
-  if (uyuyor) {
-    const kalan = M.kalanMetni(Date.parse(y.uyku.bit) - simdi);
-    if (kalan) soz += ` · ${kalan}`;
-  }
+  const soz = (uyanik && odaSozu()) || (tepkide ? gecici.metin : M.durumMetni(y, simdi, keyifsiz, tuvalet));
   if (sozEl.textContent !== soz) sozEl.textContent = soz;
+  durumAltEl.textContent = asama === 'yumurta' ? '' : O.durumAltMetni({
+    uyuyor, kalan: uyuyor ? M.kalanMetni(Date.parse(y.uyku.bit) - simdi) : '', oda, ihtiyac: M.ihtiyaclar(y, simdi),
+  });
   const ihtiyac = keyifsiz || tuvalet?.cisVar || tuvalet?.yeniKaza || M.ozledi(y, simdi) || ['ac', 'kirli', 'uykulu', 'uzgun', 'aglama'].includes(ruh);
   sozEl.dataset.ton = asama !== 'yumurta' && ihtiyac ? 'ihtiyac' : '';
 }
@@ -379,8 +424,6 @@ function cizOda() {
     odaZeminEl.replaceChildren();
     kuvetEl.replaceChildren();
     lazimlikEl.hidden = true;
-    sabunEl.hidden = true;
-    dusBtn.hidden = true;
     return;
   }
   if (sahne.dataset.oda !== oda) {
@@ -389,19 +432,38 @@ function cizOda() {
     kuvetEl.innerHTML = oda === 'banyo' ? KUVET_SVG : '';
   }
   const uyuyor = M.uyuyorMu(y.uyku, simdi);
-  const noktalar = O.odaNoktalari({ ihtiyac: M.ihtiyaclar(y, simdi), cisVar: !!T.tuvaletDurumu(y, simdi)?.cisVar, uyuyor });
+  const tuvalet = T.tuvaletDurumu(y, simdi);
+  const durumlar = O.odaDurumlari({ ihtiyac: M.ihtiyaclar(y, simdi), tuvaletDeger: tuvalet?.deger, cisVar: !!tuvalet?.cisVar, uyuyor });
   for (const o of O.ODALAR) {
-    const { btn, nokta } = odaSekme[o.id];
+    const { btn, nokta, dolu } = odaSekme[o.id];
+    const d = durumlar[o.id];
     const secili = o.id === oda;
     btn.setAttribute('aria-selected', String(secili));
     btn.tabIndex = secili ? 0 : -1;
-    nokta.hidden = !noktalar.includes(o.id);
-    btn.setAttribute('aria-label', nokta.hidden ? o.ad : `${o.ad}, ihtiyacı var`);
+    dolu.setAttribute('stroke-dasharray', `${Math.round((HALKA_C * d.deger) / 10) / 10} ${HALKA_C}`);
+    btn.toggleAttribute('data-uyari', d.uyari);
+    nokta.hidden = !d.acil;
+    btn.setAttribute('aria-label', `${o.ad}, ${d.ihtiyac} ${d.deger}${d.acil ? ', ihtiyacı var' : ''}`);
   }
   odaGrup.setAttribute('aria-labelledby', `yv-oda-${oda}`);
   lazimlikEl.hidden = oda !== 'tuvalet';
-  sabunEl.hidden = oda !== 'banyo' || uyuyor;
-  dusBtn.hidden = oda !== 'banyo' || uyuyor || !O.kopukTamam(kopuk);
+  const durulaHazir = O.kopukTamam(kopuk);
+  durulaDugme.alt.textContent = durulaHazir ? 'Köpük tamam' : 'Önce sabun';
+  if (durulaHazir) durulaDugme.btn.removeAttribute('aria-disabled');
+  else durulaDugme.btn.setAttribute('aria-disabled', 'true');
+  oneriCiz();
+}
+
+/** Odada vurgulanan tek eylem (odalar.js onerilenEylem). Köpük tamamsa sıradaki iş durulamak. */
+function oneriCiz() {
+  if (!y || y.asama === 'yumurta') return;
+  const oneri = oda === 'banyo' && O.kopukTamam(kopuk) ? 'durula' : O.onerilenEylem(oda, {
+    ihtiyac: M.ihtiyaclar(y, simdi), cisVar: !!T.tuvaletDurumu(y, simdi)?.cisVar, uyuyor: M.uyuyorMu(y.uyku, simdi),
+  });
+  for (const d of [...dugmeler, oyunlarDugme, konusDugme, magazaDugme, ninniDugme, durulaDugme]) {
+    const ad = d.btn.dataset.eylem || d.btn.dataset.ek;
+    d.btn.toggleAttribute('data-ana', ad === oneri && d.btn.getAttribute('aria-disabled') !== 'true');
+  }
 }
 
 /** Oda değiştir: seçim cihazda kalır; yarım köpük ve dinleme biter. */
@@ -411,7 +473,6 @@ function odaSec(yeni, { odak = false } = {}) {
     const yon = O.ODA_IDLERI.indexOf(yeni) > O.ODA_IDLERI.indexOf(oda) ? 'ileri' : 'geri';
     oda = yeni;
     writeStore('local', ODA_KEY, oda);
-    oyunSecAcik = false;
     kopukSifirla();
     taklit?.durdur();
     ninni?.durdur();
@@ -451,47 +512,64 @@ function cizBilgi() {
   adOneriEl.hidden = !adYok;
   adBaslik.textContent = yumurta ? 'Yumurtamız' : y.ad || 'Yavrumuz';
   adBtn.hidden = yumurta;
+  ustAd.textContent = adBaslik.textContent;
+  ustJeton.hidden = yumurta;
+  if (!yumurta) {
+    const jeton = String(Math.max(0, jetonBakiye(y))); // eşzamanlı harcamada kısa süre eksi olabilir, 0 gösterilir
+    jetonSayi.textContent = jeton;
+    ustJeton.setAttribute('aria-label', `${jeton} ortak jeton, mağazayı aç`);
+  }
   if (formAcik) {
     adBaslikForm.textContent = adYok ? 'Yavrumuza bir ad koyalım 💛' : 'Yeni adı';
     if (adOdak) {
       adOdak = false;
+      kartAc(); // ad formu kartta
       if (!adYok || !adGirdi.value) adGirdi.value = y.ad || '';
       adGirdi.focus({ preventScroll: true });
       adForm.scrollIntoView({ block: 'nearest', behavior: azHareket() ? 'auto' : 'smooth' });
     }
   }
-  const kisilik = !yumurta && Object.hasOwn(KISILIKLER, y.kisilik ?? '') ? KISILIKLER[y.kisilik] : null;
-  const seriN = yumurta ? 0 : seriDurumu(y, toDay(new Date(simdi))).n;
-  metaEl.replaceChildren(
-    M.ozelGun(y, toDay(new Date(simdi)))
-      ? h('span', { style: { color: 'var(--accent-strong)' } }, M.dogumGunuMu(y, simdi) ? M.DOGUM_GUNU_METNI : `${M.ozelGunMetni(M.ozelGun(y, toDay(new Date(simdi))), y.ad)} 🎂`)
-      : h('span', {}, y ? M.yasMetni(y, simdi) : 'Yeni yumurta'),
-    h('span', { class: 'chip yv-asama' }, E.evreSon(y)?.unvan || ASAMA_ADI[y?.asama || 'yumurta']),
-    ...(kisilik ? [h('span', { class: 'chip yv-kisilik', title: kisilik.aciklama },
-      h('span', { 'aria-hidden': 'true' }, kisilik.emoji), kisilik.ad,
-      h('span', { class: 'sr-only' }, `: ${kisilik.aciklama}`))] : []),
-    // Ortak jeton bakiyesi (mağaza sonra); eşzamanlı harcamada kısa süre eksi olabilir, 0 gösterilir.
-    ...(y ? [h('span', { class: 'chip yv-jeton', title: 'Ortak jeton' },
-      h('span', { 'aria-hidden': 'true' }, '🪙'), h('span', { class: 'sr-only' }, 'Ortak jeton: '),
-      String(Math.max(0, jetonBakiye(y))))] : []),
-    ...(seriN ? [h('span', { class: 'chip yv-seri' }, `🔥 ${seriN} gün`, h('span', { class: 'sr-only' }, ' görev serisi'))] : []));
+  cizUst();
+  if (kartSayfa) kartCiz();
+}
 
-  let buyume = '';
+/** Başlığın alt satırı: yaş (özel günde kutlama, ad yoksa çağrı) ve sevgilinin yeri. */
+function cizUst() {
+  const ozel = y ? M.ozelGun(y, toDay(new Date(simdi))) : null;
+  const yavru = !!y && y.asama !== 'yumurta';
+  const yas = !y ? 'Yeni yumurta'
+    : ozel ? (M.dogumGunuMu(y, simdi) ? M.DOGUM_GUNU_METNI : M.ozelGunMetni(ozel, y.ad))
+      : yavru && !y.ad ? 'Ona bir ad koyalım' : M.yasMetni(y, simdi);
+  const yer = partnerGoruyor(partner, 'yavru') ? (O.partnerOdaKisa(partnerAdi(), partner.alan) || `${partnerAdi()} burada`)
+    : partner ? `${partnerAdi()} çevrimiçi` : '';
+  ustAlt.textContent = yer ? `${yas} · ${yer}` : yas;
+  ustEl.querySelector('.yv-ust-kart').setAttribute('aria-label', `${ustAd.textContent}: ${ustAlt.textContent}. Kartı aç`);
+}
+
+/** Bilge kartı içeriği: yalnız açıkken çizilir (portre pahalı). */
+function kartCiz() {
+  const yumurta = !y || y.asama === 'yumurta';
+  const kisilik = !yumurta && Object.hasOwn(KISILIKLER, y.kisilik ?? '') ? KISILIKLER[y.kisilik] : null;
+  let buyumeMetni = '';
   if (y?.asama === 'kucuk') {
     const b = M.buyumeDurumu(y, simdi);
     const benP = y.puan[me.clientId] || 0;
     const oP = b.kisiler.find((k) => k.id !== me.clientId)?.puan || 0;
     if (b.kalanGun > 0 || b.toplam < b.gerekToplam) {
-      buyume = `Büyümesine ${b.kalanGun > 0 ? `${b.kalanGun} gün · ` : ''}${puanMetni(Math.min(b.toplam, b.gerekToplam))}/${b.gerekToplam} bakım`;
+      buyumeMetni = `Büyümesine ${b.kalanGun > 0 ? `${b.kalanGun} gün · ` : ''}${puanMetni(Math.min(b.toplam, b.gerekToplam))}/${b.gerekToplam} bakım`;
     } else {
-      buyume = `İkinizin de en az ${b.gerekKisi} bakımı olunca büyür`;
+      buyumeMetni = `İkinizin de en az ${b.gerekKisi} bakımı olunca büyür`;
     }
-    buyume += ` (sen ${puanMetni(benP)}, ${partnerAdi()} ${puanMetni(oP)})`;
-  } else if (y?.asama === 'buyuk') {
-    buyume = `Birlikte ${puanMetni(M.buyumeDurumu(y, simdi).toplam)} bakım`;
+    buyumeMetni += ` (sen ${puanMetni(benP)}, ${partnerAdi()} ${puanMetni(oP)})`;
   }
-  buyumeEl.textContent = buyume;
-  buyumeEl.hidden = !buyume;
+  bilgeKarti.guncelle({
+    y, simdi, kisilik, buyumeMetni,
+    portreSvg: yavruSvg({ asama: y?.asama || 'yumurta', ruh: 'mutlu', renk: y?.renk || M.renkSec(roomId), kisilik: y?.kisilik || '', giyim: y ? giyimOku(y) : {}, kimlik: 'yvk' }),
+    seriN: yumurta ? 0 : seriDurumu(y, toDay(new Date(simdi))).n,
+    yasMetni: y ? M.yasMetni(y, simdi) : 'Yeni yumurta',
+    sesAcik: !isMuted(),
+    onSes: () => { setMuted(!isMuted()); kartCiz(); },
+  });
 }
 
 function cizIhtiyac() {
@@ -550,36 +628,38 @@ function cizPanel() {
     const eylem = d.btn.dataset.eylem === 'uyut' || d.btn.dataset.eylem === 'uyandir' ? (uyuyor ? 'uyandir' : 'uyut') : d.btn.dataset.eylem;
     const e = tanim(eylem);
     d.btn.dataset.eylem = eylem;
-    d.emoji.textContent = e.emoji;
+    ikonYaz(d.emoji, EYLEM_IKON[eylem]);
     const kalan = eylem === 'ilac' ? S.ilacKalan(y, me.clientId, simdi)
       : eylem === 'lazimlik' ? T.lazimlikKalan(y, me.clientId, simdi) : M.kalanBekleme(y, me.clientId, eylem, simdi);
     const kapali = uyuyor && eylem !== 'sev' && eylem !== 'uyandir';
     const favori = favoriBonus(y.kisilik, eylem) > 0;
     const ad = favori ? `${e.ad} (en sevdiği)` : e.ad;
     d.fav.hidden = !favori;
+    d.ad.textContent = e.ad;
     if (kapali) {
       d.btn.dataset.durum = 'uyku';
-      d.ad.textContent = e.ad;
+      d.alt.textContent = 'Uyuyor';
       d.btn.setAttribute('aria-disabled', 'true');
       d.btn.setAttribute('aria-label', `${ad} (uyuyor)`);
     } else if (kalan > 0) {
       d.btn.dataset.durum = 'bekle';
-      d.ad.textContent = M.kalanMetni(kalan);
+      d.alt.textContent = `${M.kalanMetni(kalan)} sonra`;
       d.btn.setAttribute('aria-disabled', 'true');
       d.btn.setAttribute('aria-label', `${ad}: ${M.kalanMetni(kalan)} sonra`);
     } else {
       delete d.btn.dataset.durum;
-      d.ad.textContent = e.ad;
+      d.alt.textContent = eylemAlt(eylem);
       d.btn.removeAttribute('aria-disabled');
       if (favori) d.btn.setAttribute('aria-label', ad);
       else d.btn.removeAttribute('aria-label');
     }
   }
-  // Oda: yalnız bu odanın düğmeleri; Oyun odasında ek düğmeler ya da mini oyun listesi.
+  // Oda: yalnız bu odanın düğmeleri. Sev gösterilmez: bebeğe dokunmak aynı işi yapar.
   const odaT = O.odaTanimi(oda);
   let sutun = 0;
   for (const d of dugmeler) {
-    d.btn.hidden = !odaT.eylemler.includes(d.btn.dataset.eylem === 'uyandir' ? 'uyut' : d.btn.dataset.eylem);
+    const e = d.btn.dataset.eylem === 'uyandir' ? 'uyut' : d.btn.dataset.eylem;
+    d.btn.hidden = !odaT.eylemler.includes(e) || e === 'sev';
     if (!d.btn.hidden) sutun++;
   }
   const oyunOdasi = oda === 'oyun';
@@ -587,8 +667,11 @@ function cizPanel() {
   if (oyunOdasi) sutun += 3;
   ninniDugme.btn.hidden = oda !== 'yatak';
   if (oda === 'yatak') sutun++;
-  ninniDugme.emoji.textContent = ninni ? '⏹️' : '🎵';
-  ninniDugme.ad.textContent = ninni ? 'Durdur' : 'Ninni çal';
+  durulaDugme.btn.hidden = oda !== 'banyo' || uyuyor;
+  if (!durulaDugme.btn.hidden) sutun++;
+  ikonYaz(ninniDugme.emoji, ninni ? EYLEM_IKON.durdur : EYLEM_IKON.ninni);
+  ninniDugme.ad.textContent = ninni ? 'Durdur' : 'Ninni';
+  ninniDugme.alt.textContent = ninni ? 'Çalıyor' : 'Bizim bestemiz';
   ninniDugme.btn.setAttribute('aria-pressed', String(!!ninni));
   ninniDugme.btn.setAttribute('aria-label', ninni ? 'Ninniyi durdur' : 'Ninni çal');
   for (const d of [oyunlarDugme, konusDugme]) {
@@ -600,17 +683,23 @@ function cizPanel() {
       d.btn.removeAttribute('aria-disabled');
     }
   }
-  konusDugme.emoji.textContent = taklit ? '⏹️' : '🎤';
+  ikonYaz(konusDugme.emoji, taklit ? EYLEM_IKON.durdur : EYLEM_IKON.konus);
   konusDugme.ad.textContent = taklit ? 'Bitir' : 'Konuş';
   konusDugme.btn.setAttribute('aria-pressed', String(!!taklit));
   konusDugme.btn.setAttribute('aria-label', uyuyor ? 'Konuş (uyuyor)' : taklit ? 'Konuşmayı bitir' : 'Konuş: yavru seni taklit etsin');
   oyunlarDugme.btn.setAttribute('aria-label', uyuyor ? 'Mini oyunlar (uyuyor)' : 'Mini oyunlar');
-  const liste = oyunOdasi && oyunSecAcik && !uyuyor;
-  odaGrup.hidden = liste;
-  oyunSecEl.hidden = !liste;
   odaGrup.style.setProperty('--sutun', String(Math.max(1, sutun)));
-  ipucuEl.textContent = uyuyor ? '' : odaT.ipucu;
-  ipucuEl.hidden = !ipucuEl.textContent || liste;
+  oneriCiz();
+}
+
+/** Düğmenin alt satırı. */
+function eylemAlt(eylem) {
+  if (eylem === 'uyut') return `Uyku ${M.UYKU_SURE / M.SAAT} saat`;
+  if (eylem === 'uyandir') return D.uyandirmaTepkisi(y.uyku, simdi) ? 'Erken uyanırsa ağlar' : 'Günaydın';
+  if (eylem === 'lazimlik') return T.tuvaletDurumu(y, simdi)?.cisVar ? 'Çişi var' : 'Rahat';
+  if (eylem === 'ilac') return 'Keyfi yerine gelsin';
+  if (eylem === 'oyna') return `+${M.EYLEMLER.oyna.etki.mutluluk}`; // dört düğmeli sırada dar
+  return O.eylemAltMetni(eylem, M.EYLEMLER);
 }
 
 /** İlk gün rehberi: adım durumları ve sevgili henüz yoksa davet düğmesi. */
@@ -659,10 +748,12 @@ function cizGorev() {
   const gun = toDay(new Date(simdi));
   const oz = y ? G.gorevOzeti(y, { roomId, gun, kayitlar: bakim.all(), kisiler: [me.clientId, pid].filter(Boolean) }) : null;
   gorevSec.hidden = !oz;
-  if (!oz) return;
+  if (!oz) {
+    gorevSerit.guncelle({ gizli: true });
+    return;
+  }
   const { gorev, tamam, odullendi, kisiBasi, ilerleme: { n, gerek } } = oz;
   const bitti = tamam || odullendi;
-  gorevEmoji.textContent = gorev.emoji;
   const ozel = M.ozelGun(y, gun);
   gorevMetin.textContent = gorev.id === G.MUM_GOREV.id && ozel ? `${M.ozelGunMetni(ozel, y.ad)} ${gorev.metin}` : gorev.metin;
   gorevSec.dataset.tamam = String(bitti);
@@ -687,6 +778,11 @@ function cizGorev() {
     };
     gorevDurum.replaceChildren(kisi(me.clientId), ' · ', kisi(pid));
   }
+  gorevOdulEl.hidden = bitti;
+  gorevOdulEl.replaceChildren('Tamamlayınca ikinize ', h('span', { html: paraIkon(16) }), h('strong', {}, String(gorev.id === G.MUM_GOREV.id ? GOREV_JETON + G.MUM_JETON : GOREV_JETON)));
+  const seri = seriDurumu(y, gun);
+  gorevSerit.guncelle({ gizli: false, metin: gorevMetin.textContent, goster, gerek, tamam: bitti, seriN: seri.n });
+  seriNokta.guncelle(seri);
   cizGorevSeri(gun);
   cizGorevOzel(gun, gorev, kisiBasi, ozel);
   cizGorevOdalari(bitti ? [] : G.gorevOdalari(gorev).filter((o) => o !== oda));
@@ -696,8 +792,8 @@ function cizGorev() {
 /** Seri notu: dün kaçtıysa telafi, yoksa sonraki ödüle kalan. */
 function cizGorevSeri(gun) {
   const s = seriDurumu(y, gun);
-  const metin = s.telafiBekliyor ? `Dün kaçtı, sorun değil: bugün tamamlarsanız 🔥 ${s.n} gün sürer 💛`
-    : s.n && s.sonraki ? `🔥 ${s.n} gün · ${s.sonraki.gun}. günde hediye var, ${s.sonraki.kalan} gün kaldı` : s.n ? `🔥 ${s.n} gün` : '';
+  const metin = s.telafiBekliyor ? `Dün kaçtı, sorun değil: bugün tamamlarsanız ${s.n} gün sürer 💛`
+    : s.n && s.sonraki ? `${s.n} gün · ${s.sonraki.gun}. günde hediye var, ${s.sonraki.kalan} gün kaldı` : s.n ? `${s.n} gün` : '';
   gorevSeriEl.hidden = !metin;
   gorevSeriEl.textContent = metin;
 }
@@ -747,10 +843,10 @@ function cizGorevOdalari(odalar) {
     return h('button', {
       type: 'button', class: 'btn small yv-gorev-git', dataset: { oda: id },
       onclick: () => {
+        gorevSayfa?.kapat();
         odaSec(id, { odak: true });
-        sahne.scrollIntoView({ block: 'nearest', behavior: azHareket() ? 'auto' : 'smooth' });
       },
-    }, h('span', { 'aria-hidden': 'true' }, o.emoji), `${o.yonelme} git`);
+    }, h('span', { 'aria-hidden': 'true', html: ikon(ODA_IKON[id], 18) }), `${o.yonelme} git`);
   }));
 }
 
@@ -819,13 +915,7 @@ function kutla({ emoji, baslik, alt, onBitti }) {
 }
 
 function cizPartner() {
-  const burada = partnerGoruyor(partner, 'yavru');
-  buradaEl.hidden = !burada;
-  if (burada) {
-    // Partner hangi odada (presence alanı); eski istemci ya da yumurta: yalnız "burada".
-    const metin = O.partnerOdaMetni(partnerAdi(), partner.alan) || `${partnerAdi()} de burada`;
-    buradaEl.replaceChildren(h('span', { class: 'dot on', 'aria-hidden': 'true' }), metin);
-  }
+  cizUst();
 }
 
 function ciz() {
@@ -1310,7 +1400,7 @@ for (const d of dugmeler.filter((x) => YEMEK.includes(x.btn.dataset.eylem))) {
     basla: () => {
       // Beklemede ya da uykuda sürükleme yok; nedeni eylemTikla söyler.
       if (d.btn.getAttribute('aria-disabled') === 'true') { eylemTikla(eylem); return false; }
-      hayalet = h('span', { class: 'yv-hayalet', 'aria-hidden': 'true' }, tanim(eylem).emoji);
+      hayalet = h('span', { class: 'yv-hayalet', 'aria-hidden': 'true', html: ikon(EYLEM_IKON[eylem], 30) });
       document.body.append(hayalet);
       d.btn.dataset.suruklenen = '';
       return true;
@@ -1354,24 +1444,29 @@ function kabarcikEkle(n) {
   }));
 }
 let sabunda = false;
+let sabunHayalet = null;
+const yikaDugme = dugmeler.find((x) => x.btn.dataset.eylem === 'yika');
 function sabunBirak() {
   if (!sabunda) return;
   sabunda = false;
-  delete sabunEl.dataset.suruklenen;
-  sabunEl.style.translate = '';
-  if (O.kopukTamam(kopuk)) dusBtn.focus({ preventScroll: true });
+  delete yikaDugme.btn.dataset.suruklenen;
+  sabunHayalet?.remove();
+  sabunHayalet = null;
+  if (O.kopukTamam(kopuk)) durulaDugme.btn.focus({ preventScroll: true });
 }
-surukle(sabunEl, {
+surukle(yikaDugme.btn, {
   basla: () => {
     if (!uyanikYavru()) return false;
     if (M.kalanBekleme(y, me.clientId, 'yika', Date.now()) > 0) { eylemTikla('yika'); return false; }
     sabunda = true;
-    sabunEl.dataset.suruklenen = '';
+    yikaDugme.btn.dataset.suruklenen = '';
+    sabunHayalet = h('span', { class: 'yv-hayalet sabun', 'aria-hidden': 'true', html: SABUN_SVG });
+    document.body.append(sabunHayalet);
     kopuk = { ...kopuk, son: null };
     return true;
   },
-  hareket: (x, yy, x0, y0) => {
-    sabunEl.style.translate = `${x - x0}px ${yy - y0}px`;
+  hareket: (x, yy) => {
+    sabunHayalet.style.translate = `${x}px ${yy}px`;
     const n = bebekNokta(x, yy);
     const onceki = Math.floor(O.kopukOrani(kopuk) * 10);
     const r = O.kopukIlerle(kopuk, n, !!n && D.bolgeBul(n.x, n.y, y.asama) !== null);
@@ -1385,19 +1480,23 @@ surukle(sabunEl, {
   },
   birak: sabunBirak,
   iptal: sabunBirak,
+  dokunmatik: { karar: O.yemekSurukleKarar, basiliMs: O.BASILI_TUT },
 });
 /** Durula: su akar, köpük süzülür; sonra 'yika' eylemi. Yıka düğmesine tek dokunuş aynı eylemi doğrudan yapar. */
 function durula() {
-  if (!O.kopukTamam(kopuk) || sahne.hasAttribute('data-dus')) return;
+  if (!O.kopukTamam(kopuk)) {
+    toast('Önce sabunu yavrunun üstünde gezdir');
+    return;
+  }
+  if (sahne.hasAttribute('data-dus')) return;
   sahne.dataset.dus = '';
-  dusBtn.hidden = true;
   setTimeout(() => {
     kopukSifirla();
     eylemTikla('yika');
     simdi = Date.now();
     cizOda();
     cizSahne();
-    dugmeler.find((x) => x.btn.dataset.eylem === 'yika')?.btn.focus({ preventScroll: true }); // Durula gitti
+    yikaDugme.btn.focus({ preventScroll: true });
   }, azHareket() ? 0 : 900);
 }
 
@@ -1433,7 +1532,7 @@ surukle(dokunBtn, {
 // Oda kaydırma: sahnede yatay kaydırınca komşu oda. Dikey kaydırma sayfaya kalır (CSS touch-action: pan-y).
 sahne.addEventListener('pointerdown', (e) => {
   if (!e.isPrimary || e.button > 0 || !y || y.asama === 'yumurta') return;
-  if (e.target.closest('.yv-sabun, .yv-lazimlik, .yv-dus, .yv-kisayol') || (oda === 'tuvalet' && dokunBtn.contains(e.target))) return;
+  if (e.target.closest('.yv-ust, .yv-lazimlik, .yv-kisayol') || (oda === 'tuvalet' && dokunBtn.contains(e.target))) return;
   if (e.target.closest('.yv-salla')) return;
   const { pointerId: id, clientX: x0, clientY: y0 } = e;
   // Ağlarken sağ-sol sallama (dokunma.js sallaIlerle) ağlamayı dindirir; bu hareket oda değiştirmez.
@@ -1516,13 +1615,13 @@ function oyunBaslat(id, dugme) {
   oyunAc(katman, {
     oyun: id,
     azHareket: azHareket(),
-    bebekSvg: yavruSvg({ asama: y.asama, ruh: 'mutlu', renk: y.renk, kisilik: y.kisilik || '' }),
+    bebekSvg: yavruSvg({ asama: y.asama, ruh: 'mutlu', renk: y.renk, kisilik: y.kisilik || '', giyim: giyimOku(y) }),
     baglam: { room, renk: y.renk, kisilik: y.kisilik || '', giyim: giyimOku(y) },
     onBitti: oyunBitti,
     onCik: () => {
       katman.remove();
       sayfaKilit(false);
-      (dugme?.isConnected && !oyunSecEl.hidden ? dugme : oyunlarDugme.btn).focus({ preventScroll: true });
+      oyunlarDugme.btn.focus({ preventScroll: true });
     },
   });
 }
@@ -1605,6 +1704,7 @@ function magazaAc() {
     veri: () => y,
     kim: me.clientId,
     simdi: Date.now,
+    sekme: 'giyim',
     bebekOpts: { renk: y.renk, kisilik: y.kisilik },
     onKapat: () => { magaza = null; },
     // Hata yakalanmaz: mağaza iletiyi kendisi gösterir.
@@ -1635,9 +1735,9 @@ function tepki(tur) {
   tepkiZaman = setTimeout(() => { delete sahne.dataset.tepki; }, 1500);
   const bit = (cls, style, kid = null, html = null) => h('span', { class: `yv-p ${cls}`, style, html }, kid);
   if (YEMEK.includes(tur)) {
-    parcalar([bit('yv-p-yemek', {}, M.EYLEMLER[tur].emoji)]);
+    parcalar([bit('yv-p-yemek', {}, null, ikon(EYLEM_IKON[tur], 30))]);
   } else if (tur === 'oyna') {
-    parcalar([bit('yv-p-top', {}, '⚽')]);
+    parcalar([bit('yv-p-top', {}, null, ikon('top', 28))]);
   } else if (tur === 'yika') {
     parcalar(Array.from({ length: 9 }, () => bit('yv-p-kopuk', {
       '--x': `${rnd(22, 78).toFixed(1)}%`, '--s': `${Math.round(rnd(10, 26))}px`,

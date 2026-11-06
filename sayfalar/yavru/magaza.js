@@ -3,15 +3,39 @@
 // <head>'e bir kez eklenir; bebek stili yoksa o da eklenir). Üst düzeyde DOM yok: saf yardımcılar Node'da test edilir.
 import { URUNLER, satinAl, jetonBakiye, dolaptaMi, pastaBedavaMi } from './jeton.js';
 import { urunKilidi } from './evre.js';
-import { giyimOku, giyYamasi, cikarYamasi, yuvaBul, satinAlGiyYamasi } from './giyim.js';
+import { giyimOku, giyYamasi, cikarYamasi, yuvaBul, satinAlGiyYamasi, YUVALAR } from './giyim.js';
 import { bebekSvg, giyimParcaSvg, BEBEK_CSS } from './bebek.js';
 import { CIZIM_CSS } from './cizim.js';
+import { ikon, paraIkon } from './ikonlar.js';
 
 export const SEKMELER = Object.freeze([
   Object.freeze({ id: 'yiyecek', ad: 'Yiyecek', tur: 'yiyecek' }),
   Object.freeze({ id: 'giyim', ad: 'Giyim', tur: 'kiyafet' }),
 ]);
+const GORUNEN_SEKMELER = Object.freeze([...SEKMELER].reverse()); // Ekranda: Giyim | Yiyecek.
 const ETKI_AD = { tokluk: 'tokluk', mutluluk: 'mutluluk', temizlik: 'temizlik', enerji: 'enerji' };
+
+/** Giyim sekmesi filtreleri; 'tumu' dışındaki id, giyim.js YUVALAR anahtarıdır. */
+export const FILTRELER = Object.freeze([
+  Object.freeze({ id: 'tumu', ad: 'Tümü' }),
+  Object.freeze({ id: 'govde', ad: 'Kıyafet' }),
+  Object.freeze({ id: 'bas', ad: 'Başlık' }),
+  Object.freeze({ id: 'goz', ad: 'Gözlük' }),
+  Object.freeze({ id: 'boyun', ad: 'Boyun' }),
+  Object.freeze({ id: 'agiz', ad: 'Emzik' }),
+  Object.freeze({ id: 'kucak', ad: 'Kucak' }),
+]);
+
+const yiyecekSvg = (d) => `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="${d}"/></svg>`;
+
+/** Yiyecek kartı çizimleri: ikonlar.js ile aynı çizgi dili (24×24, currentColor). */
+export const YIYECEK_CIZIM = Object.freeze({
+  cilek: yiyecekSvg('M12 21.5c-3.6-1.7-7.5-5.8-7.5-10 0-2.7 2-4.5 4.4-4.5 1.2 0 2.3.4 3.1 1.2.8-.8 1.9-1.2 3.1-1.2 2.4 0 4.4 1.8 4.4 4.5 0 4.2-3.9 8.3-7.5 10ZM8 3.8c.4 2 1.8 3.7 4 4.4 2.2-.7 3.6-2.4 4-4.4M12 8.2V3M9 12v.01M15 12v.01M12 14v.01M9.8 16.5v.01M14.2 16.5v.01'),
+  kurabiye: yiyecekSvg('M12 3.5a8.5 8.5 0 1 0 8.5 8.5c-2.4 0-3.7-1-3.5-2.8-2.7.1-5.2-1.9-5-5.7ZM9 9.5v.01M8.5 14.5v.01M13 12.5v.01M12.5 17v.01M16.5 15v.01'),
+  dondurma: yiyecekSvg('M7 11.5a5.5 5.5 0 1 1 10 0M6 11.5h12M7.2 11.5l4.8 10 4.8-10M9.3 15.9l3.7-4.4M14.7 15.9 11 11.5'),
+  pizza: yiyecekSvg('M12 21.5 4.2 7.2c4.9-2.6 10.7-2.6 15.6 0L12 21.5ZM5.6 9.8c4-2 8.8-2 12.8 0M10 13.2v.01M14.2 13.7v.01M12 17.5v.01'),
+  pasta: yiyecekSvg('M4.5 21v-7.5A1.5 1.5 0 0 1 6 12h12a1.5 1.5 0 0 1 1.5 1.5V21M3 21h18M4.5 16.2c2.5 1.6 5 1.6 7.5 0s5-1.6 7.5 0M12 12V8.5M12 5.8c-.9-.8-.9-1.8 0-2.8.9 1 .9 2 0 2.8Z'),
+});
 
 /** Sekmedeki ürün id'leri (katalog sırası; fiyata göre artan). */
 export function sekmeUrunleri(sekme) {
@@ -19,9 +43,22 @@ export function sekmeUrunleri(sekme) {
   return Object.keys(URUNLER).filter((id) => URUNLER[id].tur === tur).sort((a, b) => URUNLER[a].fiyat - URUNLER[b].fiyat);
 }
 
+/** Giyim sekmesinde filtrenin ürünleri (sekmeUrunleri sırası). Bilinmeyen filtre: tümü. */
+export function filtreliUrunler(filtre) {
+  const tumu = sekmeUrunleri('giyim');
+  return Object.hasOwn(YUVALAR, filtre ?? '') ? tumu.filter((id) => YUVALAR[filtre].includes(id)) : tumu;
+}
+
+/** Önizleme bandının ürünü. denenen önce; yoksa üstündeki (kıyafet önce). -> { urun, giyili } | null. giyili: giyimOku sonucu. */
+export function onizlemeUrunu(giyili, denenen) {
+  if (denenen) return { urun: denenen, giyili: giyili[yuvaBul(denenen)] === denenen };
+  const urun = giyili.govde ?? Object.values(giyili).find(Boolean);
+  return urun ? { urun, giyili: true } : null;
+}
+
 /**
  * Kartın durumu. -> { durum, eksik? }
- * kıyafet: 'giyili' (Çıkar) | 'dolapta' (Giy) | 'kilitli' (evre gelince açılır) | 'al' | 'yetersiz';
+ * kıyafet: 'giyili' (Üstünde; Çıkar önizleme bandında) | 'dolapta' (Giy) | 'kilitli' (evre gelince açılır) | 'al' | 'yetersiz';
  * yiyecek: 'al' (bedava? özel gün pastası) | 'yetersiz' | 'yumurta' | 'uyuyor'.
  */
 export function urunDurumu(y, urun, { kim, simdi }) {
@@ -87,7 +124,6 @@ function stilEkle() {
 
 const azHareket = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 const ODAKLANIR = 'button:not([disabled]), [href], input:not([disabled]), [tabindex]:not([tabindex="-1"])';
-const KAPAT_IKON = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>';
 
 /**
  * Mağazayı açar. kok: eklenecek kap (genelde document.body).
@@ -102,19 +138,20 @@ export function magazaAc(kok, { veri, kim, simdi = () => Date.now(), yaz, bebekO
   const onceOdak = document.activeElement;
   let aktif = SEKMELER.some((s) => s.id === sekme) ? sekme : 'yiyecek';
   let denenen = null; // giyim sekmesinde önizlemede denenen ürün
+  let filtre = FILTRELER[0].id;
   let mesgul = false;
   let kapandi = false;
 
   const baslikId = `yvm-baslik-${Math.random().toString(36).slice(2, 8)}`;
   const bakiyeSayi = el('span', { class: 'yvm-bakiye-sayi' });
   const bakiye = el('p', { class: 'yvm-bakiye', 'aria-live': 'polite', 'aria-atomic': 'true' },
-    el('span', { 'aria-hidden': 'true' }, '🪙'), el('span', { class: 'sr-only' }, 'Ortak jeton: '), bakiyeSayi);
-  const kapatBtn = el('button', { type: 'button', class: 'yvm-kapat', 'aria-label': 'Mağazayı kapat', html: KAPAT_IKON, onclick: () => kapat() });
+    el('span', { class: 'yvm-simge', html: paraIkon(18) }), el('span', { class: 'sr-only' }, 'Ortak jeton: '), bakiyeSayi);
+  const kapatBtn = el('button', { type: 'button', class: 'yvm-kapat', 'aria-label': 'Mağazayı kapat', html: ikon('kapat', 22), onclick: () => kapat() });
 
   const sekmeBtn = {};
   const paneller = {};
   const tablist = el('div', { class: 'yvm-sekmeler', role: 'tablist', 'aria-label': 'Ürün türü' });
-  for (const s of SEKMELER) {
+  for (const s of GORUNEN_SEKMELER) {
     sekmeBtn[s.id] = el('button', {
       type: 'button', role: 'tab', id: `${baslikId}-t-${s.id}`, 'aria-controls': `${baslikId}-p-${s.id}`,
       onclick: () => sekmeSec(s.id),
@@ -125,18 +162,30 @@ export function magazaAc(kok, { veri, kim, simdi = () => Date.now(), yaz, bebekO
   tablist.addEventListener('keydown', (e) => {
     if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
     e.preventDefault();
-    const i = SEKMELER.findIndex((s) => s.id === aktif);
-    const n = SEKMELER.length;
+    const i = GORUNEN_SEKMELER.findIndex((s) => s.id === aktif);
+    const n = GORUNEN_SEKMELER.length;
     const j = e.key === 'Home' ? 0 : e.key === 'End' ? n - 1 : (i + (e.key === 'ArrowRight' ? 1 : -1) + n) % n;
-    sekmeSec(SEKMELER[j].id);
-    sekmeBtn[SEKMELER[j].id].focus();
+    sekmeSec(GORUNEN_SEKMELER[j].id);
+    sekmeBtn[GORUNEN_SEKMELER[j].id].focus();
   });
 
-  // Giyim önizlemesi
+  // Giyim önizlemesi (yapışık bant) ve filtreler
   const onizCizim = el('div', { class: 'yvm-oniz-cizim' });
-  const onizMetin = el('p', { class: 'yvm-oniz-metin' });
+  const onizAd = el('p', { class: 'yvm-oniz-ad' });
+  const onizDurum = el('p', { class: 'yvm-oniz-durum' });
+  const cikarBtn = el('button', { type: 'button', class: 'yvm-cikar', onclick: () => eylemYap(cikarBtn.dataset.urun) }, 'Çıkar');
   const onizNot = el('p', { class: 'yvm-oniz-not' });
-  paneller.giyim.append(el('div', { class: 'yvm-oniz' }, onizCizim, el('div', { class: 'yvm-oniz-yazi' }, onizMetin, onizNot)));
+  const filtreBtn = {};
+  const filtreler = el('div', { class: 'yvm-filtreler', role: 'group', 'aria-label': 'Filtre' });
+  for (const f of FILTRELER) {
+    filtreBtn[f.id] = el('button', { type: 'button', class: 'yvm-filtre', onclick: () => filtreSec(f.id) }, f.ad);
+    filtreler.append(filtreBtn[f.id]);
+  }
+  paneller.giyim.append(
+    el('div', { class: 'yvm-oniz' }, onizCizim, el('div', { class: 'yvm-oniz-yazi' }, onizAd, onizDurum, cikarBtn)),
+    onizNot,
+    filtreler,
+  );
 
   // Kartlar
   const kartlar = {};
@@ -147,16 +196,16 @@ export function magazaAc(kok, { veri, kim, simdi = () => Date.now(), yaz, bebekO
       const adId = `${baslikId}-u-${id}`;
       const gorsel = u.tur === 'kiyafet'
         ? el('button', { type: 'button', class: 'yvm-gorsel yvm-dene', 'aria-pressed': 'false', 'aria-label': `${u.ad}: önizlemede dene`, html: giyimParcaSvg(id, { renk: bebekOpts.renk }), onclick: () => dene(id) })
-        : el('span', { class: 'yvm-gorsel yvm-emoji', 'aria-hidden': 'true' }, u.emoji);
-      const rozet = el('span', { class: 'yvm-rozet', hidden: true });
-      const eylem = el('button', { type: 'button', class: 'btn small yvm-eylem', 'aria-describedby': adId, onclick: () => eylemYap(id) });
+        : el('span', { class: 'yvm-gorsel yvm-yiyecek', 'aria-hidden': 'true', html: YIYECEK_CIZIM[id] });
+      const fiyat = el('span', { class: 'yvm-fiyat' }, el('span', { class: 'yvm-simge', html: paraIkon(17) }), el('span', { class: 'sr-only' }, 'Fiyat: '), `${u.fiyat}`, el('span', { class: 'sr-only' }, ' jeton'));
+      const not = el('span', { class: 'yvm-not' });
+      const eylem = el('button', { type: 'button', class: 'yvm-eylem', 'aria-describedby': adId, onclick: () => eylemYap(id) });
       const kart = el('li', { class: 'yvm-kart', 'data-urun': id },
-        gorsel, rozet,
+        gorsel,
         el('h3', { class: 'yvm-ad', id: adId }, u.ad),
         u.tur === 'yiyecek' ? el('p', { class: 'yvm-etki' }, etkiMetni(id)) : null,
-        el('p', { class: 'yvm-fiyat' }, el('span', { 'aria-hidden': 'true' }, '🪙 '), el('span', { class: 'sr-only' }, 'Fiyat: '), `${u.fiyat}`, el('span', { class: 'sr-only' }, ' jeton')),
-        eylem);
-      kartlar[id] = { kart, gorsel, rozet, eylem };
+        el('div', { class: 'yvm-satir' }, fiyat, not, eylem));
+      kartlar[id] = { kart, gorsel, fiyat, not, eylem };
       liste.append(kart);
     }
     paneller[s.id].append(liste);
@@ -208,7 +257,14 @@ export function magazaAc(kok, { veri, kim, simdi = () => Date.now(), yaz, bebekO
     boya();
   }
 
-  const ETIKET = { al: 'Al', yetersiz: 'Yetersiz', dolapta: 'Giy', giyili: 'Çıkar', yumurta: 'Al', uyuyor: 'Uyuyor', kilitli: 'Kilitli' };
+  function filtreSec(id) {
+    filtre = id;
+    mesaj('');
+    boya();
+  }
+
+  const ETIKET = { al: 'Al', yetersiz: 'Yetersiz', dolapta: 'Giy', yumurta: 'Al', uyuyor: 'Uyuyor' };
+  const FIYATSIZ = ['giyili', 'dolapta', 'kilitli'];
 
   function boya() {
     const v = y();
@@ -220,19 +276,22 @@ export function magazaAc(kok, { veri, kim, simdi = () => Date.now(), yaz, bebekO
       sekmeBtn[s.id].tabIndex = secili ? 0 : -1;
       paneller[s.id].hidden = !secili;
     }
+    for (const f of FILTRELER) filtreBtn[f.id].setAttribute('aria-pressed', String(f.id === filtre));
+    const gorunen = filtreliUrunler(filtre);
     for (const [id, k] of Object.entries(kartlar)) {
       const d = urunDurumu(v, id, { kim, simdi: t });
       k.kart.dataset.durum = d.durum;
-      k.eylem.textContent = d.bedava ? 'Ver' : ETIKET[d.durum];
-      k.eylem.classList.toggle('primary', d.durum === 'al' || d.durum === 'dolapta');
+      if (URUNLER[id].tur === 'kiyafet') k.kart.hidden = !gorunen.includes(id);
+      k.fiyat.hidden = d.bedava || FIYATSIZ.includes(d.durum);
+      k.not.hidden = d.durum !== 'giyili' && !d.bedava;
+      if (d.durum === 'giyili') k.not.innerHTML = `${ikon('tik', 17)}Üstünde`;
+      else if (d.bedava) k.not.textContent = 'Bugün bedava';
+      k.eylem.hidden = d.durum === 'giyili';
+      if (d.durum === 'kilitli') k.eylem.innerHTML = `${ikon('kilit', 16)}<span class="sr-only">Kilitli: </span>${kilitMetni(d.evre)}`;
+      else k.eylem.textContent = d.bedava ? 'Ver' : ETIKET[d.durum] ?? '';
       const pasif = d.durum === 'yetersiz' || d.durum === 'yumurta' || d.durum === 'uyuyor' || d.durum === 'kilitli';
       if (pasif) k.eylem.setAttribute('aria-disabled', 'true'); else k.eylem.removeAttribute('aria-disabled');
       k.eylem.disabled = mesgul;
-      const rozet = d.durum === 'giyili' ? 'Üstünde' : d.durum === 'dolapta' ? 'Dolapta' : d.durum === 'yetersiz' ? `${d.eksik} eksik`
-        : d.durum === 'kilitli' ? `${kilitMetni(d.evre)} 🔒` : d.bedava ? 'Bugün bedava 🎂' : '';
-      k.rozet.textContent = rozet;
-      k.rozet.hidden = !rozet;
-      k.rozet.dataset.tur = d.durum;
       if (k.gorsel.tagName === 'BUTTON') k.gorsel.setAttribute('aria-pressed', String(denenen === id));
     }
     if (aktif === 'giyim') onizBoya(v);
@@ -250,10 +309,15 @@ export function magazaAc(kok, { veri, kim, simdi = () => Date.now(), yaz, bebekO
       onizCizim.dataset.anahtar = anahtar;
       onizCizim.innerHTML = bebekSvg({ asama, renk, kisilik, giyim, ruh: 'mutlu', etiket: 'Önizleme' });
     }
-    const adlar = Object.values(giyili).filter(Boolean).map((id) => URUNLER[id].ad);
-    onizMetin.textContent = denenen && giyili[yuvaBul(denenen)] !== denenen
-      ? `${URUNLER[denenen].ad} deneniyor`
-      : adlar.length ? `Üstünde: ${adlar.join(', ')}` : 'Bir kıyafet seç, üstünde dene';
+    const o = onizlemeUrunu(giyili, denenen);
+    onizAd.textContent = o ? URUNLER[o.urun].ad : 'Bir kıyafet seç, üstünde dene';
+    onizDurum.textContent = !o ? '' : o.giyili ? 'Şu an üstünde' : 'Deneniyor';
+    cikarBtn.hidden = !o?.giyili;
+    cikarBtn.disabled = mesgul;
+    if (o?.giyili) {
+      cikarBtn.dataset.urun = o.urun;
+      cikarBtn.setAttribute('aria-label', `${URUNLER[o.urun].ad}: çıkar`);
+    }
     onizNot.textContent = asama === 'kucuk' ? 'Kundaktayken yalnız başlık görünür; kıyafet, gözlük, atkı, emzik ve battaniye büyüyünce.' : '';
   }
 
@@ -272,15 +336,15 @@ export function magazaAc(kok, { veri, kim, simdi = () => Date.now(), yaz, bebekO
     } else if (d.durum === 'dolapta') {
       r = giyYamasi(v, { urun: id });
       basari = `${u.ad} çok yakıştı ✨`;
-      denenen = null;
     } else {
       // Kıyafet: satın alma ve giyme tek yazım (dolap + giyim yaması birlikte).
       r = u.tur === 'kiyafet' ? satinAlGiyYamasi(v, { kim, urun: id, simdi: t }) : satinAl(v, { kim, urun: id, simdi: t });
       kayit = r.kayit || null;
       basari = u.tur === 'kiyafet' ? `${u.emoji} ${u.ad} alındı ve giyildi ✨` : `${u.emoji} Afiyet olsun!`;
-      if (u.tur === 'kiyafet') denenen = null;
     }
     if (r.hata) { mesaj(hataMetni(r), 'hata'); return; }
+    // Bant son işlemin ürününü gösterir; çıkarılan ürün önizlemede kalmaz.
+    if (u.tur === 'kiyafet') denenen = d.durum === 'giyili' ? null : id;
     mesgul = true;
     sayfa.setAttribute('aria-busy', 'true');
     boya();
@@ -294,8 +358,15 @@ export function magazaAc(kok, { veri, kim, simdi = () => Date.now(), yaz, bebekO
     sayfa.removeAttribute('aria-busy');
     if (!kapandi) {
       boya();
-      // Odak, yeniden etkinleşen düğmede kalsın (disabled odak düşürür).
-      if (!sayfa.contains(document.activeElement)) kartlar[id].eylem.focus();
+      // Odak sayfada kalsın: disabled ve hidden düğme odağı düşürür. Çıkar ya da eylem gizlendiyse sıradaki hedef alır.
+      const odak = document.activeElement;
+      if (!sayfa.contains(odak) || odak.closest('[hidden]')) {
+        const k = kartlar[id];
+        for (const hedef of [d.durum === 'giyili' ? cikarBtn : k.eylem, k.gorsel, sayfa]) {
+          hedef.focus();
+          if (document.activeElement === hedef) break;
+        }
+      }
     }
   }
 
@@ -320,101 +391,124 @@ export function magazaAc(kok, { veri, kim, simdi = () => Date.now(), yaz, bebekO
 
 /** Mağaza stili (yvm-*). Renkler base.css değişkenlerinden; iki tema; hareket yalnız isteyene. */
 export const MAGAZA_CSS = `
-.yvm-kat { position: fixed; inset: 0; z-index: 870; display: grid; align-items: end; justify-items: center; }
+/* Görsel kutusu iki temada açık: koyu parçalar seçilsin. */
+:root { --yvm-tabak: #F8EEE8; }
+@media (prefers-color-scheme: dark) { :root:not([data-mod="acik"]) { --yvm-tabak: #F3E7DF; } }
+:root[data-mod="koyu"] { --yvm-tabak: #F3E7DF; }
+.yvm-kat { position: fixed; inset: 0; z-index: 870; display: grid; grid-template-columns: minmax(0, 1fr); align-items: end; justify-items: center; }
+.yvm-kat [hidden] { display: none !important; }
+.yvm-kat .yv-ikon, .yvm-kat .yv-para { display: block; flex: none; }
 .yvm-perde { position: absolute; inset: 0; background: var(--overlay); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); }
 .yvm-sayfa {
   position: relative; display: flex; flex-direction: column;
-  width: 100%; max-width: 520px; max-height: min(88dvh, 760px);
-  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  width: 100%; max-width: 520px; height: min(90dvh, 800px);
+  border-radius: 28px 28px 0 0;
   background: var(--bg); color: var(--text); box-shadow: var(--shadow-lg);
   padding: 8px 0 calc(8px + var(--safe-bottom));
   overscroll-behavior: contain;
 }
-.yvm-tutamak { align-self: center; width: 40px; height: 5px; border-radius: 3px; background: var(--line); margin-bottom: 4px; }
-.yvm-ust { display: flex; align-items: center; gap: 10px; padding: 4px 12px 8px 20px; }
-.yvm-baslik { margin: 0; flex: 1; font-family: var(--font-display); font-size: 1.5rem; font-weight: 600; letter-spacing: -0.01em; font-variation-settings: 'SOFT' 100; }
+.yvm-panel:focus, .yvm-sayfa:focus { outline: none; }
+.yvm-tutamak { flex: none; align-self: center; width: 40px; height: 5px; border-radius: 3px; background: var(--line); margin-bottom: 4px; }
+.yvm-ust { flex: none; display: flex; align-items: center; gap: 10px; padding: 4px 12px 8px 20px; }
+.yvm-baslik { margin: 0; flex: 1; min-width: 0; font-family: var(--font-display); font-size: 1.625rem; font-weight: 600; line-height: 1.1; font-variation-settings: 'SOFT' 100; }
+.yvm-simge { display: inline-flex; flex: none; }
 .yvm-bakiye {
-  display: inline-flex; align-items: center; gap: 6px; margin: 0; min-height: 36px; padding: 0 14px;
-  border-radius: var(--radius-pill); background: var(--surface-2); color: var(--text);
-  font-weight: 800; font-size: 1.0625rem; font-variant-numeric: tabular-nums;
+  display: inline-flex; align-items: center; gap: 7px; margin: 0; height: 36px; padding: 0 13px 0 10px;
+  border-radius: 999px; background: var(--surface-2); color: var(--text);
+  font-weight: 800; font-size: 0.9375rem; font-variant-numeric: tabular-nums;
 }
 .yvm-kapat {
   display: grid; place-items: center; width: 44px; height: 44px; flex: none;
   border: 0; border-radius: 50%; background: transparent; color: var(--muted); cursor: pointer;
 }
-.yvm-kapat svg { width: 22px; height: 22px; }
-.yvm-kapat:focus-visible, .yvm-sekmeler > button:focus-visible, .yvm-dene:focus-visible, .yvm-eylem:focus-visible {
+.yvm-kapat:focus-visible, .yvm-sekmeler > button:focus-visible, .yvm-dene:focus-visible, .yvm-eylem:focus-visible, .yvm-cikar:focus-visible {
   outline: 3px solid var(--focus); outline-offset: 2px;
 }
+.yvm-filtre:focus-visible { outline: 3px solid var(--focus); outline-offset: 0; }
 @media (hover: hover) { .yvm-kapat:hover { background: var(--surface-2); color: var(--text); } }
 .yvm-sekmeler {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin: 0 16px 10px; padding: 4px;
-  border-radius: 18px; background: var(--surface-2);
+  flex: none; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; margin: 0 16px 12px; padding: 4px;
+  border-radius: 16px; background: var(--surface-2);
 }
 .yvm-sekmeler > button {
-  min-height: 44px; border: 0; border-radius: 14px; background: transparent; color: var(--muted);
-  font: inherit; font-weight: 750; cursor: pointer;
-  transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+  min-height: 44px; border: 0; border-radius: 12px; background: transparent; color: var(--muted);
+  font: inherit; font-size: 0.9375rem; font-weight: 700; cursor: pointer;
 }
-.yvm-sekmeler > button[aria-selected='true'] {
-  background: var(--raised); color: var(--text);
-  box-shadow: var(--shadow-sm), inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 45%, transparent);
-}
-.yvm-govde { flex: 1; min-height: 0; overflow-y: auto; padding: 2px 16px 8px; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
-.yvm-panel:focus, .yvm-sayfa:focus { outline: none; }
-.yvm-izgara { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
-.yvm-kart {
-  position: relative; display: grid; grid-template-rows: auto auto auto 1fr auto; gap: 2px;
-  padding: 10px 10px 12px; border-radius: var(--radius-lg); background: var(--surface);
-  border: 1.5px solid var(--line); box-shadow: var(--shadow-sm);
-}
-.yvm-kart[data-durum='giyili'] { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
-.yvm-gorsel {
-  display: grid; place-items: center; height: 84px; margin-bottom: 6px;
-  border-radius: var(--radius); background: var(--surface-2);
-}
-.yvm-emoji { font-size: 2.75rem; line-height: 1; }
-.yvm-dene { width: 100%; padding: 12px 16px; border: 2px solid transparent; cursor: pointer; color: inherit; font: inherit; }
-.yvm-dene svg { width: 100%; height: 60px; } /* kare parçalar (emzik) kutudan taşmasın */
-.yvm-dene[aria-pressed='true'] { border-color: var(--accent); background: var(--accent-soft); }
-.yvm-rozet {
-  position: absolute; top: 16px; right: 16px; padding: 2px 8px; border-radius: var(--radius-pill);
-  background: var(--surface); color: var(--muted); font-size: 0.75rem; font-weight: 800; box-shadow: var(--shadow-sm);
-}
-.yvm-rozet[data-tur='giyili'] { background: var(--accent); color: var(--accent-ink); }
-.yvm-rozet[data-tur='dolapta'] { background: var(--good-soft); color: var(--good); }
-.yvm-ad { margin: 0; font-size: 1rem; font-weight: 800; line-height: 1.25; }
-.yvm-etki { margin: 0; color: var(--muted); font-size: 0.8125rem; line-height: 1.35; }
-.yvm-fiyat { margin: 2px 0 8px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--text); }
-.yvm-eylem { width: 100%; min-height: 44px; }
-.yvm-eylem[aria-disabled='true'] { opacity: 1; --btn-bg: var(--surface-2); --btn-line: transparent; --btn-ink: var(--muted); }
+.yvm-sekmeler > button[aria-selected='true'] { background: var(--line); color: var(--text); font-weight: 800; }
+.yvm-govde { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; padding: 0 16px 8px; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
 .yvm-oniz {
-  /* Yapışkan: aşağıdaki aksesuarı denerken önizleme görünür kalır. */
-  position: sticky; top: 0; z-index: 1; box-shadow: 0 6px 12px -10px rgb(0 0 0 / 0.35);
-  display: grid; grid-template-columns: 116px 1fr; align-items: center; gap: 12px;
-  margin-bottom: 12px; padding: 8px 14px 8px 8px; border-radius: var(--radius-lg);
-  background: color-mix(in srgb, var(--yv-govde) 32%, var(--surface));
+  /* Yapışık: aşağıdaki ürünü denerken önizleme görünür kalır. Halka, kayan kartları bandın köşelerinde örter. */
+  position: sticky; top: 0; z-index: 1;
+  display: flex; align-items: center; gap: 12px; min-height: 124px; padding-right: 14px;
+  border-radius: 22px; background: var(--surface); box-shadow: 0 0 0 10px var(--bg);
 }
-.yvm-oniz-cizim { width: 116px; aspect-ratio: 1; }
-.yvm-oniz-metin { margin: 0; font-family: var(--font-display); font-size: 1.125rem; font-weight: 600; line-height: 1.3; text-wrap: balance; }
-.yvm-oniz-not { margin: 4px 0 0; color: var(--muted); font-size: 0.8125rem; line-height: 1.4; }
+.yvm-oniz-cizim { flex: none; width: clamp(96px, 32vw, 124px); aspect-ratio: 1; }
+.yvm-oniz-yazi { flex: 1; min-width: 0; padding: 8px 0; }
+.yvm-oniz-ad { margin: 0; font-family: var(--font-display); font-size: 1.25rem; font-weight: 600; line-height: 1.2; font-variation-settings: 'SOFT' 100; }
+.yvm-oniz-durum { margin: 3px 0 0; color: var(--muted); font-size: 0.8125rem; font-weight: 700; }
+.yvm-oniz-durum:empty { display: none; }
+.yvm-cikar {
+  margin-top: 6px; min-height: 44px; padding: 0 16px; border: 1.5px solid var(--line); border-radius: 999px;
+  background: transparent; color: var(--text); font: inherit; font-size: 0.8125rem; font-weight: 800; cursor: pointer;
+}
+.yvm-oniz-not { margin: 12px 4px 0; color: var(--muted); font-size: 0.8125rem; line-height: 1.4; }
 .yvm-oniz-not:empty { display: none; }
-.yvm-durum { min-height: 1.5em; margin: 6px 20px 0; font-weight: 750; font-size: 0.9375rem; text-align: center; color: var(--text); }
+.yvm-filtreler {
+  /* Yatay kayar; gövdenin kenarına dek uzanır. Düğmenin saydam kenarı 38 px hapı 44 px dokunma alanına büyütür. */
+  display: flex; gap: 2px; margin: 0 -16px; padding: 9px 13px;
+  overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none;
+}
+.yvm-filtreler::-webkit-scrollbar { display: none; }
+.yvm-filtre {
+  flex: none; height: 44px; padding: 0 15px; border: 3px solid transparent; border-radius: 999px;
+  background: var(--surface-2); background-clip: padding-box; color: var(--muted);
+  font: inherit; font-size: 0.8125rem; font-weight: 800; cursor: pointer;
+}
+.yvm-filtre[aria-pressed='true'] { background-color: var(--text); color: var(--bg); }
+.yvm-izgara { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.yvm-kart {
+  position: relative; display: flex; flex-direction: column; min-width: 0; padding: 8px 8px 10px;
+  border-radius: 22px; background: var(--surface); box-shadow: var(--shadow-sm);
+}
+.yvm-kart[data-durum='giyili'] { box-shadow: inset 0 0 0 2px var(--accent), var(--shadow-sm); }
+.yvm-gorsel {
+  flex: none; display: grid; place-items: center; width: 100%; height: 116px; overflow: hidden;
+  border-radius: 15px; background: var(--yvm-tabak);
+}
+.yvm-yiyecek { height: 96px; color: var(--yvb-murekkep); }
+.yvm-yiyecek svg { width: 52px; height: 52px; }
+.yvm-dene { padding: 4px; border: 0; color: inherit; font: inherit; cursor: pointer; }
+.yvm-dene svg { height: 108px; } /* kare parçalar (emzik) kutudan taşmasın */
+.yvm-dene[aria-pressed='true'] { box-shadow: inset 0 0 0 3px var(--accent); }
+.yvm-kart[data-durum='giyili'] .yvm-dene[aria-pressed='true'] { box-shadow: none; }
+.yvm-ad { margin: 8px 4px 6px; font-size: 0.9375rem; font-weight: 800; line-height: 1.2; }
+.yvm-etki { margin: -2px 4px 6px; color: var(--muted); font-size: 0.8125rem; line-height: 1.35; }
+.yvm-satir {
+  margin-top: auto; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 6px;
+  min-height: 44px; padding: 0 4px;
+}
+.yvm-fiyat { display: inline-flex; align-items: center; gap: 5px; font-size: 0.9375rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.yvm-not { display: inline-flex; align-items: center; gap: 4px; color: var(--accent); font-size: 0.8125rem; font-weight: 800; }
+.yvm-kart[data-durum='al'] .yvm-not { color: var(--good); }
+.yvm-eylem {
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-width: 44px; min-height: 44px; padding: 0 18px;
+  border: 0; border-radius: 999px; background: var(--surface-2); color: var(--text);
+  font: inherit; font-size: 0.9375rem; font-weight: 800; cursor: pointer;
+}
+.yvm-kart[data-durum='al'] .yvm-eylem { background: var(--accent); color: var(--accent-ink); }
+.yvm-eylem[aria-disabled='true'] { padding: 0 10px; color: var(--muted); font-size: 0.8125rem; }
+.yvm-kart[data-durum='kilitli'] .yvm-eylem { padding: 0; background: transparent; }
+.yvm-eylem:disabled, .yvm-cikar:disabled { opacity: 0.6; cursor: default; }
+.yvm-durum { flex: none; min-height: 1.5em; margin: 6px 20px 0; font-weight: 700; font-size: 0.9375rem; text-align: center; color: var(--text); }
 .yvm-durum[data-tur='hata'] { color: var(--bad); }
 .yvm-durum[data-tur='iyi'] { color: var(--good); }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-mod="acik"]) .yvm-oniz { background: color-mix(in srgb, var(--yv-govde) 14%, var(--surface)); }
-  :root:not([data-mod="acik"]) .yvm-dene { background: color-mix(in srgb, var(--hero-ink) 86%, var(--yv-govde)); }
-}
-:root[data-mod="koyu"] .yvm-oniz { background: color-mix(in srgb, var(--yv-govde) 14%, var(--surface)); }
-/* Koyu temada aksesuar karosu açık: koyu çerçeve ve şapka seçilsin (pastel bebek gibi iki temada aynı). */
-:root[data-mod="koyu"] .yvm-dene { background: color-mix(in srgb, var(--hero-ink) 86%, var(--yv-govde)); }
 @media (prefers-reduced-motion: no-preference) {
   .yvm-perde { animation: yvm-sol 0.22s ease-out both; }
   .yvm-sayfa { animation: yvm-yuksel 0.34s cubic-bezier(0.16, 1, 0.3, 1) both; }
   .yvm-kat.kapaniyor .yvm-perde { animation: yvm-sol 0.2s ease-in reverse both; }
   .yvm-kat.kapaniyor .yvm-sayfa { animation: yvm-in 0.2s ease-in both; }
-  .yvm-dene, .yvm-kart { transition: border-color 0.15s ease, background-color 0.15s ease; }
+  .yvm-dene, .yvm-kart { transition: box-shadow 0.15s ease; }
+  .yvm-filtre, .yvm-sekmeler > button { transition: background-color 0.15s ease, color 0.15s ease; }
 }
 @keyframes yvm-sol { from { opacity: 0; } }
 @keyframes yvm-yuksel { from { transform: translateY(48px); opacity: 0; } }

@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { YUVALAR, yuvaBul, giyimOku, giyYamasi, cikarYamasi, satinAlGiyYamasi } from '../sayfalar/yavru/giyim.js';
 import { URUNLER, satinAl } from '../sayfalar/yavru/jeton.js';
 import { applyPatch } from '../js/core/veri.js';
-import { SEKMELER, sekmeUrunleri, urunDurumu, hataMetni, etkiMetni } from '../sayfalar/yavru/magaza.js';
+import { SEKMELER, sekmeUrunleri, urunDurumu, hataMetni, etkiMetni, FILTRELER, filtreliUrunler, onizlemeUrunu, YIYECEK_CIZIM } from '../sayfalar/yavru/magaza.js';
 
 const BOS = Object.freeze({ bas: null, goz: null, boyun: null, govde: null, agiz: null, kucak: null });
 const dolap = (...idler) => Object.fromEntries(idler.map((id) => [id, { at: '2026-10-30T09:00:00.000Z', kim: 'a', fiyat: URUNLER[id].fiyat }]));
@@ -119,6 +119,45 @@ test('mağaza: hata iletileri Türkçe; yetersizde eksik jeton sayısı', () => 
   for (const hata of ['zaten', 'yumurta', 'uyuyor', 'dolapta-yok', 'bilinmiyor', undefined]) {
     const m = hataMetni({ hata });
     assert.ok(typeof m === 'string' && m.length > 3 && !/undefined/.test(m), String(hata));
+  }
+});
+
+test('mağaza filtreleri: sıra, ad ve yuva', () => {
+  assert.deepEqual(FILTRELER.map((f) => [f.id, f.ad]), [
+    ['tumu', 'Tümü'], ['govde', 'Kıyafet'], ['bas', 'Başlık'], ['goz', 'Gözlük'], ['boyun', 'Boyun'], ['agiz', 'Emzik'], ['kucak', 'Kucak'],
+  ]);
+  assert.deepEqual(FILTRELER.slice(1).map((f) => f.id).sort(), Object.keys(YUVALAR).sort(), 'her yuvanın filtresi var');
+});
+
+test('filtreliUrunler: yuvaya göre süzer, fiyat sırasını korur; bilinmeyen filtre tümü', () => {
+  const tumu = sekmeUrunleri('giyim');
+  assert.deepEqual(filtreliUrunler('tumu'), tumu);
+  for (const f of ['yok', '', undefined, null, '__proto__', 'constructor', 'hasOwnProperty']) assert.deepEqual(filtreliUrunler(f), tumu, String(f));
+  assert.deepEqual(filtreliUrunler('goz'), ['kalpgozluk', 'gozluk']);
+  assert.deepEqual(filtreliUrunler('agiz'), ['emzik', 'yildizemzik']);
+  assert.deepEqual(filtreliUrunler('kucak'), ['battaniye', 'pelus']);
+  assert.deepEqual(filtreliUrunler('boyun'), ['onluk', 'papyon', 'atki']);
+  for (const yuva of Object.keys(YUVALAR)) assert.deepEqual(filtreliUrunler(yuva), tumu.filter((id) => yuvaBul(id) === yuva), yuva);
+  assert.deepEqual(Object.keys(YUVALAR).flatMap((yuva) => filtreliUrunler(yuva)).sort(), [...tumu].sort(), 'her ürün tek filtrede');
+});
+
+test('onizlemeUrunu: denenen önce; yoksa üstündeki, kıyafet önce; hiçbiri yoksa null', () => {
+  assert.equal(onizlemeUrunu(BOS, null), null);
+  assert.deepEqual(onizlemeUrunu(BOS, 'tac'), { urun: 'tac', giyili: false });
+  assert.deepEqual(onizlemeUrunu({ ...BOS, bas: 'fiyonk' }, 'tac'), { urun: 'tac', giyili: false }, 'aynı yuvada başkası üstünde');
+  assert.deepEqual(onizlemeUrunu({ ...BOS, bas: 'tac' }, 'tac'), { urun: 'tac', giyili: true });
+  assert.deepEqual(onizlemeUrunu({ ...BOS, bas: 'tac' }, null), { urun: 'tac', giyili: true });
+  assert.deepEqual(onizlemeUrunu({ ...BOS, bas: 'tac', govde: 'elbise' }, null), { urun: 'elbise', giyili: true });
+});
+
+test('yiyecek çizimleri: her yiyeceğe bir tane; ikonlar.js çizgi dili; emoji yok', () => {
+  assert.deepEqual(Object.keys(YIYECEK_CIZIM).sort(), sekmeUrunleri('yiyecek').sort());
+  for (const [id, s] of Object.entries(YIYECEK_CIZIM)) {
+    assert.match(s, /^<svg [^>]*viewBox="0 0 24 24"/, id);
+    assert.match(s, /stroke="currentColor"/, id);
+    assert.match(s, /stroke-width="1\.8"/, id);
+    assert.match(s, /aria-hidden="true"/, id);
+    assert.doesNotMatch(s, /#|url\(|\p{Extended_Pictographic}/u, id);
   }
 });
 

@@ -9,6 +9,7 @@
 import { h } from '../../../js/core/ui.js';
 import { sfx } from '../../../js/core/sound.js';
 import { newSeed } from '../../../games/hafiza/rng.js';
+import { ikon, paraIkon, OYUN_IKON } from '../ikonlar.js';
 
 export const JETON_SINIRI = 30; // oyun başı en çok
 
@@ -97,7 +98,7 @@ export function oyunAc(kok, { oyun, tohum, onBitti, onCik, azHareket, bebekSvg, 
   const alan = h('div', { class: 'oy-alan', tabindex: '-1', 'aria-label': `${tanim.ad} oyun alanı` });
   const kaplama = h('div', { class: 'oy-kaplama' });
   const cikBtn = h('button', { type: 'button', class: 'btn ghost small oy-cik', 'aria-label': 'Oyundan çık', onClick: () => cik() },
-    h('span', { 'aria-hidden': 'true', class: 'oy-ok' }, '←'), 'Çık');
+    h('span', { 'aria-hidden': 'true', class: 'oy-ok', html: ikon('geri', 22) }), 'Çık');
   const kutu = h('section', { class: 'oy', 'data-oyun': oyun, 'data-az': az ? '1' : null, 'aria-label': tanim.ad },
     h('div', { class: 'oy-ust' },
       cikBtn,
@@ -105,7 +106,7 @@ export function oyunAc(kok, { oyun, tohum, onBitti, onCik, azHareket, bebekSvg, 
       h('span', { class: 'oy-skor' }, skorEl, h('span', { class: 'oy-skor-e' }, ' puan')),
       sayacEl),
     h('div', { class: 'oy-cubuk', 'aria-hidden': 'true' }, h('i')),
-    h('div', { class: 'oy-govde' }, h('div', { class: 'oy-sahne' }, alan, kaplama)),
+    h('div', { class: 'oy-govde' }, h('div', { class: 'oy-sahne' }, alan), kaplama),
     canli);
   kok.append(kutu);
 
@@ -149,7 +150,9 @@ export function oyunAc(kok, { oyun, tohum, onBitti, onCik, azHareket, bebekSvg, 
     guncelle(ekran.adim(0));
   }
 
-  function kaplamaGoster(...icerik) {
+  // tur (giris | sayim | sonuc): oyun.css üst şeridi ve sahneyi buna göre gizler; düzen sabit kalır.
+  function kaplamaGoster(tur, ...icerik) {
+    kutu.dataset.kaplama = tur;
     kaplama.replaceChildren(...icerik);
     kaplama.hidden = false;
   }
@@ -157,10 +160,15 @@ export function oyunAc(kok, { oyun, tohum, onBitti, onCik, azHareket, bebekSvg, 
   function giris() {
     faz = 'giris';
     const basla = h('button', { type: 'button', class: 'btn primary wide oy-basla', onClick: () => sayim() }, 'Başla');
-    kaplamaGoster(h('div', { class: 'oy-kart', role: 'group', 'aria-label': tanim.ad },
-      h('h2', { class: 'oy-kart-baslik' }, tanim.ad),
-      h('p', { class: 'oy-kart-ozet' }, tanim.ozet),
-      h('ul', { class: 'oy-ipucu' }, tanim.ipucu.map((t) => h('li', {}, t))),
+    kaplamaGoster('giris', h('div', { class: 'oy-giris', role: 'group', 'aria-label': tanim.ad },
+      // Bebek varsa girişin kahramanı o; oyun ikonu köşede. Önizlemede yalnız ikon.
+      bebekSvg
+        ? h('div', { class: 'oy-giris-ikon oy-giris-bebek', html: bebekSvg }, h('span', { class: 'oy-giris-rozet', html: ikon(OYUN_IKON[oyun], 34) }))
+        : h('div', { class: 'oy-giris-ikon', html: ikon(OYUN_IKON[oyun], 88) }),
+      h('h2', { class: 'oy-giris-ad' }, tanim.ad),
+      h('p', { class: 'oy-giris-ozet' }, tanim.ozet),
+      h('ul', { class: 'oy-ipucu' }, tanim.ipucu.map((t) => h('li', {}, h('span', { class: 'oy-ipucu-tik', html: ikon('tik', 20) }), t))),
+      h('p', { class: 'oy-giris-sinir' }, 'Bu oyunda en çok', h('span', { html: paraIkon(16) }), h('b', {}, String(JETON_SINIRI))),
       basla));
     basla.focus({ preventScroll: true });
   }
@@ -174,7 +182,7 @@ export function oyunAc(kok, { oyun, tohum, onBitti, onCik, azHareket, bebekSvg, 
     taze = false;
     let n = 3;
     const sayi = h('span', { class: 'oy-sayi', 'aria-hidden': 'true' }, '3');
-    kaplamaGoster(h('div', { class: 'oy-sayim' }, sayi));
+    kaplamaGoster('sayim', h('div', { class: 'oy-sayim' }, sayi));
     duyur('Hazır ol: 3, 2, 1');
     sfx('tick');
     const birSonraki = () => {
@@ -193,6 +201,7 @@ export function oyunAc(kok, { oyun, tohum, onBitti, onCik, azHareket, bebekSvg, 
 
   function basla() {
     faz = 'oyun';
+    delete kutu.dataset.kaplama;
     kaplama.hidden = true;
     kaplama.replaceChildren();
     alan.focus({ preventScroll: true });
@@ -217,13 +226,14 @@ export function oyunAc(kok, { oyun, tohum, onBitti, onCik, azHareket, bebekSvg, 
     sfx(jeton > 0 ? 'win' : 'wrong');
     try { onBitti?.({ oyun, skor, jeton }); } catch (e) { console.warn('[oyun] onBitti', e); }
     const tekrar = h('button', { type: 'button', class: 'btn primary wide', onClick: () => sayim() }, 'Tekrar oyna');
-    kaplamaGoster(h('div', { class: 'oy-kart oy-sonuc', role: 'group', 'aria-label': 'Oyun bitti' },
-      h('h2', { class: 'oy-kart-baslik' }, sonucBasligi(oyun, jeton)),
-      h('p', { class: 'oy-sonuc-skor' }, h('b', {}, String(skor)), ' puan'),
-      h('p', { class: 'oy-jeton', 'data-sifir': jeton === 0 ? '1' : null },
-        h('span', { class: 'oy-jeton-ikon', 'aria-hidden': 'true' }),
-        jeton > 0 ? `+${jeton} jeton` : 'Bu sefer jeton yok'),
-      jeton >= JETON_SINIRI ? h('p', { class: 'oy-kart-ozet' }, `Bir oyunda en çok ${JETON_SINIRI} jeton kazanılır.`) : null,
+    kaplamaGoster('sonuc', h('div', { class: 'oy-sonuc', role: 'group', 'aria-label': 'Oyun bitti' },
+      h('div', { class: 'oy-sonuc-orta' },
+        h('h2', { class: 'oy-sonuc-baslik' }, sonucBasligi(oyun, jeton)),
+        h('p', { class: 'oy-sonuc-skor' }, h('b', {}, String(skor)), ' puan'),
+        h('p', { class: 'oy-jeton', 'data-sifir': jeton === 0 ? '1' : null },
+          h('span', { html: paraIkon(24) }),
+          jeton > 0 ? `+${jeton} jeton` : 'Bu sefer jeton yok'),
+        jeton >= JETON_SINIRI ? h('p', { class: 'oy-sonuc-not' }, `Bir oyunda en çok ${JETON_SINIRI} jeton kazanılır.`) : null),
       h('div', { class: 'oy-dugmeler' },
         tekrar,
         h('button', { type: 'button', class: 'btn wide', onClick: () => cik() }, 'Kapat'))));

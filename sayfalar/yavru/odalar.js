@@ -73,6 +73,69 @@ export function odaNoktalari({ ihtiyac = {}, cisVar = false, uyuyor = false } = 
   return n;
 }
 
+// ---------- Oda sırası: her oda kendi ihtiyacını gösterir ----------
+
+/** Bu değerin altında halka uyarı rengine döner (nokta yalnız DUSUK altında). */
+export const UYARI = 35;
+const ODA_IHTIYAC = Object.freeze({ mutfak: 'tokluk', banyo: 'temizlik', yatak: 'enerji', oyun: 'mutluluk' });
+const yuzde = (x) => (Number.isFinite(x) ? Math.round(Math.min(100, Math.max(0, x))) : 0);
+
+/**
+ * Oda başına gösterge: { [oda]: { deger 0–100, ihtiyac (ad), uyari, acil } }. Tuvalet rahatlık gösterir: 100 − sıkışıklık.
+ * tuvaletDeger: tuvalet.js tuvaletDurumu.deger; cisVar: aynı kaynaktan. acil = odaNoktalari.
+ */
+export function odaDurumlari({ ihtiyac = {}, tuvaletDeger = 0, cisVar = false, uyuyor = false } = {}) {
+  const noktalar = odaNoktalari({ ihtiyac, cisVar, uyuyor });
+  const sonuc = {};
+  for (const id of ODA_IDLERI) {
+    const ad = ODA_IHTIYAC[id];
+    const deger = ad ? yuzde(ihtiyac?.[ad]) : 100 - yuzde(tuvaletDeger);
+    sonuc[id] = { deger, ihtiyac: ad || 'rahatlık', uyari: ad ? deger < UYARI : !!cisVar, acil: noktalar.includes(id) };
+  }
+  return sonuc;
+}
+
+const AZALIYOR = Object.freeze({
+  tokluk: 'Karnı acıkıyor, yakında mama ister.', mutluluk: 'Biraz ilgi bekliyor.',
+  temizlik: 'Banyo vakti yaklaşıyor.', enerji: 'Enerjisi azalıyor, yakında uyku ister.',
+});
+
+/** Durum cümlesinin altı: uykuda kalan süre; değilse en düşük ihtiyaç; yoksa odanın ipucu. */
+export function durumAltMetni({ uyuyor = false, kalan = '', oda, ihtiyac } = {}) {
+  if (uyuyor) return kalan ? `${kalan} sonra kendiliğinden uyanır.` : 'Mışıl mışıl uyuyor.';
+  const dusuk = Object.keys(AZALIYOR)
+    .filter((ad) => Number.isFinite(ihtiyac?.[ad]) && ihtiyac[ad] < UYARI)
+    .sort((a, b) => ihtiyac[a] - ihtiyac[b])[0];
+  if (dusuk) return AZALIYOR[dusuk];
+  return odaTanimi(oda).ipucu || 'Başını okşa, karnını gıdıkla.';
+}
+
+/** Odada vurgulanacak tek eylem; gerekmiyorsa null. Uykuda vurgu yok. */
+export function onerilenEylem(oda, { ihtiyac = {}, cisVar = false, uyuyor = false } = {}) {
+  if (uyuyor) return null;
+  const az = (ad) => Number.isFinite(ihtiyac[ad]) && ihtiyac[ad] < UYARI;
+  if (oda === 'mutfak') return az('tokluk') ? 'mama' : null;
+  if (oda === 'banyo') return 'yika';
+  if (oda === 'tuvalet') return cisVar ? 'lazimlik' : null;
+  if (oda === 'yatak') return az('enerji') ? 'uyut' : null;
+  if (oda === 'oyun') return 'oyunlar';
+  return null;
+}
+
+/** "Gül banyoda": başlıkta kısa yer metni. Geçersiz alan: null. */
+export function partnerOdaKisa(ad, alan) {
+  if (typeof alan !== 'string' || !Object.hasOwn(ODA, alan)) return null;
+  return `${ad || 'Sevgilin'} ${ODA[alan].bulunma}`;
+}
+
+/** Eylemin başlıca etkisi: '+30 tokluk'. Etkisi yoksa ''. eylemler: mantik.js EYLEMLER. */
+export function eylemAltMetni(eylem, eylemler) {
+  const etki = Object.hasOwn(eylemler ?? {}, eylem ?? '') ? eylemler[eylem].etki : null;
+  if (!etki) return '';
+  const en = Object.entries(etki).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1])[0];
+  return en ? `+${en[1]} ${en[0]}` : '';
+}
+
 // ---------- Sürükleme ----------
 
 export const SURUKLE_ESIK = 8; // px: bundan az hareket dokunuştur (tık yolu çalışır)

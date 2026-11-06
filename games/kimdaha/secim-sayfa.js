@@ -111,7 +111,8 @@ export async function secimSayfasi(o) {
       title: e.title,
       lines: e.lines,
       onAgain: () => act({ type: 'restart' }),
-      log: live && c.isHost ? { roomId, gameId: o.ns, result: e.result } : null,
+      // tam: bütün turlar oynandı ("Oyunu bitir" ile yarım kalmadı).
+      log: live ? { roomId, gameId: o.ns, s, c, tam: s.log.length === s.qs.length, result: e.result } : null,
     });
   }
 

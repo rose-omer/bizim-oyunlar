@@ -96,7 +96,8 @@ function showEnding(s, c, live) {
     title: 'Ne güzel konuştunuz 🕯️',
     lines: endLines(s),
     onAgain: () => act({ type: 'restart' }),
-    log: live && c.isHost ? { roomId, gameId: NS, result: summary(s) } : null,
+    // tam: son aşama bitti ("Sohbeti bitir" değil) ve en az bir soruyu ikisi de cevapladı (atlamak tek kişiyle olur).
+    log: live ? { roomId, gameId: NS, s, c, tam: s.answered > 0 && s.stagesDone === STAGES - s.from, result: summary(s) } : null,
   });
 }
 

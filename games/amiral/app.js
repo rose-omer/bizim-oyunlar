@@ -6,6 +6,7 @@ import { mountShell, waitForPartner, celebrate, confirmDialog, toast } from '../
 import { sfx } from '../../js/core/sound.js';
 import { logGame } from '../../js/core/db.js';
 import { skorKaydet, toplamSatiri } from '../../js/core/skor.js';
+import { oyunOdulu } from '../../js/core/oyun-odul.js';
 import { bildir } from '../../js/core/bildirim.js';
 import { siraPartnere } from '../dama/kayit.js';
 import { createSync, sessionStore } from '../hafiza/sync.js';
@@ -790,6 +791,10 @@ function endGame(s) {
   if (celebratedTur === s.kimlik) return;
   celebratedTur = s.kimlik;
   const won = s.kazanan === mi;
+  oyunOdulu({
+    roomId, oyun: NS, sonuc: won ? 'kazan' : 'kayip',
+    ikiKisi: mi >= 0 && !s.players.includes('sevgilim'), oyunNo: s.kimlik,
+  });
   if (won) sfx('win');
   const mine = s.atislar[mi];
   const isabet = mine.length ? Math.round((100 * mine.filter((a) => a.vurdu).length) / mine.length) : 0;

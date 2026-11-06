@@ -5,6 +5,7 @@ import { readGameParams, lobbyUrl } from '../../js/core/identity.js';
 import { mountShell, waitForPartner, celebrate } from '../../js/core/ui.js';
 import { sfx } from '../../js/core/sound.js';
 import { logGame } from '../../js/core/db.js';
+import { oyunOdulu } from '../../js/core/oyun-odul.js';
 import { gameById } from '../../js/core/games.js';
 
 /** Odaya gir, üst şeridi kur, partneri bekle. -> { room, roomId, hostId, isHost, solo } */
@@ -127,8 +128,9 @@ export function loadingScreen(text = 'Oyun hazırlanıyor…') {
 }
 
 /**
- * Bitiş kutlaması: bir kez açar, aşama değişince kapatır. Ev sahibi canlı bitişte logGame çağırır.
- * show({ title, lines, onAgain, log }) ; log = { roomId, gameId, result } | null
+ * Bitiş kutlaması: bir kez açar, aşama değişince kapatır. Canlı bitişte ev sahibi logGame çağırır, iki cihaz da jeton yazar.
+ * show({ title, lines, onAgain, log }) ; log = { roomId, gameId, result, s, c, tam? } | null (yalnız canlı bitişte)
+ * tam: false = oyun erken bitirildi ("Bitir"): ödül yok.
  */
 export function createEnding() {
   let close = null;
@@ -145,7 +147,12 @@ export function createEnding() {
         ],
       });
       close = typeof c === 'function' ? c : () => {};
-      if (log && log.roomId) logGame(log.roomId, log.gameId, log.result);
+      if (!log?.roomId) return;
+      if (log.c.isHost) logGame(log.roomId, log.gameId, log.result);
+      // İki koltuk dolu ve aynı telefon değil: gerçekten iki kişi. seed oyun başına rastgele (sync.js 'start').
+      if (log.tam !== false) {
+        oyunOdulu({ roomId: log.roomId, oyun: log.gameId, sonuc: 'ortak', ikiKisi: !log.c.solo && log.s.players.every((p) => p.id), oyunNo: log.s.seed });
+      }
     },
     hide() {
       if (!close) return;

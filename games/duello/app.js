@@ -7,6 +7,7 @@ import { celebrate, toast, confirmDialog, h } from '../../js/core/ui.js';
 import { lobbyUrl } from '../../js/core/identity.js';
 import { sfx } from '../../js/core/sound.js';
 import { logGame } from '../../js/core/db.js';
+import { oyunOdulu } from '../../js/core/oyun-odul.js';
 import { skorKaydet, toplamSatiri } from '../../js/core/skor.js';
 import { fitToViewport } from '../hafiza/ekran.js';
 import { newSeed } from '../hafiza/rng.js';
@@ -603,6 +604,10 @@ function bitis(v, info) {
     logged = s.no;
     logGame(M.roomId, NS, D.resultOf(s));
     kayit = skorKaydet(M.room, NS, { kazanan: k === -1 || k == null ? null : s.players[k] });
+  }
+  // Ödül iki cihazda. Benimsenen kayıt gerçek bitiş değil; kimlik oyun başına rastgele.
+  if (!info?.adopted) {
+    oyunOdulu({ roomId: M.roomId, oyun: NS, sonuc: k === -1 || k == null ? 'beraber' : k === mi ? 'kazan' : 'kayip', ikiKisi: v.players.length === 2, oyunNo: v.kimlik });
   }
   try { localStorage.removeItem(GKEY); } catch { /* yok */ }
   if (celebrated === v.no) return;

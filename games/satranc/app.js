@@ -5,8 +5,10 @@ import { lobbyUrl } from '../../js/core/identity.js';
 import { sfx } from '../../js/core/sound.js';
 import { logGame } from '../../js/core/db.js';
 import { skorKaydet, toplamSatiri } from '../../js/core/skor.js';
+import { oyunOdulu } from '../../js/core/oyun-odul.js';
 import { fitToViewport } from '../hafiza/ekran.js';
 import { bootMasa, agoText, bulunma, mountAway, resumeCard, boardSpace } from '../dama/masa.js';
+import { UNKNOWN } from '../dama/kayit.js';
 import * as K from './kurallar.js';
 import * as S from './oyun.js';
 import { pieceSvg, PIECE_TR } from './taslar.js';
@@ -408,6 +410,13 @@ function celebrateEnd(s, info) {
   if (M.authority && !info?.adopted) {
     logGame(M.roomId, NS, S.resultOf(s));
     kayit = skorKaydet(M.room, NS, { kazanan: w === -1 ? null : s.players[w] });
+  }
+  if (!info?.adopted) {
+    // Teslim her an açık, partner yokken de: sayfayı tek başına açıp teslim olan ödül almasın (iki taraf da oynamış olmalı).
+    oyunOdulu({
+      roomId: M.roomId, oyun: NS, sonuc: w === -1 ? 'beraber' : s.players[w] === me ? 'kazan' : 'kayip',
+      ikiKisi: s.ply >= 2 && s.players.includes(me) && !s.players.includes(UNKNOWN), oyunNo: s.startedAt,
+    });
   }
   closeCelebrate = celebrate({
     title,

@@ -144,8 +144,8 @@ function showEnding(s, c, live) {
     title: r.tier,
     lines: [`Uyumunuz: %${r.percent}`, `${s.count} sorunun ${s.matches} tanesinde aynı şeyi seçtiniz.`],
     onAgain: () => act({ type: 'restart' }),
-    log: live && c.isHost
-      ? { roomId, gameId: NS, result: { percent: r.percent, matches: s.matches, count: s.count } }
+    log: live
+      ? { roomId, gameId: NS, s, c, result: { percent: r.percent, matches: s.matches, count: s.count } }
       : null,
   });
 }

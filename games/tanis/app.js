@@ -83,10 +83,12 @@ function showEnding(s, c, live) {
       `Toplam uyum: %${r.percent}`,
     ],
     onAgain: () => act({ type: 'restart' }),
-    log: live && c.isHost
+    log: live
       ? {
         roomId,
         gameId: NS,
+        s,
+        c,
         result: { scores: s.scores, asked: s.asked, percent: r.percent, names: s.players.map((x) => x.name) },
       }
       : null,

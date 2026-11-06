@@ -7,6 +7,7 @@ import { readGameParams, currentRoom, lobbyUrl } from '../../js/core/identity.js
 import { mountShell, celebrate, toast, confirmDialog, h } from '../../js/core/ui.js';
 import { sfx } from '../../js/core/sound.js';
 import { logGame } from '../../js/core/db.js';
+import { oyunOdulu } from '../../js/core/oyun-odul.js';
 import { createSync } from '../hafiza/sync.js';
 import { fitToViewport, fmtTime } from '../hafiza/ekran.js';
 import { newSeed } from '../hafiza/rng.js';
@@ -509,6 +510,8 @@ function bitis(s, info) {
     logged = s.no;
     logGame(M.roomId, NS, S.resultOf(s));
   }
+  // Ödül iki cihazda. Odada tek başına da biter ve koltuk hep iki ('?'): iki kişi = ikisi de hücre doldurdu.
+  if (!info?.adopted) oyunOdulu({ roomId: M.roomId, oyun: NS, sonuc: 'ortak', ikiKisi: S.katki(s).every((n) => n > 0), oyunNo: s.kimlik });
   if (celebrated === s.no) return;
   celebrated = s.no;
   sec = null;

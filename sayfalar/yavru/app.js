@@ -246,7 +246,7 @@ const ninniDugme = ekDugme('ninni', '🎵', 'Ninni çal', ninniTikla); // yatak 
 const odaGrup = h('div', { class: 'yv-eylem-grup yv-oda-grup', id: 'yv-oda-panel', role: 'tabpanel' },
   dugmeler.map((d) => d.btn), ninniDugme.btn, oyunlarDugme.btn, konusDugme.btn, magazaDugme.btn);
 const ipucuEl = h('p', { class: 'yv-oda-ipucu' });
-const OYUN_EMOJI = { balon: '🎈', top: '🧺', cee: '🙈', ninni: '⭐' };
+const OYUN_EMOJI = { balon: '🎈', top: '🧺', cee: '🙈', ninni: '⭐', giydir: '👗', tarif: '🍲', salla: '💞' };
 const oyunGeri = h('button', { type: 'button', class: 'btn ghost small yv-oyun-geri', onclick: () => { oyunSecAcik = false; cizPanel(); oyunlarDugme.btn.focus({ preventScroll: true }); } }, 'Geri');
 const oyunSecEl = h('div', { class: 'yv-oyun-sec', role: 'group', 'aria-label': 'Mini oyunlar', hidden: true },
   h('div', { class: 'yv-oyun-liste' }, Object.entries(OYUNLAR).map(([id, o]) => h('button', {
@@ -1506,6 +1506,10 @@ function ninniTikla() {
 /** Mini oyun tam ekran katmanda (oyunlar/cerceve.js oyunAc). Jeton yalnız bitişte (oyunBitti). */
 function oyunBaslat(id, dugme) {
   if (!uyanikYavru()) return;
+  if (id === 'salla') {
+    if (!partner) { toast('Sevgilin şu an çevrimdışı. İkiniz de açıkken oynanır 💞'); return; }
+    room.send({ tur: 'salla-davet' });
+  }
   const katman = h('div', { class: 'yv-oyun-katman' });
   document.body.append(katman);
   sayfaKilit(true);
@@ -1513,6 +1517,7 @@ function oyunBaslat(id, dugme) {
     oyun: id,
     azHareket: azHareket(),
     bebekSvg: yavruSvg({ asama: y.asama, ruh: 'mutlu', renk: y.renk, kisilik: y.kisilik || '' }),
+    baglam: { room, renk: y.renk, kisilik: y.kisilik || '', giyim: giyimOku(y) },
     onBitti: oyunBitti,
     onCik: () => {
       katman.remove();
@@ -1717,6 +1722,7 @@ col.on('change', () => { ciz(); magaza?.guncelle(); });
 bakim.on('change', () => { yeniBakimlar(); cizBakimlar(); cizGorev(); });
 profil?.on('change', ciz);
 room.on('presence', (p) => { partner = p || null; cizPartner(); cizPanel(); cizGorev(); });
+room.on('message', (m, from) => { if (m?.tur === 'salla-davet') toast(`${from?.name || 'Sevgilin'} Birlikte Salla'da seni bekliyor 💞`); });
 adGirdi.addEventListener('input', () => adGirdi.removeAttribute('aria-invalid'));
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') {

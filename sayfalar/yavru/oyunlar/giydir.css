@@ -1,0 +1,212 @@
+/* Giydirme Siparişi: yalnız bu oyunun stili. Ölçüler sahneye göre yüzde; 320 px'te taşmaz. */
+
+.oy[data-oyun='giydir'] {
+  /* Parça tabağı iki temada da açık: parçaların koyu renkleri (gözlük camı, şapka) koyu temada kaybolmasın. */
+  --oy-gd-tabak: #F6EAE3;
+  --oy-gd-tabak-yazi: #6B5560;
+}
+.oy[data-oyun='giydir'] .oy-sahne { background: linear-gradient(to bottom, var(--tint-6), var(--tint-1)); }
+
+.oy-gd {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 10px 12px;
+}
+
+/* ---------- Konuşma balonu: sipariş ---------- */
+.oy-gd-balon {
+  position: relative;
+  z-index: 1;
+  flex: none;
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  width: 88%;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.oy-gd-balon::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -7px;
+  width: 13px;
+  height: 13px;
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+  transform: translateX(-50%) rotate(45deg);
+}
+.oy-gd-parca {
+  position: relative;
+  flex: 0 0 30%;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: var(--radius);
+  background: var(--oy-gd-tabak);
+}
+.oy-gd-parca svg { position: absolute; left: 10%; top: 10%; width: 80%; height: 80%; }
+.oy-gd-parca.giyili svg { opacity: 0.5; }
+
+/* Rozet: renge ek işaret (✓, ✕) */
+.oy-gd-parca.giyili::after, .oy-gd-sec.giyili::after, .oy-gd-sec.hatali::after {
+  content: '✓';
+  position: absolute;
+  right: 3px;
+  top: 3px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--good);
+  color: var(--surface);
+  font-size: 0.8rem;
+  font-weight: 800;
+  line-height: 1;
+}
+.oy-gd-sec.hatali::after { content: '✕'; background: var(--bad); }
+
+/* ---------- Bebek ---------- */
+.oy-gd-orta { position: relative; flex: 1; min-height: 0; width: 100%; }
+.oy-gd-bebek { position: absolute; inset: 0; }
+/* Bebek yalnız giyim değişince yeniden çizilir; yeni <svg> bu animasyonu kendiliğinden oynatır. */
+.oy-gd-bebek svg { animation: oy-gd-giy 0.28s var(--ease); }
+.oy-gd.sars .oy-gd-bebek, .oy-gd.sars .oy-gd-balon { animation: oy-gd-sars 0.36s ease; }
+
+.oy-gd-ceza {
+  display: none;
+  position: absolute;
+  z-index: 2;
+  left: 50%;
+  top: 10%;
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  color: var(--bad);
+  font-size: 1rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+.oy-gd.sars .oy-gd-ceza { display: block; animation: oy-gd-ceza 0.8s var(--ease) both; }
+
+/* ---------- Kutlama ---------- */
+.oy-gd-kutla {
+  display: none;
+  position: absolute;
+  z-index: 2;
+  left: 50%;
+  bottom: 2%;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 6px 16px;
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+  text-align: center;
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+.oy-gd[data-faz='kutla'] .oy-gd-kutla { display: flex; animation: oy-gd-kutla 0.28s var(--ease) both; }
+.oy-gd-kutla b { font-family: var(--font-display); font-size: 1.2rem; font-weight: 600; color: var(--accent-strong); }
+.oy-gd-kutla span { font-size: 0.82rem; font-weight: 700; color: var(--muted); }
+
+.oy-gd-konfeti { display: none; position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.oy-gd[data-faz='kutla'] .oy-gd-konfeti { display: block; }
+.oy-gd-konfeti i {
+  position: absolute;
+  left: calc(50% - 4px);
+  top: 45%;
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  animation: oy-gd-uc 0.85s var(--ease) both;
+}
+.oy-gd-konfeti i:nth-child(1) { --a: 0deg; background: var(--oy-n1); }
+.oy-gd-konfeti i:nth-child(2) { --a: 45deg; background: var(--oy-n2); }
+.oy-gd-konfeti i:nth-child(3) { --a: 90deg; background: var(--oy-n3); }
+.oy-gd-konfeti i:nth-child(4) { --a: 135deg; background: var(--oy-n4); }
+.oy-gd-konfeti i:nth-child(5) { --a: 180deg; background: var(--oy-n5); }
+.oy-gd-konfeti i:nth-child(6) { --a: 225deg; background: var(--oy-n1); }
+.oy-gd-konfeti i:nth-child(7) { --a: 270deg; background: var(--oy-n2); }
+.oy-gd-konfeti i:nth-child(8) { --a: 315deg; background: var(--oy-n3); }
+
+/* ---------- Seçenekler: 2 satır, 3 sütun ---------- */
+.oy-gd-secenekler {
+  flex: none;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  width: 100%;
+  transition: opacity 0.15s ease;
+}
+.oy-gd[data-faz='kutla'] .oy-gd-secenekler { opacity: 0.55; }
+.oy-gd-sec {
+  position: relative;
+  min-width: 44px;
+  min-height: 44px;
+  aspect-ratio: 1;
+  padding: 0;
+  overflow: hidden;
+  border: 2px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--oy-gd-tabak);
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.12s var(--ease), border-color 0.12s ease;
+}
+.oy-gd-sec[aria-disabled='true'] { cursor: default; }
+.oy-gd-sec:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.oy-gd-sec:not([aria-disabled='true']):active { transform: scale(0.95); }
+@media (hover: hover) {
+  .oy-gd-sec:not([aria-disabled='true']):hover { border-color: var(--accent); }
+}
+.oy-gd-sec.hatali { border-color: var(--bad); }
+.oy-gd-sec.giyili { border-color: var(--good); }
+.oy-gd-resim { position: absolute; inset: 10%; }
+.oy-gd-sec.giyili .oy-gd-resim { opacity: 0.4; }
+/* Tuş ipucu: yalnız fare ve klavye olan cihazda */
+.oy-gd-no { display: none; position: absolute; left: 5px; top: 3px; color: var(--oy-gd-tabak-yazi); font-size: 0.72rem; font-weight: 700; line-height: 1.2; }
+@media (hover: hover) and (pointer: fine) {
+  .oy-gd-no { display: block; }
+}
+
+@keyframes oy-gd-giy { from { transform: scale(0.96); } }
+@keyframes oy-gd-sars {
+  20% { transform: translateX(-6px) rotate(-1.5deg); }
+  40% { transform: translateX(5px) rotate(1deg); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(2px); }
+}
+@keyframes oy-gd-ceza {
+  from { opacity: 0; transform: translate(-50%, 8px); }
+  20%, 70% { opacity: 1; transform: translate(-50%, 0); }
+  to { opacity: 0; transform: translate(-50%, -6px); }
+}
+@keyframes oy-gd-kutla { from { opacity: 0; transform: translateX(-50%) scale(0.7); } }
+@keyframes oy-gd-uc {
+  from { opacity: 1; transform: rotate(var(--a)) translateY(0) scale(0.6); }
+  to { opacity: 0; transform: rotate(var(--a)) translateY(-110px) scale(1) rotate(120deg); }
+}
+
+/* ---------- Hareket azaltma: yerinde ve animasyonsuz ---------- */
+.oy[data-az] .oy-gd-bebek svg,
+.oy[data-az] .oy-gd.sars .oy-gd-bebek,
+.oy[data-az] .oy-gd.sars .oy-gd-balon,
+.oy[data-az] .oy-gd.sars .oy-gd-ceza,
+.oy[data-az] .oy-gd[data-faz='kutla'] .oy-gd-kutla { animation: none; }
+.oy[data-az] .oy-gd[data-faz='kutla'] .oy-gd-konfeti { display: none; }
+.oy[data-az] .oy-gd-sec, .oy[data-az] .oy-gd-secenekler { transition: none; }
+.oy[data-az] .oy-gd-sec:not([aria-disabled='true']):active { transform: none; }

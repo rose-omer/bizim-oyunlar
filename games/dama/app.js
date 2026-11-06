@@ -4,8 +4,10 @@ import { lobbyUrl } from '../../js/core/identity.js';
 import { sfx } from '../../js/core/sound.js';
 import { logGame } from '../../js/core/db.js';
 import { skorKaydet, toplamSatiri } from '../../js/core/skor.js';
+import { oyunOdulu } from '../../js/core/oyun-odul.js';
 import { fitToViewport } from '../hafiza/ekran.js';
 import { bootMasa, agoText, bulunma, tamlayan, mountAway, resumeCard, boardSpace } from './masa.js';
+import { UNKNOWN } from './kayit.js';
 import * as D from './oyun.js';
 
 const NS = 'dama';
@@ -470,6 +472,12 @@ function celebrateEnd(s, info) {
   if (M.authority && !info?.adopted) {
     logGame(M.roomId, NS, D.resultOf(s));
     kayit = skorKaydet(M.room, NS, { kazanan: w === -1 ? null : s.players[w] });
+  }
+  if (!info?.adopted) {
+    oyunOdulu({
+      roomId: M.roomId, oyun: NS, sonuc: w === -1 ? 'beraber' : s.players[w] === me ? 'kazan' : 'kayip',
+      ikiKisi: s.players.includes(me) && !s.players.includes(UNKNOWN), oyunNo: s.startedAt,
+    });
   }
   closeCelebrate = celebrate({
     title,

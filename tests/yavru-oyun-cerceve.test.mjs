@@ -4,8 +4,8 @@ import { OYUNLAR, JETON_SINIRI, skorJeton, sonucBasligi } from '../sayfalar/yavr
 import { KAYNAKLAR } from '../sayfalar/yavru/jeton.js';
 import * as cee from '../sayfalar/yavru/oyunlar/cee.js';
 
-test('cerceve: dört oyun kayıtlı, her birinin adı, ipucu ve oranı var', () => {
-  assert.deepEqual(Object.keys(OYUNLAR), ['balon', 'top', 'cee', 'ninni']);
+test('cerceve: yedi oyun kayıtlı, her birinin adı, ipucu ve oranı var', () => {
+  assert.deepEqual(Object.keys(OYUNLAR), ['balon', 'top', 'cee', 'ninni', 'giydir', 'tarif', 'salla']);
   for (const o of Object.values(OYUNLAR)) {
     assert.ok(o.ad && o.ozet && o.ipucu.length >= 2);
     assert.ok(o.oran > 0 && o.oran <= 1);

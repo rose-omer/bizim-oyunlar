@@ -312,19 +312,20 @@ function showFatal(app) {
 }
 
 async function loadModules() {
-  const [room, identity, ui, sound, storage, db, grid, board, image, store] = await Promise.all([
+  const [room, identity, ui, sound, storage, db, odul, grid, board, image, store] = await Promise.all([
     import('../../js/core/room.js'),
     import('../../js/core/identity.js'),
     import('../../js/core/ui.js'),
     import('../../js/core/sound.js'),
     import('../../js/core/storage.js'),
     import('../../js/core/db.js'),
+    import('../../js/core/oyun-odul.js'),
     import('./grid.js'),
     import('./board.js'),
     import('./image.js'),
     import('./store.js'),
   ]);
-  return { room, identity, ui, sound, storage, db, grid, board, image, store };
+  return { room, identity, ui, sound, storage, db, odul, grid, board, image, store };
 }
 
 async function main() {
@@ -344,7 +345,7 @@ async function main() {
     showFatal(app);
     return;
   }
-  const { identity, ui, sound, storage, db, grid, store } = mods;
+  const { identity, ui, sound, storage, db, odul, grid, store } = mods;
   const { normalizeImage, decodeImage, PhotoError } = mods.image;
   const Board = mods.board.Board || mods.board.default;
   const PIECE_COUNTS = Array.isArray(grid.PIECE_COUNTS) && grid.PIECE_COUNTS.length ? grid.PIECE_COUNTS : [100, 200, 500, 1000];
@@ -847,6 +848,7 @@ async function main() {
       lastActAt = now();
       dirty = true;
     }
+    if (a.type === 'drop' && game) game.benOynadim = true;
     if (!roomId) return;
     sender.act(a);
   }
@@ -870,6 +872,8 @@ async function main() {
     saveNow();
     const ms = Math.round(clock.value());
     if (isHost && roomId) Promise.resolve(db.logGame(roomId, NS, { count: game.count, ms })).catch(() => {});
+    // Odada tek başına da biter; misafir bitmiş yapboza da girebilir: iki kişi = bu sayfada ikisi de parça bıraktı.
+    odul.oyunOdulu({ roomId, oyun: NS, sonuc: 'ortak', ikiKisi: Boolean(game.benOynadim && game.oOynadi), oyunNo: game.seed });
     sound.sfx('win');
     const lines = [`${game.count} parça · ${formatDuration(ms)}`];
     if (game.note) lines.push(`Not: ${game.note}`);
@@ -955,6 +959,7 @@ async function main() {
       return;
     }
     lastActAt = now();
+    if (a.type === 'drop' && game) game.oOynadi = true;
     const dragging = board.isDragging() ? board.draggingGroup() : null;
     const plan = gate.incoming(a, dragging);
     // deny ve düzeltme durumu da kısılan sıradan gider (bütçe + sıra).

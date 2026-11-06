@@ -3,7 +3,8 @@
 // DOM kısmı: oyunAc(kok, { oyun, onBitti, onCik }) giriş → 3-2-1 → oyun → sonuç akışını kurar.
 // Çerçeve jeton YAZMAZ; bitişte onBitti({ oyun, skor, jeton }) çağırır (bağlayan jeton.js jetonKazan ile yazar).
 // Ekran modülü sözleşmesi (<ad>-ekran.js):
-//   kur({ sahne, tohum, azHareket, duyur, bebekSvg }) -> { adim(dtMs) -> durum, temizle() }
+//   kur({ sahne, tohum, azHareket, duyur, bebekSvg, baglam }) -> { adim(dtMs) -> durum, temizle() }
+//   baglam (bağlayan verir): { room, renk, kisilik, giyim }; Node'da ve önizlemede olmayabilir.
 //   durum = { skor, bitti, ilerleme: 0..1, kalanMs? | tur?, turSayisi? }
 import { h } from '../../../js/core/ui.js';
 import { sfx } from '../../../js/core/sound.js';
@@ -32,6 +33,21 @@ export const OYUNLAR = Object.freeze({
     ad: 'Ninni Ritmi', ozet: 'Yanan yıldızlara sırayla dokun.', oran: 0.5,
     ipucu: ['Ninniyi dinle, yıldızları izle', 'Aynı sırayla dokun; ninni uzar', 'Üç bulut ayı örterse oyun biter'],
     ekran: () => import('./ninni-ekran.js'),
+  }),
+  giydir: Object.freeze({
+    ad: 'Giydirme Siparişi', ozet: 'Yavru ne isterse süre bitmeden giydir.', oran: 0.35,
+    ipucu: ['Baloncuktaki parçaları bul', 'Doğru parça: puan, sipariş bitince bonus', 'Yanlış parça süreden yer'],
+    ekran: () => import('./giydir-ekran.js'),
+  }),
+  tarif: Object.freeze({
+    ad: 'Mama Tarifi', ozet: 'Tarifi aklında tut, malzemeleri sırayla ekle.', oran: 0.25,
+    ipucu: ['Tarif kartı kısa süre görünür', 'Malzemeleri aynı sırayla tencereye ekle', 'Üç yanlışta mama taşar, oyun biter'],
+    ekran: () => import('./tarif-ekran.js'),
+  }),
+  salla: Object.freeze({
+    ad: 'Birlikte Salla', ozet: 'İkiniz aynı anda ritmi tutturun.', oran: 0.5,
+    ipucu: ['İkiniz de bu oyunu açın', 'Işık ortaya gelince dokun', 'Aynı vuruşu ikiniz tutturursanız çok puan'],
+    ekran: () => import('./salla-ekran.js'),
   }),
 });
 
@@ -66,8 +82,9 @@ const azHareketMi = () => globalThis.matchMedia?.('(prefers-reduced-motion: redu
  * onBitti({ oyun, skor, jeton }): her biten oyunda bir kez. Yarıda çıkışta çağrılmaz.
  * onCik(): oyuncu "Çık" ya da "Kapat" dedi (Escape de). Çerçeve kendini kaldırır.
  * bebekSvg: Ce-e'de saklanan bebeğin SVG metni (güvenilir, cizim.js yavruSvg); yoksa yerleşik çizim.
+ * baglam: ekran modülüne olduğu gibi geçer (oda ve yavru bilgisi).
  */
-export function oyunAc(kok, { oyun, tohum, onBitti, onCik, azHareket, bebekSvg } = {}) {
+export function oyunAc(kok, { oyun, tohum, onBitti, onCik, azHareket, bebekSvg, baglam } = {}) {
   const tanim = Object.hasOwn(OYUNLAR, oyun) ? OYUNLAR[oyun] : null;
   if (!tanim) throw new Error(`Bilinmeyen oyun: ${oyun}`);
   stilEkle();
@@ -124,7 +141,7 @@ export function oyunAc(kok, { oyun, tohum, onBitti, onCik, azHareket, bebekSvg }
     if (kapandi) return;
     ekran?.temizle();
     alan.replaceChildren();
-    ekran = m.kur({ sahne: alan, tohum: tohum ?? newSeed(), azHareket: az, duyur, bebekSvg });
+    ekran = m.kur({ sahne: alan, tohum: tohum ?? newSeed(), azHareket: az, duyur, bebekSvg, baglam });
     tohum = undefined; // "Tekrar" yeni dizi alır
     taze = true;
     sonSkor = 0;

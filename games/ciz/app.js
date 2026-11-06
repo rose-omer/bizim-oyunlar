@@ -9,6 +9,7 @@ import { toDay } from '../../js/core/gunler.js';
 import { mountShell, waitForPartner, celebrate, toast, confirmDialog } from '../../js/core/ui.js';
 import { sfx } from '../../js/core/sound.js';
 import { logGame } from '../../js/core/db.js';
+import { oyunOdulu } from '../../js/core/oyun-odul.js';
 import { createSync, sessionStore } from '../hafiza/sync.js';
 import { newSeed } from '../hafiza/rng.js';
 import { fitToViewport, esc } from '../hafiza/ekran.js';
@@ -645,6 +646,7 @@ function celebrateEnd(s) {
   sfx('win');
   const r = resultOf(s);
   if (authority && roomId) logGame(roomId, 'ciz', r);
+  oyunOdulu({ roomId, oyun: NS, sonuc: 'ortak', ikiKisi: s.players.length === 2, oyunNo: s.seed });
   const title = r.ok === r.total ? 'Kusursuz takım! 🎨' : r.ok > 0 ? 'Harika takım! 🎨' : 'Bir dahaki sefere! 💞';
   const lines = [`Toplam puan: ${r.score}`, `${r.ok}/${r.total} kelimeyi bildiniz`];
   announce(`${title} ${lines.join('. ')}`);

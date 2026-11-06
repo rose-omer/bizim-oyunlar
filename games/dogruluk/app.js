@@ -121,10 +121,14 @@ function showEnding(s, c, live) {
       `${total} kart oynadınız.`,
     ],
     onAgain: () => act({ type: 'restart' }),
-    log: live && c.isHost
+    // Oyun yalnız "Bitir" ile biter. tam: ikisi de en az bir kart oynadı.
+    log: live
       ? {
         roomId,
         gameId: NS,
+        s,
+        c,
+        tam: total >= 2,
         result: { scores: s.scores, passes: s.passes, levels: s.levels, names: s.players.map((x) => x.name), solo: c.solo },
       }
       : null,

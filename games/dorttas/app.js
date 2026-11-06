@@ -7,6 +7,7 @@ import { mountShell, waitForPartner, celebrate, confirmDialog } from '../../js/c
 import { sfx } from '../../js/core/sound.js';
 import { logGame } from '../../js/core/db.js';
 import { skorKaydet, toplamSatiri } from '../../js/core/skor.js';
+import { oyunOdulu } from '../../js/core/oyun-odul.js';
 import { bildir } from '../../js/core/bildirim.js';
 import { siraPartnere } from '../dama/kayit.js';
 import { createSync, sessionStore } from '../hafiza/sync.js';
@@ -76,7 +77,7 @@ const sync = createSync({
   storage: sessionStore(),
   storeKey: `bizim.${NS}.${roomId || '-'}`,
   accept: (s) => s.v === 1 && s.players?.join() === players.join(),
-  onState: (s, prev) => { draw(s); siraBildir(s, prev); },
+  onState: (s, prev) => { draw(s); siraBildir(s, prev); bitisOdulu(s, prev); },
   onPeer: (here) => {
     clearTimeout(awayTimer);
     if (here) away.classList.add('hidden');
@@ -416,6 +417,18 @@ function effects(s, prev) {
     announce(`${who} ${turnText(s)}`);
   }
   if (s.faz === 'bitti' && prev.faz !== 'bitti') endGame(s);
+}
+
+// Ödül onaylı duruma bağlı, endGame'e değil: misafirin tahmini (draw(guess)) de endGame'i çalıştırır,
+// tahmin 3 sn'de geri alınırsa ev sahibi onayıyla ikinci kez çalışır. XOX ödül listesinde (SITE_OYUNLARI) yok.
+function bitisOdulu(s, prev) {
+  if (!prev || prev.oyun !== s.oyun || prev.mod !== s.mod) return;
+  if (s.faz !== 'bitti' || prev.faz === 'bitti' || s.mod !== 'dort') return;
+  const mi = myIdx(s);
+  oyunOdulu({
+    roomId, oyun: 'dorttas', sonuc: s.kazanan === -1 ? 'beraber' : s.kazanan === mi ? 'kazan' : 'kayip',
+    ikiKisi: mi >= 0 && !s.players.includes('sevgilim'),
+  });
 }
 
 function endGame(s) {

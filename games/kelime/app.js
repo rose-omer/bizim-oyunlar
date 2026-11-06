@@ -5,6 +5,7 @@ import { readGameParams, lobbyUrl } from '../../js/core/identity.js';
 import { mountShell, waitForPartner, celebrate, confirmDialog, ICONS } from '../../js/core/ui.js';
 import { sfx } from '../../js/core/sound.js';
 import { logGame } from '../../js/core/db.js';
+import { oyunOdulu } from '../../js/core/oyun-odul.js';
 import { createSync, sessionStore } from '../hafiza/sync.js';
 import { fitToViewport, esc } from '../hafiza/ekran.js';
 import {
@@ -586,6 +587,8 @@ function effects(s, prev) {
 function endGame(s) {
   const mi = myIdx(s);
   const pn = partnerName(s);
+  // Ödül iki cihazda. oyunNo yok: s.oyun her oturumda 1'den başlar; yeniden yüklemede endGame çalışmaz (prev yok).
+  oyunOdulu({ roomId, oyun: NS, sonuc: birlikteMi(s) ? 'ortak' : s.kazanan === mi ? 'kazan' : 'kayip', ikiKisi: s.players.length === 2 && !s.players.includes('sevgilim') });
   if (isHost && roomId && loggedGame !== s.oyun) {
     loggedGame = s.oyun;
     logGame(roomId, NS, resultOf(s));

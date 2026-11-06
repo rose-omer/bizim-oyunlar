@@ -1,0 +1,191 @@
+/* Mama Tarifi: yalnız bu oyunun stili. Renkler base.css ve .oy jetonlarından. */
+
+/* Sahne DOM ile çizilir, 5:9'a bağlı değil: kısa ekranda genişler, düğmeler 44 px altına inmez. */
+.oy[data-oyun='tarif'] .oy-sahne {
+  width: min(100cqw, max(100cqh * 5 / 9, 340px));
+  height: min(100cqh, 180cqw);
+  aspect-ratio: auto;
+  background: linear-gradient(to bottom, var(--tint-6), var(--tint-3));
+}
+
+.oy-tf {
+  --kalem-h: 46px;
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  overflow: hidden;
+}
+
+/* ---------- Tarif kartı ---------- */
+.oy-tf-kart {
+  position: relative;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 6px 8px 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  overflow: hidden;
+}
+.oy-tf-ust { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-height: 24px; }
+.oy-tf-durum { margin: 0; min-width: 0; font-family: var(--font-display); font-size: 1.05rem; font-weight: 600; line-height: 1.15; }
+.oy-tf[data-faz='iyi'] .oy-tf-durum { color: var(--good); }
+.oy-tf[data-faz='tasti'] .oy-tf-durum { color: var(--bad); }
+.oy-tf-canlar { flex: none; display: flex; gap: 1px; font-size: 0.95rem; line-height: 1; }
+.oy-tf-can { transition: opacity 0.2s ease; }
+.oy-tf-can.kayip { filter: grayscale(1); opacity: 0.3; }
+.oy-tf-kalemler {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-content: center;
+  gap: 4px;
+  min-height: calc(2 * var(--kalem-h) + 4px);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.oy-tf-kalem {
+  flex: 0 0 calc((100% - 12px) / 4);
+  min-width: 0;
+  height: var(--kalem-h);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+.oy-tf-kalem b { font-size: 1.3rem; font-weight: 600; line-height: 1.1; }
+.oy-tf-kalem small { min-height: 1.1em; font-size: 0.68rem; font-weight: 650; line-height: 1.1; color: var(--text); }
+.oy-tf-kalem[data-d='kapali'] b { font-family: var(--font-display); color: var(--muted); }
+.oy-tf-kalem[data-d='dolu'] { background: var(--tint-4); }
+.oy-tf-kalem[data-d='yanlis'] { background: var(--surface); box-shadow: inset 0 0 0 2px var(--bad); }
+.oy-tf-sure { position: absolute; inset: auto 0 0; height: 3px; opacity: 0; }
+.oy-tf[data-faz='goster'] .oy-tf-sure { opacity: 1; }
+.oy-tf-sure i { display: block; height: 100%; background: var(--accent); transform-origin: left; transform: scaleX(var(--kart, 1)); }
+
+/* ---------- Tencere ---------- */
+.oy-tf-tencere { position: relative; flex: 1; min-height: 0; }
+.oy-tf-tencere svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.oy-tf-golge { fill: var(--oy-hali); }
+.oy-tf-dis { fill: var(--oy-b3); }
+.oy-tf-kulp, .oy-tf-agiz { fill: color-mix(in srgb, var(--oy-b3) 72%, var(--text)); }
+.oy-tf-icyuz { fill: var(--surface-2); }
+.oy-tf-mama, .oy-tf-damla, .oy-tf-kabarma { fill: var(--oy-b4); }
+.oy-tf-mama {
+  transform: translateY(calc(150px - var(--seviye, 0) * 86px));
+  transition: transform 0.3s var(--ease) 0.2s;
+}
+.oy-tf-kabarma {
+  transform-box: fill-box;
+  transform-origin: bottom;
+  transform: scaleY(0);
+  transition: transform 0.25s var(--ease);
+}
+.oy-tf-damla {
+  transform-box: fill-box;
+  transform-origin: top;
+  transform: scaleY(0);
+  transition: transform 0.15s ease;
+}
+.oy-tf[data-faz='tasti'] .oy-tf-kabarma { transform: none; }
+.oy-tf[data-faz='tasti'] .oy-tf-damla { transform: none; transition: transform 0.55s var(--ease) 0.1s; }
+.oy-tf[data-faz='tasti'] .oy-tf-gove { animation: oy-titre 0.32s ease; }
+.oy-tf-buhar path { fill: none; stroke: var(--muted); stroke-width: 4; stroke-linecap: round; opacity: 0; }
+.oy-tf[data-faz='iyi'] .oy-tf-buhar path { opacity: 0.7; animation: oy-tf-buhar 0.8s ease both; }
+.oy-tf-bonus {
+  position: absolute;
+  inset: 0 0 auto;
+  width: fit-content;
+  margin-inline: auto;
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--good);
+  font-size: 1rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  animation: oy-belir 0.3s var(--ease) both;
+}
+.oy-tf-bonus[hidden] { display: none; }
+.oy-tf-dusen {
+  position: absolute;
+  left: calc(50% + var(--x, 0px));
+  font-size: 2rem;
+  line-height: 1;
+  pointer-events: none;
+  animation: oy-tf-dus 0.42s ease-in both; /* tarif-ekran.js DUSME_MS */
+}
+@keyframes oy-tf-dus {
+  from { top: -6%; opacity: 0; transform: translateX(-50%) rotate(-14deg); }
+  20% { opacity: 1; }
+  to { top: 48%; opacity: 0.25; transform: translateX(-50%) rotate(16deg) scale(0.6); }
+}
+@keyframes oy-tf-buhar { from { opacity: 0; transform: translateY(10px); } }
+
+/* ---------- Malzeme rafı ---------- */
+.oy-tf-raf { flex: none; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; }
+.oy-tf-malzeme {
+  position: relative;
+  min-width: 0;
+  min-height: 56px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  padding: 4px 2px;
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.12s var(--ease), border-color 0.12s ease;
+}
+.oy-tf-emoji { font-size: 1.5rem; line-height: 1.1; }
+.oy-tf-ad { font-size: 0.72rem; font-weight: 650; line-height: 1.1; }
+.oy-tf-tus { display: none; position: absolute; top: 2px; right: 5px; font-size: 0.66rem; font-weight: 700; color: var(--muted); }
+.oy-tf-malzeme[aria-disabled='true'] { cursor: default; }
+.oy-tf-malzeme[aria-disabled='true'] > * { opacity: 0.55; }
+.oy-tf-malzeme:not([aria-disabled='true']):active { transform: scale(0.95); }
+.oy-tf-malzeme:focus-visible { z-index: 1; outline: 3px solid var(--focus); outline-offset: 1px; }
+.oy-tf-malzeme.dogru { border-color: var(--good); box-shadow: inset 0 0 0 1.5px var(--good); }
+.oy-tf-malzeme.yanlis { border-color: var(--bad); box-shadow: inset 0 0 0 1.5px var(--bad); animation: oy-titre 0.32s ease; }
+@media (hover: hover) and (pointer: fine) {
+  .oy-tf-tus { display: block; }
+  .oy-tf-malzeme:not([aria-disabled='true']):hover { border-color: var(--accent); }
+}
+
+/* ---------- Kısa ekran ---------- */
+@container (max-height: 400px) {
+  .oy-tf { --kalem-h: 36px; gap: 4px; padding: 6px; }
+  .oy-tf-kart { padding: 3px 8px 6px; gap: 3px; }
+  .oy-tf-kalem b { font-size: 1rem; }
+  .oy-tf-kalem small { font-size: 0.62rem; }
+  .oy-tf-malzeme { min-height: 44px; padding-block: 2px; }
+  .oy-tf-emoji { font-size: 1.15rem; }
+  .oy-tf-ad { font-size: 0.66rem; }
+}
+
+/* ---------- Hareket azaltma ---------- */
+.oy[data-az] .oy-tf-mama, .oy[data-az] .oy-tf-kabarma, .oy[data-az] .oy-tf-damla,
+.oy[data-az] .oy-tf[data-faz='tasti'] .oy-tf-damla, .oy[data-az] .oy-tf-malzeme, .oy[data-az] .oy-tf-can { transition: none; }
+.oy[data-az] .oy-tf[data-faz='tasti'] .oy-tf-gove, .oy[data-az] .oy-tf[data-faz='iyi'] .oy-tf-buhar path,
+.oy[data-az] .oy-tf-bonus, .oy[data-az] .oy-tf-malzeme.yanlis { animation: none; }
+.oy[data-az] .oy-tf-malzeme:not([aria-disabled='true']):active { transform: none; }
+@media (prefers-reduced-motion: reduce) {
+  .oy-tf-mama, .oy-tf-kabarma, .oy-tf-damla, .oy-tf[data-faz='tasti'] .oy-tf-damla, .oy-tf-malzeme, .oy-tf-can { transition: none; }
+  .oy-tf[data-faz='tasti'] .oy-tf-gove, .oy-tf[data-faz='iyi'] .oy-tf-buhar path, .oy-tf-bonus, .oy-tf-malzeme.yanlis { animation: none; }
+  .oy-tf-malzeme:not([aria-disabled='true']):active { transform: none; }
+  .oy-tf-dusen { display: none; }
+}

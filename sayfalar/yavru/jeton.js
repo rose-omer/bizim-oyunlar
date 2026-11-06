@@ -2,7 +2,7 @@
 // Ortak cüzdan: çiftin tek bakiyesi. Bakiye saklanmaz, hesaplanır:
 //   bakiye = Σ kişi kazancı − Σ kişi yiyecek harcaması − Σ dolaptaki kıyafet fiyatı
 // Belgede alanlar:
-//   jeton: { [clientId]: { kazanc, harcama, gun: 'YYYY-MM-DD', bugun, gorevGun? } }  (sayaç; yalnız sahibi yazar; gorevGun: gorev.js)
+//   jeton: { [clientId]: { kazanc, harcama, gun: 'YYYY-MM-DD', bugun, gorevGun?, oyunHak? } }  (sayaç; yalnız sahibi yazar; gorevGun: gorev.js; oyunHak: site-oyun.js)
 //   dolap: { [urunId]: { at, kim, fiyat } }                              (kalıcı kıyafet; fiyat bir kez sayılır)
 // Yarış: 'jeton.<clientId>' anahtarını yalnız o kişi yazar; iki kişinin yazımı çakışmaz, jeton kaybolmaz/çoğalmaz.
 // Kıyafetin bedeli dolap kaydından sayılır; ikisi aynı anda alırsa tek kayıt kalır, bir kez ödenir.
@@ -63,7 +63,7 @@ const nesne = (x) => (x && typeof x === 'object' && !Array.isArray(x) ? x : {});
 const sayi = (x) => (Number.isFinite(x) && x > 0 ? x : 0);
 const kimGecerli = (kim) => typeof kim === 'string' && kim.length > 0;
 
-/** Kişinin sayacı (bozuk alanlar 0): { kazanc, harcama, gun, bugun, gorevGun? }. */
+/** Kişinin sayacı (bozuk alanlar 0): { kazanc, harcama, gun, bugun, gorevGun?, oyunHak? }. */
 export function jetonKaydi(y, kim) {
   const k = nesne(nesne(y?.jeton)[kim]);
   return {
@@ -72,6 +72,7 @@ export function jetonKaydi(y, kim) {
     gun: typeof k.gun === 'string' ? k.gun : null,
     bugun: sayi(k.bugun),
     ...(typeof k.gorevGun === 'string' ? { gorevGun: k.gorevGun } : {}),
+    ...(typeof nesne(k.oyunHak).gun === 'string' ? { oyunHak: k.oyunHak } : {}),
   };
 }
 

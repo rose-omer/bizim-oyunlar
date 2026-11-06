@@ -5,9 +5,11 @@ import { lobbyUrl } from '../../js/core/identity.js';
 import { sfx } from '../../js/core/sound.js';
 import { logGame } from '../../js/core/db.js';
 import { skorKaydet, toplamSatiri } from '../../js/core/skor.js';
+import { oyunOdulu } from '../../js/core/oyun-odul.js';
 import { newSeed } from '../hafiza/rng.js';
 import { fitToViewport } from '../hafiza/ekran.js';
 import { bootMasa, agoText, bulunma, mountAway, resumeCard } from '../dama/masa.js';
+import { UNKNOWN } from '../dama/kayit.js';
 import * as P from './oyun.js';
 
 const NS = 'pisti';
@@ -429,6 +431,12 @@ function celebrateEnd(s, info) {
   if (M.authority && !info?.adopted) {
     logGame(M.roomId, NS, P.resultOf(s));
     kayit = skorKaydet(M.room, NS, { kazanan: w === -1 ? null : s.players[w] });
+  }
+  if (!info?.adopted) {
+    oyunOdulu({
+      roomId: M.roomId, oyun: NS, sonuc: w === -1 ? 'beraber' : won ? 'kazan' : 'kayip',
+      ikiKisi: s.players.includes(me) && !s.players.includes(UNKNOWN), oyunNo: s.startedAt,
+    });
   }
   lines.push(toplamSatiri(M.room, NS, s.players, s.names, kayit));
   closeCelebrate = celebrate({

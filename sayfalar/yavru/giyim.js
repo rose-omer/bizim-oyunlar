@@ -8,12 +8,13 @@ import { URUNLER, dolaptaMi, satinAl } from './jeton.js';
 
 /** yuva → giyilebilen ürün id'leri. */
 export const YUVALAR = Object.freeze({
-  bas: Object.freeze(['fiyonk', 'tac', 'sapka']),
-  goz: Object.freeze(['gozluk']),
-  boyun: Object.freeze(['atki']),
-  govde: Object.freeze(['pijama', 'ayicik', 'elbise']),
-  agiz: Object.freeze(['emzik']),
-  kucak: Object.freeze(['battaniye']),
+  bas: Object.freeze(['fiyonk', 'tac', 'sapka', 'noelbant', 'kovasapka', 'bere', 'cicektac']),
+  goz: Object.freeze(['gozluk', 'kalpgozluk']),
+  boyun: Object.freeze(['atki', 'onluk', 'papyon']),
+  govde: Object.freeze(['pijama', 'ayicik', 'elbise', 'ayitulum', 'tavsan', 'yagmurluk', 'noelelbise', 'cileksalopet', 'cilekbodi',
+    'firfirbodi', 'lalepijama', 'ciftrenk', 'denizci', 'salopet']),
+  agiz: Object.freeze(['emzik', 'yildizemzik']),
+  kucak: Object.freeze(['battaniye', 'pelus']),
 });
 
 const nesne = (x) => (x && typeof x === 'object' && !Array.isArray(x) ? x : {});

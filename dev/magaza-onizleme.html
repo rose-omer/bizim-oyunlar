@@ -56,7 +56,7 @@
     import { CIZIM_CSS } from '../sayfalar/yavru/cizim.js';
     import { applyPatch } from '../js/core/veri.js';
     import { URUNLER, jetonBakiye } from '../sayfalar/yavru/jeton.js';
-    import { giyimOku } from '../sayfalar/yavru/giyim.js';
+    import { giyimOku, YUVALAR } from '../sayfalar/yavru/giyim.js';
     import { magazaAc } from '../sayfalar/yavru/magaza.js';
     import { buyumeSahnesi } from '../sayfalar/yavru/buyume-sahne.js';
 
@@ -120,13 +120,12 @@
       d.innerHTML = `<div class="cizim">${svg}</div><span>${ad}</span>`;
       document.getElementById(kap).append(d);
     };
-    const tek = [['bas', 'fiyonk'], ['bas', 'tac'], ['bas', 'sapka'], ['goz', 'gozluk'], ['boyun', 'atki'],
-      ['govde', 'pijama'], ['govde', 'ayicik'], ['govde', 'elbise'], ['agiz', 'emzik'], ['kucak', 'battaniye']];
+    const tek = Object.entries(YUVALAR).flatMap(([yuva, liste]) => liste.map((id) => [yuva, id]));
     hucre('izgara-buyuk', bebekSvg({ asama: 'buyuk', renk: 3 }), 'varsayılan');
     for (const [yuva, id] of tek) hucre('izgara-buyuk', bebekSvg({ asama: 'buyuk', renk: 3, giyim: { [yuva]: id } }), URUNLER[id].ad);
     for (const [, id] of tek) hucre('izgara-buyuk', giyimParcaSvg(id, { renk: 3 }), `${URUNLER[id].ad} (kart)`);
     hucre('izgara-kucuk', bebekSvg({ asama: 'kucuk', renk: 2 }), 'varsayılan');
-    for (const id of ['fiyonk', 'tac', 'sapka']) hucre('izgara-kucuk', bebekSvg({ asama: 'kucuk', renk: 2, giyim: { bas: id, goz: 'gozluk', boyun: 'atki', govde: 'elbise', kucak: 'battaniye' } }), URUNLER[id].ad);
+    for (const id of YUVALAR.bas) hucre('izgara-kucuk', bebekSvg({ asama: 'kucuk', renk: 2, giyim: { bas: id, goz: 'gozluk', boyun: 'atki', govde: 'elbise', kucak: 'battaniye' } }), URUNLER[id].ad);
     const birlikte = [
       [{ bas: 'tac', goz: 'gozluk', boyun: 'atki' }, 1, 'normal', 'hepsi'],
       [{ bas: 'sapka', boyun: 'atki' }, 2, 'mutlu', 'şapka+atkı'],

@@ -258,18 +258,24 @@ test('çatlama: 24 saat ve iki kişinin her biri en az 3 ısıtma', () => {
   assert.equal(ruhHali(uygula(yap(3, 3), yama), gun), 'normal');
 });
 
-test('büyüme: 7 gün, toplam 60 puan, ikisi de en az 15', () => {
-  const yap = (puan, gun = 7) => kucuk({}, { catlama: iso(T0 - gun * GUN), puan });
+test('büyüme: 6 gün, toplam 60 puan, ikisi de en az 15', () => {
+  const yap = (puan, gun = 6) => kucuk({}, { catlama: iso(T0 - gun * GUN), puan });
   assert.equal(buyumeDurumu(yap({ [A]: 30, [B]: 30 }), T0).hazir, true);
-  assert.equal(buyumeDurumu(yap({ [A]: 30, [B]: 30 }, 6.9), T0).hazir, false, '7 gün dolmadı');
+  assert.equal(buyumeDurumu(yap({ [A]: 30, [B]: 30 }, 5.9), T0).hazir, false, '6 gün dolmadı');
   assert.equal(buyumeDurumu(yap({ [A]: 30, [B]: 29 }), T0).hazir, false, 'toplam 59');
   assert.equal(buyumeDurumu(yap({ [A]: 50, [B]: 14 }), T0).hazir, false, 'biri 15 altında');
   assert.equal(buyumeDurumu(yap({ [A]: 70 }), T0).hazir, false, 'tek kişi');
   assert.deepEqual(buyumeDurumu(yap({ [A]: 20, [B]: 5 }, 4.5), T0),
-    { hazir: false, kalanGun: 3, toplam: 25, gerekToplam: 60, gerekKisi: 15, kisiler: [{ id: A, puan: 20 }, { id: B, puan: 5 }] });
+    { hazir: false, kalanGun: 2, toplam: 25, gerekToplam: 60, gerekKisi: 15, kisiler: [{ id: A, puan: 20 }, { id: B, puan: 5 }] });
   const buyuk = oku({ ...yap({ [A]: 30, [B]: 30 }), asama: 'buyuk' });
   assert.equal(buyumeDurumu(buyuk, T0).hazir, false, 'sonraki aşama yok');
   assert.deepEqual(buyumeYamasi(T0), { asama: 'buyuk', buyume: iso(T0) });
+});
+
+test('büyüme: 1 Kasım 13:03 (TR) çatlayan yavru 7 Kasım 13:03 (TR) büyür', () => {
+  const y = kucuk({}, { catlama: '2026-11-01T10:03:34.038Z', puan: { [A]: 96, [B]: 27 } });
+  assert.equal(buyumeDurumu(y, Date.parse('2026-11-07T10:03:00Z')).hazir, false);
+  assert.equal(buyumeDurumu(y, Date.parse('2026-11-07T10:04:00Z')).hazir, true);
 });
 
 test('ruhHali: uyuyor, en düşük ihtiyaç (<25), hepsi >60 mutlu, yoksa normal', () => {

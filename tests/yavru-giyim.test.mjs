@@ -89,7 +89,9 @@ const belge = (kazanc, ek = {}) => ({
 test('mağaza: sekmeler ve ürünler fiyata göre', () => {
   assert.deepEqual(SEKMELER.map((s) => s.id), ['yiyecek', 'giyim']);
   assert.deepEqual(sekmeUrunleri('yiyecek'), ['cilek', 'kurabiye', 'dondurma', 'pizza', 'pasta']);
-  assert.deepEqual(sekmeUrunleri('giyim'), ['emzik', 'battaniye', 'fiyonk', 'atki', 'sapka', 'pijama', 'gozluk', 'ayicik', 'elbise', 'tac']);
+  assert.deepEqual(sekmeUrunleri('giyim'), ['emzik', 'yildizemzik', 'onluk', 'papyon', 'battaniye', 'fiyonk', 'noelbant', 'kovasapka', 'atki', 'bere',
+    'cicektac', 'sapka', 'pelus', 'kalpgozluk', 'pijama', 'cilekbodi', 'gozluk', 'firfirbodi', 'lalepijama', 'ayicik', 'salopet', 'ciftrenk',
+    'denizci', 'cileksalopet', 'elbise', 'yagmurluk', 'noelelbise', 'ayitulum', 'tavsan', 'tac']);
   assert.deepEqual(sekmeUrunleri('yok'), []);
   assert.equal(etkiMetni('cilek'), '+10 tokluk · +5 mutluluk');
   assert.equal(etkiMetni('tac'), '');
@@ -143,6 +145,16 @@ test('satinAlGiyYamasi: hatada yama yok; yiyecekte satinAl sonucu aynen', () => 
   assert.deepEqual(satinAlGiyYamasi(belge(300), { kim: K, urun: 'yok', simdi: T }), { hata: 'bilinmiyor' });
   const y = belge(100);
   assert.deepEqual(satinAlGiyYamasi(y, { kim: K, urun: 'cilek', simdi: T }), satinAl(y, { kim: K, urun: 'cilek', simdi: T }));
+});
+
+test('yeni ürünler: doğru yuvada', () => {
+  assert.deepEqual(YUVALAR.bas, ['fiyonk', 'tac', 'sapka', 'noelbant', 'kovasapka', 'bere', 'cicektac']);
+  assert.deepEqual(YUVALAR.goz, ['gozluk', 'kalpgozluk']);
+  assert.deepEqual(YUVALAR.boyun, ['atki', 'onluk', 'papyon']);
+  assert.deepEqual(YUVALAR.govde, ['pijama', 'ayicik', 'elbise', 'ayitulum', 'tavsan', 'yagmurluk', 'noelelbise', 'cileksalopet', 'cilekbodi',
+    'firfirbodi', 'lalepijama', 'ciftrenk', 'denizci', 'salopet']);
+  assert.deepEqual(YUVALAR.agiz, ['emzik', 'yildizemzik']);
+  assert.deepEqual(YUVALAR.kucak, ['battaniye', 'pelus']);
 });
 
 test('yeni kıyafet fiyatları: kıyafet 40–120, emzik 20, battaniye 35', () => {

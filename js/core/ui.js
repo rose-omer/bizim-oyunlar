@@ -59,6 +59,7 @@ const TAB_ICONS = {
   sohbet: `<svg viewBox="0 0 24 24" ${TAB_STROKE} aria-hidden="true" focusable="false"><path class="f" d="M4.5 7A2.5 2.5 0 0 1 7 4.5h10A2.5 2.5 0 0 1 19.5 7v7a2.5 2.5 0 0 1-2.5 2.5h-6l-4.5 3.5v-3.5H7A2.5 2.5 0 0 1 4.5 14z"/><path d="M8.5 9.5h7M8.5 12.5h4.5"/></svg>`,
   anilar: `<svg viewBox="0 0 24 24" ${TAB_STROKE} aria-hidden="true" focusable="false"><rect class="f" x="3.5" y="5" width="17" height="14" rx="2.8"/><circle cx="9" cy="10" r="1.7"/><path d="m4 17 4.6-4.2 3.4 3 2.6-2.2L20 18"/></svg>`,
   gunler: `<svg viewBox="0 0 24 24" ${TAB_STROKE} aria-hidden="true" focusable="false"><rect class="f" x="3.8" y="5.3" width="16.4" height="14.7" rx="2.8"/><path d="M3.8 10h16.4M8.3 3.5v3.6M15.7 3.5v3.6"/><path d="M12 17.2c-.1 0-.2 0-.3-.1-1.5-1.2-2.4-2-2.4-3a1.4 1.4 0 0 1 2.7-.6 1.4 1.4 0 0 1 2.7.6c0 1-.9 1.8-2.4 3-.1.1-.2.1-.3.1z"/></svg>`,
+  yavru: `<svg viewBox="0 0 24 24" ${TAB_STROKE} aria-hidden="true" focusable="false"><circle class="f" cx="12" cy="13" r="8"/><path d="M12 5c-1.7-.3-2.6-1.3-2-2.2.5-.7 1.7-.5 1.7.3"/><path d="M9.2 11.8v.5M14.8 11.8v.5"/><path d="M9.3 15.4a3.3 3.3 0 0 0 5.4 0"/></svg>`,
   daha: `<svg viewBox="0 0 24 24" ${TAB_STROKE} aria-hidden="true" focusable="false"><rect class="f" x="4" y="4" width="6.6" height="6.6" rx="2"/><rect class="f" x="13.4" y="4" width="6.6" height="6.6" rx="2"/><rect class="f" x="4" y="13.4" width="6.6" height="6.6" rx="2"/><rect class="f" x="13.4" y="13.4" width="6.6" height="6.6" rx="2"/></svg>`,
 };
 // Alt çubukta kısa adlar (sayfa başlığı uzun olabilir).

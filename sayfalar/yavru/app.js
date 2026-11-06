@@ -44,7 +44,7 @@ import { oyunSecKur, CSS as OYUN_SEC_CSS } from './oyun-sec.js';
 import { bilgeKartiKur, CSS as KART_CSS } from './bilge-karti.js';
 import { gorevSeritKur, seriNoktaKur, CSS as GOREV_CSS } from './gorev-sayfa.js';
 
-const { room, roomId, me } = await bootPage({ ns: 'yavru', title: 'Yavrumuz', tab: 'daha' });
+const { room, roomId, me } = await bootPage({ ns: 'yavru', title: 'Yavrumuz', tab: 'yavru' });
 const app = document.getElementById('app');
 document.head.append(h('style', { id: 'yv-cizim-stil' }, CIZIM_CSS + BEBEK_CSS + ODA_CSS + OYUN_SEC_CSS + KART_CSS + GOREV_CSS));
 app.replaceChildren(h('div', { class: 'yv' }, h('p', { class: 'yv-yukleniyor muted', role: 'status' }, 'Yavrunuz geliyor…')));
@@ -160,7 +160,6 @@ const ustAlt = h('span', { class: 'yv-ust-alt' });
 const jetonSayi = h('span', { class: 'yv-ust-sayi' });
 const ustJeton = h('button', { type: 'button', class: 'yv-ust-jeton', onclick: () => magazaAc() }, h('span', { html: paraIkon(20) }), jetonSayi);
 const ustEl = h('header', { class: 'yv-ust' },
-  h('button', { type: 'button', class: 'yv-ust-geri', 'aria-label': 'Geri dön', html: ikon('geri'), onclick: () => document.querySelector('#shell .shell-back')?.click() }),
   h('button', { type: 'button', class: 'yv-ust-kart', onclick: () => kartAc() }, ustAd, ustAlt),
   ustJeton);
 const sahne = h('section', { class: 'yv-sahne', 'aria-label': 'Yavrumuz' },

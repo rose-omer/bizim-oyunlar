@@ -1826,7 +1826,7 @@ dialog.kirp::backdrop { background: var(--kirp-zemin); }
   bottom: 0;
   z-index: 40;
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   min-height: var(--tabbar-h);
   padding: 6px max(6px, var(--safe-right)) calc(6px + var(--safe-bottom)) max(6px, var(--safe-left));
   background: color-mix(in srgb, var(--surface) 88%, transparent);
@@ -1889,6 +1889,10 @@ dialog.kirp::backdrop { background: var(--kirp-zemin); }
 #tabbar .tab:active .tab-icon { transform: scale(0.92); }
 #tabbar .tab:focus-visible { outline-offset: -3px; }
 @media (hover: hover) { #tabbar .tab:not([aria-current='page']):hover { color: var(--text); } }
+@media (max-width: 359px) {
+  #tabbar { padding-inline: 2px; }
+  #tabbar .tab { font-size: 0.6875rem; } /* altı sekme: "Yavrumuz" kesilmesin */
+}
 body.has-tabbar #app { padding-bottom: calc(var(--tabbar-h) + 16px); }
 body.has-tabbar .toasts { bottom: calc(var(--tabbar-h) + 12px); }
 /* Sekme sayfasında gizlenen geri bağlantısının yerine başlığa nefes payı */

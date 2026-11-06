@@ -4,6 +4,8 @@ import assert from 'node:assert/strict';
 import { ODALAR, odaDurumlari, durumAltMetni, onerilenEylem, partnerOdaKisa, eylemAltMetni, UYARI } from '../sayfalar/yavru/odalar.js';
 import { ikon, ODA_IKON, EYLEM_IKON } from '../sayfalar/yavru/ikonlar.js';
 import { EYLEMLER, DUSUK } from '../sayfalar/yavru/mantik.js';
+import { readFileSync } from 'node:fs';
+import { SEKMELER } from '../js/core/games.js';
 
 const TOK = { tokluk: 72, mutluluk: 88, temizlik: 55, enerji: 60 };
 
@@ -96,4 +98,17 @@ test('ikonlar: her oda ve eylemin ikonu var; tek biçim, emoji yok', () => {
     assert.doesNotMatch(c, /\p{Extended_Pictographic}/u, ad);
     assert.doesNotMatch(c, /undefined|NaN/, ad);
   }
+});
+
+test('alt bar: Yavrumuz sekmesi Anılar ile Günler arasında, sayfada bar görünür', () => {
+  assert.deepEqual(SEKMELER, ['biz', 'sohbet', 'anilar', 'yavru', 'gunler', 'daha']);
+  const taban = readFileSync(new URL('../css/base.css', import.meta.url), 'utf8');
+  const sutun = taban.match(/#tabbar \{[^}]*?grid-template-columns: repeat\((\d+),/);
+  assert.equal(Number(sutun?.[1]), SEKMELER.length);
+  const uygulama = readFileSync(new URL('../sayfalar/yavru/app.js', import.meta.url), 'utf8');
+  assert.match(uygulama, /bootPage\(\{ ns: 'yavru', title: 'Yavrumuz', tab: 'yavru' \}\)/);
+  assert.doesNotMatch(uygulama, /yv-ust-geri/);
+  const stil = readFileSync(new URL('../sayfalar/yavru/style.css', import.meta.url), 'utf8');
+  assert.doesNotMatch(stil, /body\.yv-tam #tabbar/);
+  assert.doesNotMatch(stil, /yv-ust-geri/);
 });

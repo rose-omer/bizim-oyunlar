@@ -19,7 +19,7 @@ test('DAHA_GRUPLARI: dört grup, talimattaki sıra', () => {
 test('dahaGruplari: sekmeler ve ayarlar çıkar, haritadaki sıra korunur', () => {
   const g = dahaGruplari(SAYFALAR, SEKMELER);
   const hepsi = g.flatMap((x) => x.sayfalar.map((y) => y.id));
-  for (const yok of ['biz', 'daha', 'ayarlar', 'sohbet', 'anilar', 'gunler']) assert.ok(!hepsi.includes(yok), yok);
+  for (const yok of ['biz', 'daha', 'ayarlar', 'sohbet', 'anilar', 'gunler', 'yavru']) assert.ok(!hepsi.includes(yok), yok);
   assert.deepEqual(g[0].sayfalar.map((x) => x.id), ['mektup', 'gunsorusu', 'haftalik', 'gunfoto', 'not']);
   assert.deepEqual(g[2].sayfalar.map((x) => x.id), ['ruh', 'sevgidili', 'yilimiz', 'sohbetozet', 'rozetler', 'skor', 'konum']);
   // Bu daldaki kayıtta her sayfa bir gruba düşer: "Diğer" yok.

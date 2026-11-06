@@ -190,7 +190,7 @@ export const SAYFALAR = [
 ];
 
 // Alt sekme çubuğu sırası.
-export const SEKMELER = ['biz', 'sohbet', 'anilar', 'gunler', 'daha'];
+export const SEKMELER = ['biz', 'sohbet', 'anilar', 'yavru', 'gunler', 'daha'];
 
 export function sayfaById(id) {
   return SAYFALAR.find((s) => s.id === id) || null;

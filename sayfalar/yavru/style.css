@@ -2,16 +2,16 @@
    Tek ana an: sahnedeki yavru. Düzen tek ekran: sahne esner, altındakiler sabit; günlük bakım kaydırmadan yapılır.
    Görev, kart ve oyun listesi alt sayfada (gorev-sayfa.js, bilge-karti.js, oyun-sec.js kendi stillerini getirir). */
 
-/* Bu sayfada genel üst şerit ve sekme çubuğu yok: gezinme sahnedeki başlıkta ve odalar sırasında. */
-body.yv-tam #shell, body.yv-tam #tabbar { display: none; }
-body.yv-tam #app { padding-bottom: 0; }
-body.yv-tam .toasts { bottom: calc(112px + var(--safe-bottom)); }
+/* Bu sayfa bir alt sekme: genel üst şerit yok (başlık sahnede), sekme çubuğu var; odalar sırası çubuğun üstünde durur. */
+body.yv-tam #shell { display: none; }
+body.yv-tam #app { padding-bottom: var(--tabbar-h); }
+body.yv-tam .toasts { bottom: calc(var(--tabbar-h) + 100px); }
 .yv-ikon, .yv-para { display: block; flex: none; }
 
 .yv {
   width: 100%;
   max-width: 560px;
-  min-height: 100dvh;
+  min-height: calc(100dvh - var(--tabbar-h));
   margin: 0 auto;
   display: flex;
   flex-direction: column;
@@ -22,8 +22,8 @@ body.yv-tam .toasts { bottom: calc(112px + var(--safe-bottom)); }
   position: relative;
   isolation: isolate;
   overflow: hidden;
-  flex: 1 1 300px;
-  min-height: 260px;
+  flex: 1 1 0;
+  min-height: 210px;
   display: grid;
   justify-items: center;
   align-content: end;
@@ -32,48 +32,40 @@ body.yv-tam .toasts { bottom: calc(112px + var(--safe-bottom)); }
   container-type: size;
   touch-action: pan-y; /* yatay kaydırma odayı değiştirir */
 }
-.yv[data-asama='yumurta'] .yv-sahne { flex: none; height: 46dvh; }
+.yv[data-asama='yumurta'] .yv-sahne { flex: none; height: 38dvh; }
 .yv-oda-zemin { position: absolute; inset: 0; z-index: -2; pointer-events: none; }
 .yv-oda-zemin:empty { display: none; }
 
-/* Başlık: geri, ad, jeton */
+/* Başlık: ad, jeton */
 .yv-ust {
   position: absolute;
   top: calc(10px + var(--safe-top));
-  left: 6px;
+  left: 16px;
   right: 14px;
   z-index: 4;
   display: flex;
-  align-items: center;
-  gap: 2px;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
 }
-.yv-ust-geri {
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 44px;
-  height: 44px;
-  border: 0;
-  border-radius: 50%;
-  background: none;
-  color: var(--text);
-  cursor: pointer;
-}
+/* Ad ve jeton aynı zemin: oda çizimi ne olursa olsun okunur (kırpılan sahnede pencere başlığın altına gelebilir). */
 .yv-ust-kart {
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
   min-height: 44px;
-  padding: 0;
+  padding: 5px 16px 6px;
   border: 0;
-  background: none;
+  border-radius: 22px;
+  background: var(--bg);
   color: var(--text);
+  box-shadow: var(--shadow-sm);
   text-align: left;
   cursor: pointer;
 }
 .yv-ust-ad {
   display: block;
   font-family: var(--font-display);
-  font-size: 1.75rem;
+  font-size: 1.25rem;
   font-weight: 600;
   font-variation-settings: 'SOFT' 100;
   letter-spacing: -0.01em;
@@ -84,7 +76,7 @@ body.yv-tam .toasts { bottom: calc(112px + var(--safe-bottom)); }
 }
 .yv-ust-alt {
   display: block;
-  margin-top: 3px;
+  margin-top: 1px;
   color: var(--muted);
   font-size: 0.8125rem;
   font-weight: 700;
@@ -111,9 +103,7 @@ body.yv-tam .toasts { bottom: calc(112px + var(--safe-bottom)); }
   cursor: pointer;
 }
 .yv-ust-jeton[hidden] { display: none; }
-.yv-ust-geri:focus-visible, .yv-ust-kart:focus-visible, .yv-ust-jeton:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
-.yv-sahne[data-gece] .yv-ust-geri, .yv-sahne[data-gece] .yv-ust-kart { color: var(--hero-ink); }
-.yv-sahne[data-gece] .yv-ust-alt { color: var(--hero-muted); }
+.yv-ust-kart:focus-visible, .yv-ust-jeton:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 
 /* Gece (uyurken): yıldızlı erik göğü ve hilal; yumuşak geçiş. Yatak odası kendi gecesini çizer. */
 .yv-sahne[data-oda][data-gece] .yv-gok { opacity: 0.8; }
@@ -447,12 +437,12 @@ body.yv-tam .toasts { bottom: calc(112px + var(--safe-bottom)); }
 .yv-odalar {
   flex: none;
   position: sticky;
-  bottom: 0;
+  bottom: var(--tabbar-h);
   z-index: 6;
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 2px;
-  padding: 8px 8px calc(10px + var(--safe-bottom));
+  padding: 6px 8px;
   border-top: 1px solid var(--line);
   background: var(--bg);
 }

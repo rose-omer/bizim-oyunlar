@@ -8,7 +8,7 @@ const belge = (id, updated_at, extra = {}) => ({
 });
 
 test('COP_TURLERI: içerik türleri', () => {
-  assert.deepEqual(COP_TURLERI, ['mesaj', 'ani', 'mektup', 'gun', 'liste', 'randevu', 'harcama', 'kupon', 'gunfoto', 'kumbara', 'not']);
+  assert.deepEqual(COP_TURLERI, ['mesaj', 'ani', 'mektup', 'gun', 'liste', 'randevu', 'harcama', 'kupon', 'izin', 'gunfoto', 'kumbara', 'not']);
 });
 
 test('copListesi: yalnız silinmiş ve verisi dolu olanlar; en yeni önce; en çok 50; türü taşır', () => {
@@ -46,6 +46,7 @@ test('copOnizleme: tür adı, kısa metin ve varsa fotoğraf', () => {
   assert.equal(copOnizleme('randevu', { metin: 'Piknik' }).tur, 'Randevu fikri');
   assert.equal(copOnizleme('harcama', { baslik: 'Market', tutar: 12550 }).metin, 'Market · 125,50 ₺');
   assert.equal(copOnizleme('kupon', { baslik: 'Kahvaltı', emoji: '🍰' }).metin, '🍰 Kahvaltı');
+  assert.deepEqual(copOnizleme('izin', { kisi: 'Veli', yer: 'Kadıköy' }), { tur: 'İzin belgesi', metin: 'Veli, Kadıköy', foto: null });
   assert.deepEqual(copOnizleme('gunfoto', { foto: 'g.jpg' }), { tur: 'Günün fotoğrafı', metin: 'Günün fotoğrafı', foto: 'g.jpg' });
   // Uzun metin kısalır; bozuk veri çökertmez.
   const uzun = copOnizleme('liste', { metin: 'a'.repeat(200) }).metin;

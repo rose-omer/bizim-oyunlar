@@ -90,7 +90,7 @@ test('bildir: gizli verilmeyen (sabit metinli) çağrı profil okumaz; kısıtl�
 
 test('içerik taşıyan bildirim çağrıları gizli seçeneği verir', () => {
   for (const yol of ['sohbet/app.js', 'anilar/app.js', 'gunler/app.js', 'harcama/app.js', 'harcama/kumbara.js',
-    'kupon/app.js', 'listeler/app.js', 'mektup/app.js', 'not/app.js']) {
+    'izin/app.js', 'kupon/app.js', 'listeler/app.js', 'mektup/app.js', 'not/app.js']) {
     const s = readFileSync(new URL(`../sayfalar/${yol}`, import.meta.url), 'utf8').replace(/\r\n/g, '\n');
     const i = s.indexOf('bildir(roomId, {');
     assert.ok(i >= 0, yol);

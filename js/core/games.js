@@ -182,6 +182,7 @@ export const SAYFALAR = [
   { id: 'yavru', title: 'Yavrumuz', icon: '🐣', path: 'sayfalar/yavru/', desc: 'Birlikte baktığınız minik dostunuz: besleyin, sevin, büyütün.' },
   { id: 'oyunlar', title: 'Oyunlarımız', icon: '🎲', path: 'sayfalar/oyunlar/', desc: 'Tüm oyunlarınız, gruplu.' },
   { id: 'kupon', title: 'Aşk Kuponları', icon: '🎟️', path: 'sayfalar/kupon/', desc: 'Birbirinize küçük sözler verin, zamanı gelince kullanın.' },
+  { id: 'izin', title: 'İzin Belgesi', icon: '📜', path: 'sayfalar/izin/', desc: 'Hanımdan ya da beyden izin: doldur, damgalat, vaktinde dön.' },
   { id: 'onun', title: 'Onun Hakkında', icon: '💝', path: 'sayfalar/onun/', desc: 'Ölçüler, sevdikleri, alerjiler: hediye için her şey.' },
   { id: 'cark', title: 'Karar Çarkı', icon: '🎡', path: 'sayfalar/cark/', desc: 'Ne yesek, ne izlesek? Çark karar versin.' },
   { id: 'not', title: 'Not Bırak', icon: '✍️', path: 'sayfalar/not/', desc: 'Yazı, çizim ya da fotoğraf: sevgiline küçük bir not bırak.' },

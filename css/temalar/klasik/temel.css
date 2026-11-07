@@ -87,8 +87,8 @@ a { text-decoration-thickness: revert; }
 @media (pointer: coarse) {
 #shell, #tabbar { background: revert; }
 }
-@font-face { font-family: 'Fraunces'; font-style: normal; font-weight: 400 700; font-display: swap; src: url('../../../assets/fonts/temalar/fraunces.woff2') format('woff2'); }
-@font-face { font-family: 'Fraunces'; font-style: italic; font-weight: 400 700; font-display: swap; src: url('../../../assets/fonts/temalar/fraunces-italic.woff2') format('woff2'); }
+@font-face { font-family: 'Fraunces'; font-style: normal; font-weight: 400 700; font-display: swap; src: url('../../../assets/fonts/fraunces.woff2') format('woff2'); }
+@font-face { font-family: 'Fraunces'; font-style: italic; font-weight: 400 700; font-display: swap; src: url('../../../assets/fonts/fraunces-italic.woff2') format('woff2'); }
 @font-face { font-family: 'Nunito'; font-style: normal; font-weight: 400 800; font-display: swap; src: url('../../../assets/fonts/temalar/nunito.woff2') format('woff2'); }
 :root { --rk-accent: #C2375C; --rk-accent-dk: #F08DA8; --rk-hover: #AB2B4F; --rk-hover-dk: #F6A6BB; --rk-soft: #FBE3E9; --rk-soft-dk: #4A2139; --rk-strong: #A8264B; --rk-strong-dk: #F8B4C6; --rk-plum: #5E2B4F; --rk-plum-dk: #D7A8D0; --rk-ink-dk: #2B0E1B; --rk-hero: #5E2B4F; --rk-hero-dk: #3A2140; --rk-hero-muted: #E5C6D8; --rk-hero-muted-dk: #CDB0C2; --rk-hero-accent: #F7AFC2; --rk-hero-accent-dk: #F08DA8; }
 :root[data-renk="mor"] { --rk-accent: #8A3FB0; --rk-accent-dk: #CDA2F0; --rk-hover: #76349A; --rk-hover-dk: #DAB8F5; --rk-soft: #F0E4FA; --rk-soft-dk: #3B2652; --rk-strong: #6E2F96; --rk-strong-dk: #DEC6F8; --rk-plum: #3E2A6B; --rk-plum-dk: #C3B0F0; }

@@ -40,8 +40,14 @@ const YOL = Object.freeze({
   kisilik: 'M20.5 12a8.5 8.5 0 1 1-17 0 8.5 8.5 0 0 1 17 0ZM8.4 13.600a4.1 4.1 0 0 0 7.2 0M9.2 9.600v.2M14.8 9.600v.2',
 });
 
+// Kendi çizimini getiren tema (temalar/<id>/ikonlar.js). O temada olmayan ikon varsayılan çizimle gelir.
+let ozel = null;
+export function ikonTemasi(modul) { ozel = modul; }
+
 /** İkon SVG metni. Bilinmeyen ad -> ''. Süs: aria-hidden. */
 export function ikon(ad, boy = 24) {
+  const o = ozel?.ikon(ad, boy);
+  if (o) return o;
   if (!Object.hasOwn(YOL, ad ?? '')) return '';
   return `<svg class="yv-ikon" width="${boy}" height="${boy}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="${YOL[ad]}"/></svg>`;
 }
@@ -72,6 +78,8 @@ const DOLGU = Object.freeze({
 
 /** Dolgulu ikon: tek ikonla aynı çizgi, altında şeker rengi. Bilinmeyen ad -> ''. Süs: aria-hidden. */
 export function renkliIkon(ad, boy = 28) {
+  const o = ozel?.ikon(ad, boy);
+  if (o) return o;
   if (!Object.hasOwn(DOLGU, ad ?? '')) return '';
   const dolgu = DOLGU[ad].map(([renk, d]) => `<path fill="var(${renk})" stroke="none" d="${d}"/>`).join('');
   return `<svg class="yv-ikon renkli" width="${boy}" height="${boy}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${dolgu}<path d="${YOL[ad]}"/></svg>`;
@@ -79,6 +87,7 @@ export function renkliIkon(ad, boy = 28) {
 
 /** Jeton: dolu altın para (tek renkli ikon değil; --yvb-altin ve --yvb-altin-koyu bebek.js'te). */
 export function paraIkon(boy = 18) {
+  if (ozel) return ozel.paraIkon(boy);
   return `<svg class="yv-para" width="${boy}" height="${boy}" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10" fill="var(--yvb-altin)"/><circle cx="12" cy="12" r="6.5" fill="none" stroke="var(--yvb-altin-koyu)" stroke-width="1.6"/></svg>`;
 }
 

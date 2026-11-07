@@ -14,7 +14,7 @@ import { openProfil } from '../../js/core/profil.js';
 import { bildir } from '../../js/core/bildirim.js';
 import { partnerGoruyor } from '../../js/core/room.js';
 import { readStore, writeStore, isLocalMode, lobbyUrl } from '../../js/core/identity.js';
-import { h, toast, knownPartner, formatDay, celebrate, shareInvite, ICONS } from '../../js/core/ui.js';
+import { h, toast, knownPartner, formatDay, celebrate, shareInvite, ICONS, readTema } from '../../js/core/ui.js';
 import { sfx, isMuted, setMuted } from '../../js/core/sound.js';
 import { titret, yerelHatirlaticilar } from '../../js/core/mobil.js';
 import * as M from './mantik.js';
@@ -30,7 +30,7 @@ import { GOREV_JETON, seriDurumu } from './seri.js';
 import { yavruSvg, catlamaSvg, CIZIM_CSS } from './cizim.js';
 import { BEBEK_CSS } from './bebek.js';
 import * as O from './odalar.js';
-import { odaSvg, KUVET_SVG, LAZIMLIK_SVG, SABUN_SVG, ODA_CSS } from './oda-cizim.js';
+import { odaSvg, KUVET_SVG, LAZIMLIK_SVG, SABUN_SVG, ODA_CSS, odaTemaYukle } from './oda-cizim.js';
 import { OYUNLAR, oyunAc } from './oyunlar/cerceve.js';
 import { taklitBaslat, taklitDestegi, mikrofonAcikMi } from './taklit.js';
 import { giyimOku } from './giyim.js';
@@ -38,7 +38,7 @@ import { magazaAc as magazaKatmani } from './magaza.js';
 import { buyumeSahnesi, buyumeSahnesiGerekli, kutlamaSahnesi } from './buyume-sahne.js';
 import { ninniCal, ninniRuhu } from './ninni.js';
 import { tazelikIzleyici, otoYazimIzinli, kazaKarari } from './tazelik.js';
-import { ikon, renkliIkon, paraIkon, ODA_IKON, EYLEM_IKON } from './ikonlar.js';
+import { ikon, renkliIkon, paraIkon, ikonTemasi, ODA_IKON, EYLEM_IKON } from './ikonlar.js';
 import { altSayfaAc } from './alt-sayfa.js';
 import { oyunSecKur, CSS as OYUN_SEC_CSS } from './oyun-sec.js';
 import { bilgeKartiKur, CSS as KART_CSS } from './bilge-karti.js';
@@ -46,7 +46,15 @@ import { gorevSeritKur, seriNoktaKur, CSS as GOREV_CSS } from './gorev-sayfa.js'
 
 const { room, roomId, me } = await bootPage({ ns: 'yavru', title: 'Yavrumuz', tab: 'yavru' });
 const app = document.getElementById('app');
-document.head.append(h('style', { id: 'yv-cizim-stil' }, CIZIM_CSS + BEBEK_CSS + ODA_CSS + OYUN_SEC_CSS + KART_CSS + GOREV_CSS));
+// Temanın oda çizimleri ve simgeleri: ilk çizimden önce. Piksel'in simgeleri ve çubukları sayfa kurulurken seçilir.
+const PIKSEL = 'piksel';
+const acikTema = readTema().tema;
+if (acikTema === PIKSEL) ikonTemasi(await import('./temalar/piksel/ikonlar.js'));
+await odaTemaYukle(acikTema).catch((e) => console.warn('[yavru]', e));
+const cizimStil = h('style', { id: 'yv-cizim-stil' });
+const cizimStilYaz = () => { cizimStil.textContent = CIZIM_CSS + BEBEK_CSS + ODA_CSS + OYUN_SEC_CSS + KART_CSS + GOREV_CSS; };
+cizimStilYaz();
+document.head.append(cizimStil);
 app.replaceChildren(h('div', { class: 'yv' }, h('p', { class: 'yv-yukleniyor muted', role: 'status' }, 'Yavrunuz geliyor…')));
 
 const [col, bakim, profil] = await Promise.all([
@@ -183,7 +191,7 @@ const odaSekmeEl = h('div', { class: 'yv-odalar', role: 'tablist', 'aria-label':
   O.ODALAR.map((o) => {
     const nokta = h('span', { class: 'yv-oda-nokta', 'aria-hidden': 'true', hidden: true });
     const deger = h('span', { class: 'yv-halka-deger' });
-    const halka = h('span', { class: 'yv-halka', 'aria-hidden': 'true', html: `<svg viewBox="0 0 52 52" focusable="false"><circle class="yv-halka-iz" cx="26" cy="26" r="22"/><circle class="yv-halka-dolu" cx="26" cy="26" r="22" stroke-dasharray="0 ${HALKA_C}"/></svg><span class="yv-halka-ikon">${renkliIkon(ODA_IKON[o.id], 26)}</span>` }, nokta, deger);
+    const halka = h('span', { class: 'yv-halka', 'aria-hidden': 'true', html: acikTema === PIKSEL ? `<svg viewBox="0 0 54 46" focusable="false"><path class="yv-halka-iz" d="M2 40H52"/><path class="yv-halka-dolu" pathLength="${HALKA_C}" d="M2 40H52" stroke-dasharray="0 ${HALKA_C}"/><path class="yv-halka-olcu" d="M2 40H52"/></svg><span class="yv-halka-ikon">${ikon(ODA_IKON[o.id], 23)}</span>` : `<svg viewBox="0 0 52 52" focusable="false"><circle class="yv-halka-iz" cx="26" cy="26" r="22"/><circle class="yv-halka-dolu" cx="26" cy="26" r="22" stroke-dasharray="0 ${HALKA_C}"/></svg><span class="yv-halka-ikon">${renkliIkon(ODA_IKON[o.id], 26)}</span>` }, nokta, deger);
     const btn = h('button', {
       type: 'button', role: 'tab', id: `yv-oda-${o.id}`, class: 'yv-oda-sekme', 'aria-controls': 'yv-oda-panel',
       dataset: { oda: o.id }, onclick: () => odaSec(o.id),
@@ -1872,3 +1880,25 @@ async function belgeHazirla() {
 ciz();
 await belgeHazirla();
 ciz();
+
+// Tema değişince: oda çizimleri ve gömülü stil yeniden yazılır. Piksel'e girip çıkarken sayfa yeniden açılır (çubuk ve simgeler kurulurken seçilir).
+let cizimTema = acikTema;
+window.addEventListener('bizim:tema-hazir', async (e) => {
+  const t = e.detail?.tema;
+  if (!t || t === cizimTema) return;
+  if ((t === PIKSEL) !== (acikTema === PIKSEL)) {
+    location.reload();
+    return;
+  }
+  cizimTema = t;
+  try {
+    await odaTemaYukle(t);
+  } catch (err) {
+    console.warn('[yavru]', err);
+    return;
+  }
+  cizimStilYaz();
+  lazimlikEl.innerHTML = LAZIMLIK_SVG;
+  delete sahne.dataset.oda;
+  cizOda();
+});

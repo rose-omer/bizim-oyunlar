@@ -321,6 +321,7 @@ function durumCubugu() {
     sessiz(cagir('StatusBar', 'setBackgroundColor', { color: renk }), 'çubuk rengi');
   };
   uygula();
+  globalThis.addEventListener?.('bizim:tema-hazir', uygula);
   try {
     globalThis.matchMedia?.('(prefers-color-scheme: dark)')?.addEventListener?.('change', uygula);
   } catch { /* eski WebView */ }

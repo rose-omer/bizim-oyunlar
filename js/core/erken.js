@@ -1,14 +1,60 @@
 // İlk boyamadan önce çalışan klasik betik (her sayfanın <head>'inde, modül değil).
 // 1) Tema: Ayarlar → localStorage 'bizim.tema'. Renk sıçraması olmasın; ui.js sonra da uygular.
+//    Ortak tema (tema.js): dosyaları CSS'lerin sırasına oturur, yüklenene dek sayfa gizli kalır (en çok 1,5 sn).
 // 2) Kilit perdesi: PIN varsa içerik, kilit.js kararını verene dek gizli kalır (kilit.js kaldırır).
 //    Kendiliğinden kalkmaz (fail-closed). 8 sn sonra hâlâ duruyorsa "Kilit yüklenemedi" kartı çıkar.
 (function () {
   var r = document.documentElement;
+  var TEMALAR = /^(pamuk|klasik|ucak|defter|yildiz|popbant|balon|piksel|dergi|yesilcam|iznik|sivicam|sessiz)$/;
+  var KOYU = /^(yildiz|piksel|sivicam)$/; // otomatikte koyu açılan temalar
+  var betik = document.currentScript && document.currentScript.src;
+  r.dataset.tema = 'pamuk'; // Pamuk'a özel süs kuralları buna bağlı; depo okunamazsa da geçerli
+  try {
+    // Sayfa kimliği: tema CSS'inin sayfaya özel kuralları buna bağlı (site kökü '', ör. 'sayfalar/anilar').
+    var kok = new URL('../../', betik).pathname;
+    var yol = location.pathname.indexOf(kok) === 0 ? location.pathname.slice(kok.length) : '';
+    r.dataset.sayfa = yol.replace(/\/?(index\.html)?$/, '');
+  } catch (e) { /* adres okunamadı */ }
   try {
     var t = JSON.parse(localStorage.getItem('bizim.tema') || 'null') || {};
     r.dataset.renk = /^(pembe|mor|kirmizi|mercan|mavi)$/.test(t.renk) ? t.renk : 'pembe';
     r.dataset.mod = /^(otomatik|acik|koyu)$/.test(t.mod) ? t.mod : 'otomatik';
+    r.dataset.tema = TEMALAR.test(t.tema) ? t.tema : 'pamuk';
+    if (r.dataset.mod === 'otomatik' && KOYU.test(r.dataset.tema)) r.dataset.mod = 'koyu';
+    if (r.dataset.tema !== 'pamuk') temaBagla(r.dataset.tema);
   } catch (e) { /* gizli sekme */ }
+
+  function temaBagla(id) {
+    var temel = null;
+    var bekleyen = 2;
+    r.classList.add('tema-bekle');
+    var st = document.createElement('style');
+    st.textContent = 'html.tema-bekle{visibility:hidden}';
+    document.head.appendChild(st);
+    var ac = function () { r.classList.remove('tema-bekle'); };
+    setTimeout(ac, 1500);
+    var bagla = function (dosya) {
+      var l = document.createElement('link');
+      l.rel = 'stylesheet';
+      l.href = new URL('../../css/temalar/' + id + '/' + dosya, betik).href;
+      l.setAttribute('data-tema-css', id);
+      l.onload = l.onerror = function () { if (--bekleyen === 0) ac(); };
+      return l;
+    };
+    var gozcu = new MutationObserver(function () {
+      var taban = document.querySelector('link[href$="css/base.css"]');
+      if (taban && !temel) {
+        temel = bagla('temel.css');
+        taban.parentNode.insertBefore(temel, taban.nextSibling);
+      }
+      if (temel && document.body) {
+        document.head.appendChild(bagla('sayfalar.css'));
+        gozcu.disconnect();
+      }
+    });
+    gozcu.observe(r, { childList: true, subtree: true });
+  }
+
   try {
     if (localStorage.getItem('bizim.kilit')) {
       r.classList.add('kilit-bekle');

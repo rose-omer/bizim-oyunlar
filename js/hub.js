@@ -18,7 +18,7 @@ import {
 } from './core/gunler.js';
 import {
   h, icon, ICONS, avatarEl, toast, celebrate, shareInvite, copyInvite, muteButton, pairEl, knownPartner, rememberPartner,
-  partnerWhere, locative, genitive, trackShellHeight, formatDay, startAppServices, mountTabBar, removeTabBar, sohbetRozetiDinle,
+  partnerWhere, locative, genitive, trackShellHeight, formatDay, startAppServices, temaEsitle, mountTabBar, removeTabBar, sohbetRozetiDinle,
   listenTouches, TOUCHES, touchByTur, davetLinki, initial,
 } from './core/ui.js';
 import { sfx } from './core/sound.js';
@@ -416,6 +416,7 @@ async function ensureRoom(roomId) {
     room.on('presence', onPresence),
     listenTouches(room),
     sohbetRozetiDinle(room),
+    temaEsitle(room),
   ];
   openData(room);
   mountYavru(state.view);

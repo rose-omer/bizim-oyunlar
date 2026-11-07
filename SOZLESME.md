@@ -44,7 +44,7 @@ Kayıt: `js/core/games.js` → `GAMES` dizisi (koordinatör yazdı).
 - Alt ajanlar tarayıcı aracı kullanmaz. Tarayıcı testini koordinatör yapar.
 - Ağ bütçesi: istemci başına en fazla 10 mesaj/sn (sürekli). Tek mesaj < 100 KB.
   Sürükleme ve çizim verisi 100 ms'de bir toplu gönderilir; alıcı yumuşatır.
-- Font: Baloo 2 ve Quicksand sitede: `assets/fonts/` (alt küme WOFF2, OFL), `css/base.css` `@font-face`, `font-display: swap`. Font için dış adres yok; CSP `font-src 'self'`.
+- Font: Baloo 2 ve Quicksand sitede: `assets/fonts/` (alt küme WOFF2, OFL), `css/base.css` `@font-face`, `font-display: swap`. Font için dış adres yok; CSP `font-src 'self'`. Temaların yazı tipleri `assets/fonts/temalar/`.
 - Erişilebilirlik: gerçek `<button>`, görünür odak, `aria-label`, en az 44 px dokunma alanı.
 - Kullanıcıya görünen metin Türkçe, sıcak ve kısa. Açık saçık içerik yok (en fazla PG-13).
 
@@ -440,6 +440,9 @@ await fotoSecVeYukle(roomId, { coklu }) // -> [url]; games/yapboz/image.js norma
 - kilit.js ekleri: `pinDogruMu(pin)`, `cihazdanUnut(roomId)`. mobil.js eki: `mobilBaslat()` (startAppServices çağırır).
 - ui.js ekleri: `avatarEl`, `genitive`, `fotoSrc`, `removeTabBar`, `startAppServices` (tema, kilit, PWA, mobil, bildirim tazeleme).
 - `js/core/erken.js`: her sayfanın `<head>`'inde klasik betik. Temayı ilk boyamadan uygular; PIN varsa `html.kilit-bekle` ile içeriği kilit kararına dek gizler.
+- Ortak tema (`js/core/tema.js`): 13 tema, Ayarlar › Görünüm seçer. Seçim `cift` belgesinde `{ tema, temaAt }`; son seçen kazanır. `temaEsitle(room)` (ui.js) canlı `veri` yayınını dinler, açılışta belgeyi okur. Vurgu rengi ve açık/koyu cihaza özeldir.
+  - Varsayılan `pamuk` ek dosya yüklemez. Pamuk'a özel, yüksek seçicilikli süs kuralı `:where([data-tema='pamuk'])` ile başlar. `<html data-tema data-sayfa>` erken.js yazar.
+  - Üretilen dosyalar: `css/temalar/<id>/temel.css` (base.css'in ardına), `sayfalar.css` (`<head>` sonuna), `js/core/tema-ikon/<id>.js`, `sayfalar/yavru/temalar/<id>/`, `assets/temalar/<id>/`. Elle düzenlenmez; `node dev/tema-uret.mjs` stil worktree'lerinden (`C:\BizIkimiz\stiller`) yeniden üretir. Bu dosyalar sayfa CSS'inin farkıdır: sayfa CSS'i değişince yeni kurallar temalara da geçer.
 - Her HTML `<head>`'i: charset'in hemen arkasına birebir aynı CSP ve referrer meta'sı (`tests/guvenlik-baslik.test.mjs`; yeni dış kaynak CSP'ye de eklenir), theme-color, favicon, manifest, apple-touch-icon, apple/mobile meta, erken.js. Satır içi `<script>` ve `on*=` yasak.
 - `games/hafiza/sync.js`, `rng.js`, `ekran.js` artık ortak (Çiz, Dört Taş, Amiral, Dama, Tavla). API'leri sabit kalmalı.
 - Yerel duman testi: `iki.mjs` service worker'ı varsayılan engeller; PWA testi için `{ sw: true }`.

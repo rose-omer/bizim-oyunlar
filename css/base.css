@@ -2298,7 +2298,7 @@ a { text-decoration-thickness: 2px; }
   --hero-muted: var(--hamur-muted);
   --hero-accent: var(--hamur-accent);
 }
-body :is(.hc-bakiye, .on-kart-bas, .rz-ozet, .ruh-bugun, .sk-hero, .so-kapak) { box-shadow: var(--shadow-lg); border-radius: 34px; }
+:where([data-tema='pamuk']) body :is(.hc-bakiye, .on-kart-bas, .rz-ozet, .ruh-bugun, .sk-hero, .so-kapak) { box-shadow: var(--shadow-lg); border-radius: 34px; }
 
 /* ---------- Üst şerit: aşağı sarkan yumuşak raf ---------- */
 #shell {
@@ -2438,7 +2438,7 @@ dialog.ui-dialog[open] { animation: hamur-ac 0.34s var(--ease-hamur); }
 }
 .biz-thread .avatar { box-shadow: var(--shadow-sm); }
 .biz-count { margin-top: 12px; }
-.biz-count-n, body .gn-count-num {
+:where([data-tema='pamuk']) .biz-count-n, :where([data-tema='pamuk']) body .gn-count-num {
   color: var(--sayi-yuz);
   font-family: var(--font-display);
   font-weight: 800;
@@ -2531,7 +2531,7 @@ dialog.ui-dialog[open] { animation: hamur-ac 0.34s var(--ease-hamur); }
 .biz-next-q { font-weight: 800; }
 .biz-next-title { font-weight: 800; }
 .biz-next-lines { border-top: 3px dotted var(--line); }
-.card-row-tile, .biz-pick .game-tile { border-radius: 17px; box-shadow: var(--shadow-sm); }
+:where([data-tema='pamuk']) .card-row-tile, :where([data-tema='pamuk']) .biz-pick .game-tile { border-radius: 17px; box-shadow: var(--shadow-sm); }
 .card-row + .card-row { border-top: 3px dotted var(--line); }
 .biz-pick-all { border-top: 3px dotted var(--line); font-family: var(--font-display); font-size: 1.0625rem; }
 .biz-istek { box-shadow: var(--shadow); border-radius: 28px; }

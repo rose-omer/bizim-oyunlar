@@ -1299,9 +1299,9 @@ dialog.sh-sabitler { width: min(calc(100% - 24px), 440px); }
 }
 
 /* Pamuk Şeker: balonlar şişkin; ardışık köşeler de dolgun kalır. */
-body .sh-balon { --r: 24px; --r-ic: 12px; border: 0; box-shadow: var(--shadow-sm); }
-body .benim .sh-balon { box-shadow: var(--shadow-renkli); }
-body .onun.son .sh-balon { border-bottom-left-radius: 10px; }
-body .benim.son .sh-balon { border-bottom-right-radius: 10px; }
-body .sh-gonder { box-shadow: var(--shadow-renkli); }
-body .benim .sh-zaman { color: var(--accent-ink); }
+:where([data-tema='pamuk']) body .sh-balon { --r: 24px; --r-ic: 12px; border: 0; box-shadow: var(--shadow-sm); }
+:where([data-tema='pamuk']) body .benim .sh-balon { box-shadow: var(--shadow-renkli); }
+:where([data-tema='pamuk']) body .onun.son .sh-balon { border-bottom-left-radius: 10px; }
+:where([data-tema='pamuk']) body .benim.son .sh-balon { border-bottom-right-radius: 10px; }
+:where([data-tema='pamuk']) body .sh-gonder { box-shadow: var(--shadow-renkli); }
+:where([data-tema='pamuk']) body .benim .sh-zaman { color: var(--accent-ink); }

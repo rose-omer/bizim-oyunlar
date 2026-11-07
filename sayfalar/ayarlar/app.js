@@ -3,6 +3,7 @@ import { bootPage } from '../../js/core/sayfa.js';
 import { openProfil } from '../../js/core/profil.js';
 import { openCollection, listDocs, putDoc, iceAktar, onbellekTemizle, kaliciSil } from '../../js/core/veri.js';
 import { sayfaById } from '../../js/core/games.js';
+import { TEMALAR } from '../../js/core/tema.js';
 import { COP_TURLERI, copListesi, copOnizleme, copKimZaman } from './mantik.js';
 import {
   setName, inviteUrl, lobbyUrl, pageUrl, readStore, writeStore, parseYapistirilanLink, buildTasimaUrl, SITE_ROOT, isLocalMode,
@@ -152,11 +153,16 @@ function anahtarSatiri(baslik, aciklama, anahtarEl) {
 
 /** Yuvarlak renk seçici (radiogroup, ok tuşlarıyla gezilir). */
 function renkGrubu(id, secenekler, onSec) {
-  const grup = h('div', { class: 'ayar-renkler', role: 'radiogroup', id });
-  const dugmeler = secenekler.map((s) => h('button', {
+  const dugme = (s) => h('button', {
     type: 'button', role: 'radio', class: 'ayar-renk', 'aria-label': s.ad, title: s.ad,
     dataset: { deger: s.deger }, style: { '--sw': s.renk }, onclick: () => onSec(s.deger),
-  }, svg('tik', 'ayar-renk-tik')));
+  }, svg('tik', 'ayar-renk-tik'));
+  return secimGrubu(id, 'ayar-renkler', secenekler.map(dugme));
+}
+
+/** Tek seçimli düğme grubu: ok tuşlarıyla gezilir. grup.sec(deger) seçili olanı işaretler. */
+function secimGrubu(id, sinif, dugmeler) {
+  const grup = h('div', { class: sinif, role: 'radiogroup', id });
   grup.append(...dugmeler);
   grup.addEventListener('keydown', (e) => {
     const yon = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
@@ -558,12 +564,31 @@ function temaKaydet(degisim) {
   window.dispatchEvent(new Event('bizim:tema'));
 }
 
-const temaRenk = renkGrubu('ayar-tema-renk', TEMA_RENKLERI.map((r) => ({ deger: r.id, ad: r.ad, renk: r.renk })), (id) => {
+// Ortak tema: ikinizde de değişir (tür 'cift'). Alttaki vurgu rengi ve açık/koyu bu cihaza özeldir.
+const temaGrup = secimGrubu('ayar-tema', 'ayar-temalar', TEMALAR.map((t) => h('button', {
+  type: 'button', role: 'radio', class: 'ayar-tema', 'aria-label': t.ad, dataset: { deger: t.id },
+  onclick: () => temaSec(t.id),
+},
+h('span', { class: 'ayar-tema-resim' },
+  h('img', { src: new URL(`../../assets/tema-onizleme/${t.id}.jpg`, import.meta.url).href, alt: '', width: 195, height: 260, loading: 'lazy', decoding: 'async' }),
+  svg('tik', 'ayar-tema-tik')),
+h('span', { class: 'ayar-tema-ad' }, t.ad))));
+const temaAlan = alan('Tema', temaGrup, { grup: true, yardim: 'Seçtiğin tema ikinizde de anında değişir.' });
+
+function temaSec(id) {
+  if (id === tema.tema) return;
+  const temaAt = new Date().toISOString();
+  temaKaydet({ tema: id, temaAt });
+  temaYenile();
+  yaz(profil.setCift({ tema: id, temaAt }), temaAlan);
+}
+
+const temaRenk = renkGrubu('ayar-tema-renk', TEMA_RENKLERI.map((r) => ({ deger: r.id, ad: r.ad, renk: `var(--sw-${r.id}, ${r.renk})` })), (id) => {
   temaKaydet({ renk: id });
   temaYenile();
   kaydedildi(temaRenkAlan, 'Uygulandı');
 });
-const temaRenkAlan = alan('Tema rengi', temaRenk, { grup: true });
+const temaRenkAlan = alan('Vurgu rengi', temaRenk, { grup: true });
 const temaRenkAdi = h('span', { class: 'ayar-etiket-ek' });
 temaRenkAlan.querySelector('.ayar-etiket').append(temaRenkAdi);
 
@@ -572,9 +597,10 @@ const modSeg = h('div', { class: 'seg ayar-seg', role: 'group', id: 'ayar-mod' }
     type: 'button', dataset: { mod: m.id },
     onclick: () => { temaKaydet({ mod: m.id }); temaYenile(); kaydedildi(modAlan, 'Uygulandı'); },
   }, m.ad)));
-const modAlan = alan('Açık / koyu', modSeg, { grup: true, yardim: 'Otomatik: telefonunun ayarına uyar.' });
+const modAlan = alan('Açık / koyu', modSeg, { grup: true, yardim: 'Otomatik: telefonunun ayarına uyar. Yıldız Haritası, Piksel ve Sıvı Cam koyu açılır.' });
 
 function temaYenile() {
+  temaGrup.sec(tema.tema);
   temaRenk.sec(tema.renk);
   temaRenkAdi.textContent = ` · ${TEMA_RENKLERI.find((r) => r.id === tema.renk)?.ad || ''}`;
   for (const b of modSeg.children) b.setAttribute('aria-pressed', String(b.dataset.mod === tema.mod));
@@ -587,6 +613,7 @@ const sesAnahtar = anahtar('ayar-ses', !isMuted(), (ac) => {
 const sesSatiri = anahtarSatiri('Ses efektleri', 'Oyunlardaki ve dokunuşlardaki kısa sesler.', sesAnahtar);
 window.addEventListener('bizim:mute', () => sesAnahtar.setAttribute('aria-checked', String(!isMuted())));
 window.addEventListener('storage', (e) => { if (e.key === K_TEMA) { tema = parseTema(e.newValue); temaYenile(); } });
+window.addEventListener('bizim:tema', () => { tema = readTema(); temaYenile(); }); // karşı taraf temayı değiştirince
 
 // ---------- Konum paylaşımı: tek satır, ayrıntı Konum sayfasında ----------
 const konumDurum = h('span', { class: 'chip' });
@@ -1449,7 +1476,7 @@ app.replaceChildren(h('div', { class: 'ayar' },
   bolum('biz', 'Biz', kart(ciftAdAlan, gunlerAlan, kapakAlan)),
   bolum('bildirim', 'Bildirimler', bildirimKutu),
   bolum('kilit', 'Uygulama kilidi', kilitKutu),
-  bolum('gorunum', 'Görünüm', kart(temaRenkAlan, modAlan), kart(sesSatiri)),
+  bolum('gorunum', 'Görünüm', kart(temaAlan), kart(temaRenkAlan, modAlan), kart(sesSatiri)),
   konumSatiri,
   veriBolumu,
   bolum('cihaz', 'Cihazlar', cihazKutu),

@@ -483,10 +483,10 @@ body.sohbet-sayfa .toasts { bottom: calc(var(--sh-tab-h, var(--tabbar-h, 68px)) 
 .sh-alt {
   flex: none;
   padding: 8px 0;
-  border-top: 1px solid color-mix(in srgb, var(--line) 75%, transparent);
   /* Altında kayan içerik yok (liste ayrı kutuda): bulanıklık katmanı boşuna GPU belleği ve birleştirme yükü. */
   background: color-mix(in srgb, var(--bg) 86%, transparent);
 }
+:where([data-tema='pamuk']) .sh-alt { border-top: 1px solid color-mix(in srgb, var(--line) 75%, transparent); }
 .sh-alt > .sh-sutun { padding: 0 max(8px, calc(var(--gutter) - 8px)); }
 .sh-giris { display: flex; align-items: flex-end; gap: 4px; }
 

@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { ayristir, secicilik } from '../dev/tema-fark.mjs';
 import { bekleyenYazmaVar } from '../js/core/veri.js';
 import { TEMALAR, VARSAYILAN_TEMA, IKONLU_TEMALAR, KOYU_TEMALAR, temaGecerli, temaKarar, temaAdi, temaModu } from '../js/core/tema.js';
 
@@ -156,4 +157,32 @@ test('odaTemaYukle: oda çizimi temaya geçer, varsayılana döner', async () =>
   await c.odaTemaYukle('pamuk');
   assert.equal(c.odaSvg('banyo'), pamuk);
   assert.equal(c.ODA_CSS, css);
+});
+
+test('yazı tipi değişkenleri yalnız Pamuk için tanımlı: tema dosyası gelmeden Baloo ve Quicksand inmez', () => {
+  const secici = ayristir(oku('css/base.css'))
+    .filter((o) => o.tur === 'kural' && o.bildirimler.some(([p]) => p === '--font-display' || p === '--font-body'))
+    .map((o) => o.secici);
+  assert.ok(secici.length > 0);
+  for (const s of secici) assert.match(s, /\[data-tema='pamuk'\]/, s);
+});
+
+test('Pamuk yazı tipi kuralı seçiciliği artırmaz', () => {
+  const k = ayristir(oku('css/base.css')).find((o) => o.tur === 'kural' && o.bildirimler.some(([p]) => p === '--font-display'));
+  assert.deepEqual(secicilik(k.secici), secicilik(':root'));
+});
+
+test('her özel tema iki yazı tipi değişkenini de tanımlar', () => {
+  for (const { id } of ozel) {
+    const b = ayristir(oku(`css/temalar/${id}/temel.css`)).filter((o) => o.tur === 'kural' && !o.baglam.length && o.secici === ':root').flatMap((o) => o.bildirimler.map(([p]) => p));
+    assert.ok(b.includes('--font-display') && b.includes('--font-body'), id);
+  }
+});
+
+test('tema CSS revert kullanmaz (tarayıcı varsayılanına düşürür, düğmeleri bozar)', () => {
+  for (const { id } of ozel) {
+    for (const f of ['temel.css', 'sayfalar.css']) {
+      assert.doesNotMatch(oku(`css/temalar/${id}/${f}`), /:\s*revert\b/, `${id}/${f}`);
+    }
+  }
 });

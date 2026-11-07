@@ -156,12 +156,11 @@
   gap: 12px;
   margin-inline: calc(var(--gutter) * -1);
   padding: 8px var(--gutter) 6px;
-  background-color: var(--bg);
-  background-image: var(--grain);
   font-size: clamp(2.125rem, 1.7rem + 2vw, 2.875rem);
   letter-spacing: -0.035em;
   font-variant-numeric: lining-nums;
 }
+:where([data-tema='pamuk']) .ani-yil-baslik { background-color: var(--bg); background-image: var(--grain); }
 .ani-yil-sayi {
   color: var(--muted);
   font-family: var(--font-body);

@@ -58,17 +58,17 @@ test('temaFarki: farklı seçicilikte sonraki kural yazılmaz', () => {
 
 test('temaFarki: temanın kaldırdığı bildirim geri alınır', () => {
   const ata = '.a { box-shadow: 0 0 1px; top: 0 }';
-  assert.equal(fark(ata, ata, '.a { top: 0 }'), '.a { box-shadow: revert; }');
+  assert.equal(fark(ata, ata, '.a { top: 0 }'), '.a { box-shadow: initial; }');
 });
 
 test('temaFarki: temanın kaldırdığı kuralın bildirimleri geri alınır', () => {
   const ata = '.a::before { content: "x" } .b { top: 0 }';
-  assert.equal(fark(ata, ata, '.b { top: 0 }'), '.a::before { content: revert; }');
+  assert.equal(fark(ata, ata, '.b { top: 0 }'), '.a::before { content: initial; }');
 });
 
-test('temaFarki: ana dalda yeni olan süs kuralı temaya sızmaz (özel değişken dahil)', () => {
+test('temaFarki: ana dalda sonradan gelen kural temada da kalır (Pamuk süsü data-tema ile ayrılır)', () => {
   const ata = '.a { top: 0 }';
-  assert.equal(fark(ata, `${ata} .yeni { color: red; --x: 1 }`, ata), '.yeni { color: revert; --x: revert; }');
+  assert.equal(fark(ata, `${ata} .yeni { color: red; --x: 1 }`, ata), '');
 });
 
 test('temaFarki: ana dalda yeni olan bağlamlı kural (ekran uyarlaması) kalır', () => {
@@ -86,8 +86,12 @@ test('temaFarki: anaKorur: ana dalda yeni olan kurala dokunulmaz', () => {
   assert.equal(fark(ata, `${ata} .yeni { color: red }`, ata, { anaKorur: true }), '');
 });
 
-test('temaFarki: ana dalın sonradan eklediği bildirim temada yoksa geri alınır', () => {
-  assert.equal(fark('.a { top: 0 }', '.a { top: 0; filter: blur(1px) }', '.a { top: 0 }'), '.a { filter: revert; }');
+test('temaFarki: ana dalın sonradan eklediği bildirim temada da kalır', () => {
+  assert.equal(fark('.a { top: 0 }', '.a { top: 0; filter: blur(1px) }', '.a { top: 0 }'), '');
+});
+
+test('temaFarki: anaKorur: Pamuk için ayrılan bildirim temada kendi değeriyle yazılır', () => {
+  assert.equal(fark('.a { color: red }', ":where([data-tema='pamuk']) .a { color: red }", '.a { color: red }', { anaKorur: true }), '.a { color: red; }');
 });
 
 test('temaFarki: ana dalın değiştirdiği değer temada eski kalmışsa eskiye döner', () => {
@@ -98,7 +102,7 @@ test('temaFarki: anaKorur: temanın değiştirmediğine dokunulmaz, değiştirdi
   const s = { anaKorur: true };
   assert.equal(fark('.a { top: 0 }', '.a { top: 1px; filter: none }', '.a { top: 0 }', s), '');
   assert.equal(fark('.a { top: 0 }', '.a { top: 1px }', '.a { top: 2px }', s), '.a { top: 2px; }');
-  assert.equal(fark('.a { top: 0; color: red }', '.a { top: 0; color: red }', '.a { top: 0 }', s), '.a { color: revert; }');
+  assert.equal(fark('.a { top: 0; color: red }', '.a { top: 0; color: red }', '.a { top: 0 }', s), '.a { color: inherit; }');
 });
 
 test('temaFarki: özel değişken kaldırılınca geri alınmaz', () => {

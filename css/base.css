@@ -10,6 +10,11 @@
 @font-face { font-family: 'Quicksand'; font-style: normal; font-weight: 600; font-display: swap; src: url('../assets/fonts/quicksand-latin-semibold.woff2') format('woff2'); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-206F,U+20AC,U+2122,U+2190-2193,U+2212,U+2215,U+FEFF,U+FFFD; }
 @font-face { font-family: 'Quicksand'; font-style: normal; font-weight: 700; font-display: swap; src: url('../assets/fonts/quicksand-latin-ext-bold.woff2') format('woff2'); unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
 @font-face { font-family: 'Quicksand'; font-style: normal; font-weight: 700; font-display: swap; src: url('../assets/fonts/quicksand-latin-bold.woff2') format('woff2'); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-206F,U+20AC,U+2122,U+2190-2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+/* Yazı tipleri Pamuk'a bağlı: başka temada tema dosyası gelmeden Baloo ve Quicksand inmesin. :where seçiciliği artırmaz. */
+:root:where([data-tema='pamuk']) {
+  --font-display: 'Baloo 2', ui-rounded, 'SF Pro Rounded', 'Segoe UI', system-ui, sans-serif;
+  --font-body: 'Quicksand', ui-rounded, 'SF Pro Rounded', 'Segoe UI', system-ui, sans-serif;
+}
 
 /* Biz İkimiz — Pamuk Şeker: claymorphism. Her yüzey şişkin hamur; çift iç gölge jetonların içinde (--shadow*).
    Oyunlar renk sabit yazmaz; aşağıdaki değişkenleri kullanır.
@@ -155,8 +160,6 @@
   --shadow-oyuk: inset 2px 3px 6px rgb(120 60 140 / 0.22), inset -2px -2px 4px rgb(255 255 255 / 0.85);
   --shadow-renkli: 0 10px 16px -7px color-mix(in srgb, var(--accent) 65%, #3A0A3E), inset 2px 3px 5px rgb(255 255 255 / 0.55), inset -3px -5px 8px rgb(70 0 60 / 0.24);
 
-  --font-display: 'Baloo 2', ui-rounded, 'SF Pro Rounded', 'Segoe UI', system-ui, sans-serif;
-  --font-body: 'Quicksand', ui-rounded, 'SF Pro Rounded', 'Segoe UI', system-ui, sans-serif;
 
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
@@ -335,12 +338,12 @@ button { cursor: pointer; }
 a { color: var(--accent-strong); text-underline-offset: 0.18em; }
 h1, h2, h3, h4 {
   font-family: var(--font-display);
-  font-variation-settings: 'SOFT' 100;
   font-weight: 600;
   line-height: 1.15;
   letter-spacing: -0.01em;
   text-wrap: balance;
 }
+:where([data-tema='pamuk']) h1, :where([data-tema='pamuk']) h2, :where([data-tema='pamuk']) h3, :where([data-tema='pamuk']) h4 { font-variation-settings: 'SOFT' 100; }
 p { text-wrap: pretty; }
 ::selection { background: var(--accent-soft); color: var(--text); }
 [hidden] { display: none !important; }
@@ -448,12 +451,12 @@ p { text-wrap: pretty; }
   margin-right: auto;
   padding-left: 6px;
   font-family: var(--font-display);
-  font-variation-settings: 'SOFT' 100;
   font-size: 1.1875rem;
   font-weight: 600;
   letter-spacing: -0.01em;
   white-space: nowrap;
 }
+:where([data-tema='pamuk']) .hub-brand { font-variation-settings: 'SOFT' 100; }
 .hub-brand svg { width: 28px; height: 28px; flex: none; }
 
 @media (max-width: 420px) {
@@ -495,13 +498,13 @@ p { text-wrap: pretty; }
 }
 .title {
   font-family: var(--font-display);
-  font-variation-settings: 'SOFT' 100;
   font-size: clamp(2rem, 1.6rem + 1.6vw, 2.75rem);
   font-weight: 600;
   line-height: 1.08;
   letter-spacing: -0.02em;
   text-wrap: balance;
 }
+:where([data-tema='pamuk']) .title { font-variation-settings: 'SOFT' 100; }
 .subtitle {
   max-width: 34em;
   color: var(--muted);
@@ -665,13 +668,13 @@ textarea.input { min-height: 96px; resize: vertical; }
   background: var(--plum);
   color: var(--plum-ink);
   font-family: var(--font-display);
-  font-variation-settings: 'SOFT' 100;
   font-size: calc(var(--av) * 0.44);
   font-weight: 600;
   line-height: 1;
   box-shadow: 0 0 0 3px var(--bg);
   transition: background-color 0.3s ease, color 0.3s ease;
 }
+:where([data-tema='pamuk']) .avatar { font-variation-settings: 'SOFT' 100; }
 .avatar.partner { background: var(--accent); color: var(--accent-ink); }
 .avatar.away { background: var(--surface-2); color: var(--muted); }
 .avatar.empty {
@@ -744,11 +747,11 @@ textarea.input { min-height: 96px; resize: vertical; }
   white-space: nowrap;
   text-overflow: ellipsis;
   font-family: var(--font-display);
-  font-variation-settings: 'SOFT' 100;
   font-size: 1.25rem;
   font-weight: 600;
   line-height: 1.2;
 }
+:where([data-tema='pamuk']) .person-name { font-variation-settings: 'SOFT' 100; }
 .person-state {
   display: inline-flex;
   align-items: center;
@@ -1105,12 +1108,12 @@ dialog.ui-dialog[open] { animation: pop-in 0.24s var(--ease); }
 .game-body { display: flex; flex: 1 1 auto; flex-direction: column; gap: 4px; width: 100%; min-width: 0; }
 .game-title {
   font-family: var(--font-display);
-  font-variation-settings: 'SOFT' 100;
   font-size: 1.0625rem;
   font-weight: 600;
   line-height: 1.2;
   overflow-wrap: anywhere;
 }
+:where([data-tema='pamuk']) .game-title { font-variation-settings: 'SOFT' 100; }
 .game-desc {
   display: -webkit-box;
   overflow: hidden;
@@ -1139,12 +1142,12 @@ dialog.ui-dialog[open] { animation: pop-in 0.24s var(--ease); }
 .stats-when { display: block; color: var(--muted); font-size: 0.875rem; }
 .stats-count {
   font-family: var(--font-display);
-  font-variation-settings: 'SOFT' 100;
   font-size: 1.25rem;
   font-weight: 600;
   text-align: right;
   white-space: nowrap;
 }
+:where([data-tema='pamuk']) .stats-count { font-variation-settings: 'SOFT' 100; }
 .stats-count small { font-family: var(--font-body); font-size: 0.8125rem; font-weight: 700; color: var(--muted); margin-left: 3px; }
 
 .settings { --stack-gap: 20px; }
@@ -1159,13 +1162,13 @@ dialog.ui-dialog[open] { animation: pop-in 0.24s var(--ease); }
 /* Büyük sayı: sayaçlar ve geri sayımlar için (Baloo 2, sabit genişlikli rakam). */
 .stat-big {
   font-family: var(--font-display);
-  font-variation-settings: 'SOFT' 100;
   font-size: clamp(2.5rem, 1.8rem + 4vw, 3.5rem);
   font-weight: 600;
   line-height: 1;
   letter-spacing: -0.03em;
   font-variant-numeric: lining-nums tabular-nums;
 }
+:where([data-tema='pamuk']) .stat-big { font-variation-settings: 'SOFT' 100; }
 /* Kart içi satır listesi: <div class="card card-list"><a class="card-row">…</a>…</div> */
 .card.card-list { padding: 4px 0; overflow: hidden; }
 .card-row {
@@ -1240,23 +1243,23 @@ a.card-row:active { background: var(--surface-2); }
 .biz-count { display: flex; flex-direction: column; align-items: center; margin-top: 8px; line-height: 1; }
 .biz-count-n {
   font-family: var(--font-display);
-  font-variation-settings: 'SOFT' 100;
   font-size: clamp(64px, 23vw, 92px);
   font-weight: 600;
   line-height: 0.95;
   letter-spacing: -0.035em;
   font-variant-numeric: tabular-nums lining-nums;
 }
+:where([data-tema='pamuk']) .biz-count-n { font-variation-settings: 'SOFT' 100; }
 .biz-count-w {
   margin-top: 2px;
   color: var(--hero-accent);
   font-family: var(--font-display);
-  font-variation-settings: 'SOFT' 100;
   font-size: 1.75rem;
   font-style: italic;
   font-weight: 500;
   letter-spacing: -0.01em;
 }
+:where([data-tema='pamuk']) .biz-count-w { font-variation-settings: 'SOFT' 100; }
 .biz-count-sub { margin-top: 14px; font-size: 1.0625rem; font-weight: 750; }
 .biz-count-since { color: var(--hero-muted); font-size: 0.875rem; }
 
@@ -1314,13 +1317,13 @@ a.card-row:active { background: var(--surface-2); }
 .biz-now-name {
   overflow: hidden;
   font-family: var(--font-display);
-  font-variation-settings: 'SOFT' 100;
   font-size: 1.1875rem;
   font-weight: 600;
   line-height: 1.25;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
+:where([data-tema='pamuk']) .biz-now-name { font-variation-settings: 'SOFT' 100; }
 .biz-now-state { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 12px; color: var(--muted); font-size: 0.875rem; font-weight: 650; line-height: 1.35; }
 .biz-now-dist { display: inline-flex; align-items: center; gap: 4px; }
 .biz-now-dist svg { width: 15px; height: 15px; color: var(--accent-strong); }
@@ -1469,16 +1472,15 @@ a.biz-next-head:focus-visible { outline-offset: -2px; }
 .biz-next-text { display: flex; flex-direction: column; min-width: 0; }
 .biz-next-title {
   font-family: var(--font-display);
-  font-variation-settings: 'SOFT' 100;
   font-size: 1.125rem;
   font-weight: 600;
   line-height: 1.25;
   overflow-wrap: anywhere;
 }
+:where([data-tema='pamuk']) .biz-next-title { font-variation-settings: 'SOFT' 100; }
 .biz-next-sub { color: var(--muted); font-size: 0.875rem; line-height: 1.35; }
 .biz-next-q {
   font-family: var(--font-display);
-  font-variation-settings: 'SOFT' 100;
   font-size: 1.3125rem;
   font-weight: 600;
   line-height: 1.22;
@@ -1486,6 +1488,7 @@ a.biz-next-head:focus-visible { outline-offset: -2px; }
   text-wrap: balance;
   overflow-wrap: anywhere;
 }
+:where([data-tema='pamuk']) .biz-next-q { font-variation-settings: 'SOFT' 100; }
 .biz-next-note { color: var(--muted); font-size: 0.875rem; overflow-wrap: anywhere; }
 .biz-next-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .biz-next-lines { display: flex; flex-direction: column; margin: 0 -6px; padding-top: 6px; border-top: 1px solid var(--line); }
@@ -1572,9 +1575,9 @@ a.biz-next-head:focus-visible { outline-offset: -2px; }
   font-size: clamp(88px, 26vw, 140px);
   line-height: 1;
   transform: translate(-50%, -50%);
-  filter: drop-shadow(0 12px 24px rgb(59 31 43 / 0.25));
   animation: burst-main 1.9s var(--ease) both;
 }
+:where([data-tema='pamuk']) .touch-burst-main { filter: drop-shadow(0 12px 24px rgb(59 31 43 / 0.25)); }
 .touch-burst-bit {
   position: absolute;
   bottom: -50px;
@@ -1653,7 +1656,6 @@ dialog.foto-buyut::backdrop {
 .foto-buyut-ad {
   max-width: 100%;
   font-family: var(--font-display);
-  font-variation-settings: 'SOFT' 100;
   font-size: 1.75rem;
   font-weight: 600;
   line-height: 1.15;
@@ -1661,6 +1663,7 @@ dialog.foto-buyut::backdrop {
   text-align: center;
   overflow-wrap: anywhere;
 }
+:where([data-tema='pamuk']) .foto-buyut-ad { font-variation-settings: 'SOFT' 100; }
 .foto-buyut-kapat {
   position: absolute;
   top: calc(10px + var(--safe-top));
@@ -2042,13 +2045,13 @@ html.kapi-acik { overflow: hidden; }
 .kapi-baslik {
   margin-top: 2px;
   font-family: var(--font-display);
-  font-variation-settings: 'SOFT' 100;
   font-size: clamp(1.75rem, 1.45rem + 1.4vw, 2.25rem);
   font-weight: 600;
   line-height: 1.1;
   letter-spacing: -0.02em;
   text-wrap: balance;
 }
+:where([data-tema='pamuk']) .kapi-baslik { font-variation-settings: 'SOFT' 100; }
 .kapi-baslik:focus { outline: none; }
 .kapi-metin { max-width: 34ch; font-size: 1.0625rem; line-height: 1.5; text-wrap: pretty; }
 .kapi-cihaz {
@@ -2183,11 +2186,11 @@ html.kapi-acik { overflow: hidden; }
   color: var(--accent-ink);
   box-shadow: 0 0 0 3px var(--surface), var(--shadow);
   font-family: var(--font-display);
-  font-variation-settings: 'SOFT' 100;
   font-size: 15px;
   font-weight: 600;
   line-height: 1;
 }
+:where([data-tema='pamuk']) .biz-konum-pin { font-variation-settings: 'SOFT' 100; }
 .biz-konum-pin[data-kim='ben'] { background: var(--plum); color: var(--plum-ink); }
 .biz-konum-canli {
   position: absolute;
@@ -2243,13 +2246,13 @@ html.kapi-acik { overflow: hidden; }
 .biz-konum-metin { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .biz-konum-buyuk {
   font-family: var(--font-display);
-  font-variation-settings: 'SOFT' 100;
   font-size: 1.375rem;
   font-weight: 600;
   line-height: 1.2;
   letter-spacing: -0.01em;
   overflow-wrap: anywhere;
 }
+:where([data-tema='pamuk']) .biz-konum-buyuk { font-variation-settings: 'SOFT' 100; }
 .biz-konum-on {
   color: var(--muted);
   font-family: var(--font-body);
@@ -2273,9 +2276,9 @@ html.kapi-acik { overflow: hidden; }
 button, a, label, [role="button"] { touch-action: manipulation; }
 /* Dokunmatik cihazda sabit şeritlerin arkasını her karede bulanıklaştırmak zayıf GPU'yu yorar: opak zemin. */
 @media (pointer: coarse) {
-  #shell, #tabbar { -webkit-backdrop-filter: none; backdrop-filter: none; }
-  #shell { background: var(--bg); }
-  #tabbar { background: var(--surface); }
+  :where([data-tema='pamuk']) #shell, :where([data-tema='pamuk']) #tabbar { -webkit-backdrop-filter: none; backdrop-filter: none; }
+  :where([data-tema='pamuk']) #shell { background: var(--bg); }
+  :where([data-tema='pamuk']) #tabbar { background: var(--surface); }
 }
 
 /* ==========================================================================
@@ -2283,16 +2286,17 @@ button, a, label, [role="button"] { touch-action: manipulation; }
    Malzeme: şişkin hamur. Sert çizgi yok; derinlik çift iç gölge + renkli dış gölge.
    Basınca: gölge içe döner, yüzey yumuşakça çöker; bırakınca yaylanır.
    ========================================================================== */
-html { font-synthesis: none; scrollbar-color: color-mix(in srgb, var(--accent) 45%, var(--surface-2)) transparent; }
-body { font-weight: 600; line-height: 1.5; caret-color: var(--accent-strong); }
+html:where([data-tema='pamuk']) { font-synthesis: none; scrollbar-color: color-mix(in srgb, var(--accent) 45%, var(--surface-2)) transparent; }
+body { font-weight: 600; line-height: 1.5; }
+:where([data-tema='pamuk']) body { caret-color: var(--accent-strong); }
 ::selection { background: var(--accent); color: var(--accent-ink); }
 h1, h2, h3, h4 { font-weight: 800; letter-spacing: 0; line-height: 1.12; }
 .title { font-weight: 800; letter-spacing: -0.005em; line-height: 1.02; }
-.subtitle { font-weight: 600; }
-a { text-decoration-thickness: 2px; }
+:where([data-tema='pamuk']) .subtitle { font-weight: 600; }
+:where([data-tema='pamuk']) a { text-decoration-thickness: 2px; }
 
 /* Pastel hamur kartları: bu kartlarda --hero ailesi pastele döner (koyu modda koyu hamur). */
-.biz-hero, .hc-bakiye, .on-kart-bas, .rz-ozet, .ruh-bugun, .sk-hero, .so-kapak, .kt-kapak, .yl-kart[data-id='kapak'] {
+:where([data-tema='pamuk']) .biz-hero, :where([data-tema='pamuk']) .hc-bakiye, :where([data-tema='pamuk']) .on-kart-bas, :where([data-tema='pamuk']) .rz-ozet, :where([data-tema='pamuk']) .ruh-bugun, :where([data-tema='pamuk']) .sk-hero, :where([data-tema='pamuk']) .so-kapak, :where([data-tema='pamuk']) .kt-kapak, :where([data-tema='pamuk']) .yl-kart[data-id='kapak'] {
   --hero: var(--hamur);
   --hero-ink: var(--hamur-ink);
   --hero-muted: var(--hamur-muted);
@@ -2306,17 +2310,19 @@ a { text-decoration-thickness: 2px; }
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
   border-bottom: 0;
-  border-radius: 0 0 26px 26px;
-  box-shadow: 0 10px 18px -10px rgb(100 40 120 / 0.35), inset -3px -5px 9px color-mix(in srgb, var(--accent) 8%, rgb(120 60 140 / 0.14));
 }
-.shell-title, .hub-brand { font-family: var(--font-display); font-weight: 800; letter-spacing: 0; }
-.shell-title { font-size: 1.25rem; line-height: 1.3; }
+:where([data-tema='pamuk']) #shell { border-radius: 0 0 26px 26px; box-shadow: 0 10px 18px -10px rgb(100 40 120 / 0.35), inset -3px -5px 9px color-mix(in srgb, var(--accent) 8%, rgb(120 60 140 / 0.14)); }
+:where([data-tema='pamuk']) .shell-title, :where([data-tema='pamuk']) .hub-brand { font-family: var(--font-display); font-weight: 800; letter-spacing: 0; }
+.shell-title { font-size: 1.25rem; }
+:where([data-tema='pamuk']) .shell-title { line-height: 1.3; }
 .hub-brand { font-size: 1.3125rem; }
-.shell-partner { min-height: 34px; background: var(--tint-4); box-shadow: var(--shadow-sm); }
+.shell-partner { min-height: 34px; background: var(--tint-4); }
+:where([data-tema='pamuk']) .shell-partner { box-shadow: var(--shadow-sm); }
 .shell-partner-state { color: var(--text); }
 .shell-local { background: var(--tint-6); }
-.shell-back { background: var(--surface); box-shadow: var(--shadow-sm); padding: 0 10px; margin-right: 4px; font-family: var(--font-display); }
-.shell-tools .icon-btn { background: var(--surface); box-shadow: var(--shadow-sm); }
+.shell-back { padding: 0 10px; }
+:where([data-tema='pamuk']) .shell-back { background: var(--surface); box-shadow: var(--shadow-sm); margin-right: 4px; font-family: var(--font-display); }
+:where([data-tema='pamuk']) .shell-tools .icon-btn { background: var(--surface); box-shadow: var(--shadow-sm); }
 
 /* ---------- Düğme: şişkin şeker ---------- */
 .btn {
@@ -2324,33 +2330,33 @@ a { text-decoration-thickness: 2px; }
   padding: 0 1.4rem;
   border: 0;
   background: var(--btn-bg);
-  box-shadow: var(--shadow);
-  font-family: var(--font-display);
   font-size: 1.0625rem;
   font-weight: 800;
   transition: background-color 0.15s ease, box-shadow 0.18s ease, transform 0.26s var(--ease-hamur);
 }
+:where([data-tema='pamuk']) .btn { box-shadow: var(--shadow); font-family: var(--font-display); }
 .btn.primary { box-shadow: var(--shadow-renkli); }
-.btn.ghost { box-shadow: none; }
-.btn.small { min-height: 38px; padding: 0 1rem; font-size: 0.9375rem; box-shadow: var(--shadow-sm); }
-.btn.primary.small { box-shadow: var(--shadow-renkli); }
+:where([data-tema='pamuk']) .btn.ghost { box-shadow: none; }
+.btn.small { min-height: 38px; padding: 0 1rem; font-size: 0.9375rem; }
+:where([data-tema='pamuk']) .btn.small { box-shadow: var(--shadow-sm); }
+:where([data-tema='pamuk']) .btn.primary.small { box-shadow: var(--shadow-renkli); }
 .btn.danger { --btn-bg: var(--bad-soft); }
 .btn:active:not(:disabled) {
   transform: translateY(2px) scale(0.975, 0.93);
-  box-shadow: var(--shadow-bas);
-  transition: box-shadow 0.08s ease, transform 0.1s ease-out;
 }
-.btn.ghost:active:not(:disabled) { background: var(--surface-2); }
-.btn:disabled, .btn[aria-disabled='true'] { opacity: 1; background: var(--surface-2); color: var(--muted); box-shadow: var(--shadow-oyuk); }
+:where([data-tema='pamuk']) .btn:active:not(:disabled) { box-shadow: var(--shadow-bas); transition: box-shadow 0.08s ease, transform 0.1s ease-out; }
+:where([data-tema='pamuk']) .btn.ghost:active:not(:disabled) { background: var(--surface-2); }
+.btn:disabled, .btn[aria-disabled='true'] { opacity: 1; }
+:where([data-tema='pamuk']) .btn:disabled, :where([data-tema='pamuk']) .btn[aria-disabled='true'] { background: var(--surface-2); color: var(--muted); box-shadow: var(--shadow-oyuk); }
 @media (hover: hover) {
-  .btn:hover:not(:disabled) { filter: saturate(1.08) brightness(1.02); }
-  .btn.ghost:hover:not(:disabled) { filter: none; }
+  :where([data-tema='pamuk']) .btn:hover:not(:disabled) { filter: saturate(1.08) brightness(1.02); }
+  :where([data-tema='pamuk']) .btn.ghost:hover:not(:disabled) { filter: none; }
 }
 .icon-btn {
   transition: background-color 0.15s ease, box-shadow 0.18s ease, transform 0.26s var(--ease-hamur);
 }
-.icon-btn:active { transform: scale(0.92, 0.88); box-shadow: var(--shadow-bas); transition-duration: 0.08s; }
-.icon-btn svg, .shell-back svg { stroke-width: 2.3; }
+:where([data-tema='pamuk']) .icon-btn:active { transform: scale(0.92, 0.88); box-shadow: var(--shadow-bas); transition-duration: 0.08s; }
+:where([data-tema='pamuk']) .icon-btn svg, :where([data-tema='pamuk']) .shell-back svg { stroke-width: 2.3; }
 
 /* ---------- Kart, çip, giriş ---------- */
 .card { border: 0; border-radius: var(--radius-lg); }
@@ -2358,40 +2364,43 @@ a { text-decoration-thickness: 2px; }
   min-height: 28px;
   padding: 2px 11px;
   background: var(--surface-2);
-  box-shadow: inset 1px 1.5px 2px rgb(255 255 255 / 0.5), inset -1px -2px 3px rgb(120 60 140 / 0.14);
   color: var(--text);
 }
+:where([data-tema='pamuk']) .chip { box-shadow: inset 1px 1.5px 2px rgb(255 255 255 / 0.5), inset -1px -2px 3px rgb(120 60 140 / 0.14); }
 .chip.accent { background: var(--accent-soft); }
 .input {
   min-height: 50px;
   padding: 11px 16px;
   border: 0;
   background: var(--surface-2);
-  box-shadow: var(--shadow-oyuk);
-  font-weight: 600;
 }
+:where([data-tema='pamuk']) .input { box-shadow: var(--shadow-oyuk); font-weight: 600; }
 .input::placeholder { color: var(--muted); opacity: 1; }
-.input:focus-visible { outline: 3px solid var(--focus); outline-offset: 1px; box-shadow: var(--shadow-oyuk); }
-.input[aria-invalid='true'] { outline: 3px solid var(--bad); outline-offset: 1px; }
+.input:focus-visible { outline: 3px solid var(--focus); box-shadow: var(--shadow-oyuk); }
+:where([data-tema='pamuk']) .input:focus-visible { outline-offset: 1px; }
+:where([data-tema='pamuk']) .input[aria-invalid='true'] { outline: 3px solid var(--bad); outline-offset: 1px; }
 .linkbox .input { background: var(--surface-2); }
 
-.seg { padding: 5px; border-radius: 24px; box-shadow: var(--shadow-oyuk); }
+.seg { padding: 5px; border-radius: 24px; }
+:where([data-tema='pamuk']) .seg { box-shadow: var(--shadow-oyuk); }
 .seg > button { border-radius: 19px; color: var(--muted); font-weight: 700; transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.18s ease, transform 0.26s var(--ease-hamur); }
 .seg > button[aria-pressed='true'] { background: var(--raised); box-shadow: var(--shadow-sm); }
-.seg > button:active { transform: scale(0.96, 0.92); }
+:where([data-tema='pamuk']) .seg > button:active { transform: scale(0.96, 0.92); }
 
 /* ---------- Avatar, kalp ---------- */
 .avatar { font-weight: 800; box-shadow: var(--shadow-sm); line-height: 1.1; }
-.avatar.partner { box-shadow: var(--shadow-renkli); }
-.avatar.empty { box-shadow: none; border-width: 3px; }
+:where([data-tema='pamuk']) .avatar.partner { box-shadow: var(--shadow-renkli); }
+.avatar.empty { box-shadow: none; }
+:where([data-tema='pamuk']) .avatar.empty { border-width: 3px; }
 .avatar-badge { box-shadow: var(--shadow-sm); }
 .person-name { font-weight: 800; }
-.pair-heart::before, .pair-heart::after { border-top-width: 3px; border-top-style: dotted; }
-.pair[data-link='on'] .pair-heart::before, .pair[data-link='on'] .pair-heart::after { border-top-width: 3px; border-top-style: solid; border-radius: 3px; }
+:where([data-tema='pamuk']) .pair-heart::before, :where([data-tema='pamuk']) .pair-heart::after { border-top-width: 3px; border-top-style: dotted; }
+:where([data-tema='pamuk']) .pair[data-link='on'] .pair-heart::before, :where([data-tema='pamuk']) .pair[data-link='on'] .pair-heart::after { border-top-width: 3px; border-top-style: solid; border-radius: 3px; }
 
 /* ---------- Bildirim, diyalog, alt sayfa ---------- */
 .toast { border-radius: 22px; box-shadow: 0 16px 26px -12px rgb(40 10 50 / 0.6); }
-.toast-action { border-radius: 16px; font-family: var(--font-display); }
+.toast-action { border-radius: 16px; }
+:where([data-tema='pamuk']) .toast-action { font-family: var(--font-display); }
 .dialog-card { border-radius: 34px; }
 .dialog-text { font-weight: 700; }
 @media (max-width: 560px) {
@@ -2400,7 +2409,7 @@ a { text-decoration-thickness: 2px; }
 dialog.ui-dialog[open] { animation: hamur-ac 0.34s var(--ease-hamur); }
 @media (max-width: 560px) { dialog.ui-dialog.sheet[open] { animation: sheet-in 0.34s var(--ease-hamur); } }
 @keyframes hamur-ac { from { opacity: 0; transform: translateY(10px) scale(0.9, 0.86); } }
-.celebrate-card { border-radius: 36px; }
+:where([data-tema='pamuk']) .celebrate-card { border-radius: 36px; }
 .biz-konum-canli { box-shadow: var(--shadow-sm); }
 
 /* ---------- Oyun kartı ---------- */
@@ -2412,12 +2421,14 @@ dialog.ui-dialog[open] { animation: hamur-ac 0.34s var(--ease-hamur); }
   box-shadow: var(--shadow);
   transition: box-shadow 0.18s ease, transform 0.26s var(--ease-hamur);
 }
-.game-card:active:not(:disabled) { transform: translateY(2px) scale(0.97, 0.94); box-shadow: var(--shadow-bas); transition-duration: 0.09s; }
+.game-card:active:not(:disabled) { transform: translateY(2px) scale(0.97, 0.94); }
+:where([data-tema='pamuk']) .game-card:active:not(:disabled) { box-shadow: var(--shadow-bas); transition-duration: 0.09s; }
 @media (hover: hover) { .game-card:hover:not(:disabled) { box-shadow: var(--shadow-lg); } }
 .game-card[data-partner='true'] { box-shadow: 0 0 0 3px var(--accent), var(--shadow); }
-.game-tile { width: 52px; height: 52px; border-radius: 20px; box-shadow: var(--shadow-sm); }
+.game-tile { width: 52px; height: 52px; border-radius: 20px; }
+:where([data-tema='pamuk']) .game-tile { box-shadow: var(--shadow-sm); }
 .game-title { font-weight: 800; font-size: 1.125rem; }
-.game-desc { font-weight: 600; }
+:where([data-tema='pamuk']) .game-desc { font-weight: 600; }
 .game-meta .chip { min-height: 24px; }
 .stats .game-tile { width: 42px; height: 42px; border-radius: 16px; }
 .stats-count { font-weight: 800; }
@@ -2431,11 +2442,8 @@ dialog.ui-dialog[open] { animation: hamur-ac 0.34s var(--ease-hamur); }
 .biz-hero::before {
   /* Şeker serpintisi */
   background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cg opacity='.62' fill='none' stroke-width='6.5' stroke-linecap='round'%3E%3Cpath stroke='%23FFF3FB' d='M22 30l12 8M150 24l-9 11M96 142l13 4'/%3E%3Cpath stroke='%23FFE98F' d='M70 22l5 12M16 118l11-6M164 92l-4 13'/%3E%3Cpath stroke='%23A8EFD0' d='M118 62l12-4M46 76l4 13M150 158l-12 5'/%3E%3Cpath stroke='%23FF9CC6' d='M92 96l-11 6M28 166l12-3M178 44l-10 7'/%3E%3C/g%3E%3C/svg%3E") center top / 180px;
-  /* Yazının altı temiz kalsın: serpinti yalnız kenarlarda. */
-  -webkit-mask-image: radial-gradient(ellipse 66% 60% at 50% 56%, transparent 74%, black 100%);
-  mask-image: radial-gradient(ellipse 66% 60% at 50% 56%, transparent 74%, black 100%);
-  opacity: var(--serpinti);
 }
+:where([data-tema='pamuk']) .biz-hero::before { -webkit-mask-image: radial-gradient(ellipse 66% 60% at 50% 56%, transparent 74%, black 100%); mask-image: radial-gradient(ellipse 66% 60% at 50% 56%, transparent 74%, black 100%); opacity: var(--serpinti); }
 .biz-thread .avatar { box-shadow: var(--shadow-sm); }
 .biz-count { margin-top: 12px; }
 :where([data-tema='pamuk']) .biz-count-n, :where([data-tema='pamuk']) body .gn-count-num {
@@ -2454,11 +2462,11 @@ dialog.ui-dialog[open] { animation: hamur-ac 0.34s var(--ease-hamur); }
     0 18px 16px var(--sayi-golge);
 }
 .biz-count-n {
-  padding-bottom: 8px;
   font-size: clamp(76px, 27vw, 108px);
   line-height: 0.92;
   font-variant-numeric: lining-nums;
 }
+:where([data-tema='pamuk']) .biz-count-n { padding-bottom: 8px; }
 .biz-count-w {
   margin-top: 2px;
   color: var(--hero-accent);
@@ -2466,22 +2474,27 @@ dialog.ui-dialog[open] { animation: hamur-ac 0.34s var(--ease-hamur); }
   font-style: normal;
   font-weight: 800;
   letter-spacing: 0;
-  line-height: 1.1;
 }
-.biz-count-sub { margin-top: 10px; font-family: var(--font-display); font-size: 1.1875rem; font-weight: 800; line-height: 1.25; }
-.biz-count-since { color: var(--hero-muted); font-weight: 700; }
-.biz-hero .biz-hero-btn { box-shadow: var(--shadow-sm); }
-.biz-hero .input { background: var(--surface); }
+:where([data-tema='pamuk']) .biz-count-w { line-height: 1.1; }
+.biz-count-sub { margin-top: 10px; font-size: 1.1875rem; font-weight: 800; }
+:where([data-tema='pamuk']) .biz-count-sub { font-family: var(--font-display); line-height: 1.25; }
+.biz-count-since { color: var(--hero-muted); }
+:where([data-tema='pamuk']) .biz-count-since { font-weight: 700; }
+:where([data-tema='pamuk']) .biz-hero .biz-hero-btn { box-shadow: var(--shadow-sm); }
+:where([data-tema='pamuk']) .biz-hero .input { background: var(--surface); }
 
 /* ---------- Biz: bölümler ---------- */
 .biz-sec { margin-top: 30px; }
 .biz-sec-head h2 { font-size: 1.5rem; }
 .biz-block-head h3 { font-size: 1.1875rem; }
-.biz-link { font-family: var(--font-display); font-size: 1rem; font-weight: 800; }
+.biz-link { font-size: 1rem; font-weight: 800; }
+:where([data-tema='pamuk']) .biz-link { font-family: var(--font-display); }
 .biz-now-partner .avatar { box-shadow: var(--shadow-renkli); }
 .biz-now-name { font-weight: 800; font-size: 1.25rem; }
-.biz-now-mood { background: var(--tint-6); box-shadow: var(--shadow-sm); }
-.biz-now-quote { background: var(--surface-2); box-shadow: var(--shadow-oyuk); border-radius: 22px; padding: 11px 14px; }
+.biz-now-mood { background: var(--tint-6); }
+:where([data-tema='pamuk']) .biz-now-mood { box-shadow: var(--shadow-sm); }
+.biz-now-quote { background: var(--surface-2); border-radius: 22px; padding: 11px 14px; }
+:where([data-tema='pamuk']) .biz-now-quote { box-shadow: var(--shadow-oyuk); }
 .biz-now-me { border-top: 0; padding-top: 6px; }
 .biz-mood-row { gap: 10px; }
 .biz-mood-btn {
@@ -2489,21 +2502,25 @@ dialog.ui-dialog[open] { animation: hamur-ac 0.34s var(--ease-hamur); }
   border: 0;
   border-radius: 22px;
   background: var(--surface);
-  box-shadow: var(--shadow-sm);
   transition: background-color 0.15s ease, box-shadow 0.18s ease, transform 0.26s var(--ease-hamur);
 }
-.biz-mood-row > :nth-child(6n+1) { --seker: var(--tint-1); }
-.biz-mood-row > :nth-child(6n+2) { --seker: var(--tint-6); }
-.biz-mood-row > :nth-child(6n+3) { --seker: var(--tint-4); }
-.biz-mood-row > :nth-child(6n+4) { --seker: var(--tint-2); }
-.biz-mood-row > :nth-child(6n+5) { --seker: var(--tint-5); }
-.biz-mood-row > :nth-child(6n) { --seker: var(--tint-3); }
+:where([data-tema='pamuk']) .biz-mood-btn { box-shadow: var(--shadow-sm); }
+:where([data-tema='pamuk']) .biz-mood-row > :nth-child(6n+1) { --seker: var(--tint-1); }
+:where([data-tema='pamuk']) .biz-mood-row > :nth-child(6n+2) { --seker: var(--tint-6); }
+:where([data-tema='pamuk']) .biz-mood-row > :nth-child(6n+3) { --seker: var(--tint-4); }
+:where([data-tema='pamuk']) .biz-mood-row > :nth-child(6n+4) { --seker: var(--tint-2); }
+:where([data-tema='pamuk']) .biz-mood-row > :nth-child(6n+5) { --seker: var(--tint-5); }
+:where([data-tema='pamuk']) .biz-mood-row > :nth-child(6n) { --seker: var(--tint-3); }
 .biz-mood-btn { background: var(--seker, var(--surface)); }
-.biz-mood-btn:active { transform: scale(0.96, 0.9); box-shadow: var(--shadow-bas); transition-duration: 0.08s; }
-.biz-mood-btn[aria-pressed='true'] { outline: 3px solid var(--accent-strong); outline-offset: -3px; background: var(--seker, var(--accent-soft)); box-shadow: var(--shadow-bas); }
+.biz-mood-btn:active { transform: scale(0.96, 0.9); }
+:where([data-tema='pamuk']) .biz-mood-btn:active { box-shadow: var(--shadow-bas); transition-duration: 0.08s; }
+.biz-mood-btn[aria-pressed='true'] { background: var(--seker, var(--accent-soft)); }
+:where([data-tema='pamuk']) .biz-mood-btn[aria-pressed='true'] { outline: 3px solid var(--accent-strong); outline-offset: -3px; box-shadow: var(--shadow-bas); }
 .biz-mood-btn[aria-pressed='true'] .biz-mood-ad { color: var(--text); }
-.biz-mood-ad { font-family: var(--font-display); font-size: 0.9375rem; font-weight: 800; }
-.biz-inbox { background: var(--accent-soft); box-shadow: var(--shadow-sm); border-radius: 22px; }
+.biz-mood-ad { font-size: 0.9375rem; font-weight: 800; }
+:where([data-tema='pamuk']) .biz-mood-ad { font-family: var(--font-display); }
+.biz-inbox { background: var(--accent-soft); border-radius: 22px; }
+:where([data-tema='pamuk']) .biz-inbox { box-shadow: var(--shadow-sm); }
 .biz-touch-emoji {
   width: 60px;
   height: 60px;
@@ -2513,28 +2530,34 @@ dialog.ui-dialog[open] { animation: hamur-ac 0.34s var(--ease-hamur); }
   transition: transform 0.26s var(--ease-hamur), box-shadow 0.18s ease, opacity 0.2s ease;
 }
 .biz-touch-row { gap: 4px; }
-.biz-touch-row > :nth-child(5n+1) { --seker: var(--tint-1); }
-.biz-touch-row > :nth-child(5n+2) { --seker: var(--tint-2); }
-.biz-touch-row > :nth-child(5n+3) { --seker: var(--tint-6); }
-.biz-touch-row > :nth-child(5n+4) { --seker: var(--tint-4); }
-.biz-touch-row > :nth-child(5n) { --seker: var(--tint-5); }
-.biz-touch:active .biz-touch-emoji { transform: scale(0.92, 0.84); box-shadow: var(--shadow-bas); transition-duration: 0.08s; }
-.biz-touch-label { color: var(--text); font-family: var(--font-display); font-size: 0.8125rem; font-weight: 600; letter-spacing: 0; }
-.biz-touch.sent .biz-touch-emoji { background: var(--accent-soft); outline: 3px solid var(--accent-strong); outline-offset: -3px; }
+:where([data-tema='pamuk']) .biz-touch-row > :nth-child(5n+1) { --seker: var(--tint-1); }
+:where([data-tema='pamuk']) .biz-touch-row > :nth-child(5n+2) { --seker: var(--tint-2); }
+:where([data-tema='pamuk']) .biz-touch-row > :nth-child(5n+3) { --seker: var(--tint-6); }
+:where([data-tema='pamuk']) .biz-touch-row > :nth-child(5n+4) { --seker: var(--tint-4); }
+:where([data-tema='pamuk']) .biz-touch-row > :nth-child(5n) { --seker: var(--tint-5); }
+.biz-touch:active .biz-touch-emoji { transform: scale(0.92, 0.84); }
+:where([data-tema='pamuk']) .biz-touch:active .biz-touch-emoji { box-shadow: var(--shadow-bas); transition-duration: 0.08s; }
+.biz-touch-label { color: var(--text); font-size: 0.8125rem; font-weight: 600; letter-spacing: 0; }
+:where([data-tema='pamuk']) .biz-touch-label { font-family: var(--font-display); }
+.biz-touch.sent .biz-touch-emoji { background: var(--accent-soft); }
+:where([data-tema='pamuk']) .biz-touch.sent .biz-touch-emoji { outline: 3px solid var(--accent-strong); outline-offset: -3px; }
 .biz-cd { gap: 10px; }
-.biz-cd-cell { border-radius: 22px; box-shadow: var(--shadow-sm); }
-.biz-cd-cell:nth-child(4n+1) { background: var(--tint-1); }
-.biz-cd-cell:nth-child(4n+2) { background: var(--tint-2); }
-.biz-cd-cell:nth-child(4n+3) { background: var(--tint-4); }
-.biz-cd-cell:nth-child(4n) { background: var(--tint-6); }
+.biz-cd-cell { border-radius: 22px; }
+:where([data-tema='pamuk']) .biz-cd-cell { box-shadow: var(--shadow-sm); }
+:where([data-tema='pamuk']) .biz-cd-cell:nth-child(4n+1) { background: var(--tint-1); }
+:where([data-tema='pamuk']) .biz-cd-cell:nth-child(4n+2) { background: var(--tint-2); }
+:where([data-tema='pamuk']) .biz-cd-cell:nth-child(4n+3) { background: var(--tint-4); }
+:where([data-tema='pamuk']) .biz-cd-cell:nth-child(4n) { background: var(--tint-6); }
 .biz-cd-cell .stat-big { color: var(--text); }
 .biz-next-q { font-weight: 800; }
 .biz-next-title { font-weight: 800; }
 .biz-next-lines { border-top: 3px dotted var(--line); }
 :where([data-tema='pamuk']) .card-row-tile, :where([data-tema='pamuk']) .biz-pick .game-tile { border-radius: 17px; box-shadow: var(--shadow-sm); }
 .card-row + .card-row { border-top: 3px dotted var(--line); }
-.biz-pick-all { border-top: 3px dotted var(--line); font-family: var(--font-display); font-size: 1.0625rem; }
-.biz-istek { box-shadow: var(--shadow); border-radius: 28px; }
+.biz-pick-all { border-top: 3px dotted var(--line); }
+:where([data-tema='pamuk']) .biz-pick-all { font-family: var(--font-display); font-size: 1.0625rem; }
+.biz-istek { border-radius: 28px; }
+:where([data-tema='pamuk']) .biz-istek { box-shadow: var(--shadow); }
 .biz-istek-simge { box-shadow: var(--shadow-sm); border-radius: 18px; }
 .biz-konum-kart { border: 0; border-radius: 30px; }
 .biz-konum-kart:active { transform: translateY(2px) scale(0.985, 0.97); }
@@ -2545,8 +2568,10 @@ dialog.ui-dialog[open] { animation: hamur-ac 0.34s var(--ease-hamur); }
 .settings-group + .settings-group { border-top: 3px dotted var(--line); }
 .foto-buyut-foto { box-shadow: 0 0 0 6px var(--surface), var(--shadow-lg); }
 .kapi-form { border: 0; border-radius: 30px; box-shadow: var(--shadow); }
-.kapi-simge { box-shadow: var(--shadow); background: var(--surface); }
-.kapi-cihaz { box-shadow: var(--shadow-oyuk); color: var(--text); }
+.kapi-simge { background: var(--surface); }
+:where([data-tema='pamuk']) .kapi-simge { box-shadow: var(--shadow); }
+.kapi-cihaz { color: var(--text); }
+:where([data-tema='pamuk']) .kapi-cihaz { box-shadow: var(--shadow-oyuk); }
 .kapi-baslik { font-weight: 800; }
 
 /* ---------- Sekme çubuğu: havada yüzen şişkin hap ---------- */
@@ -2554,49 +2579,47 @@ dialog.ui-dialog[open] { animation: hamur-ac 0.34s var(--ease-hamur); }
   left: max(12px, var(--safe-left));
   right: max(12px, var(--safe-right));
   bottom: calc(10px + var(--safe-bottom));
-  max-width: 560px;
-  margin-inline: auto;
   min-height: 66px;
   padding: 5px 6px;
-  border: 0;
-  border-radius: var(--radius-pill);
   background: var(--surface);
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
   box-shadow: var(--shadow-lg);
 }
+:where([data-tema='pamuk']) #tabbar { max-width: 560px; margin-inline: auto; border: 0; border-radius: var(--radius-pill); }
 #tabbar .tab {
   gap: 1px;
   border-radius: 28px;
   color: var(--muted);
-  font-family: var(--font-display);
   font-size: 0.8125rem;
   font-weight: 600;
   line-height: 1.1;
 }
+:where([data-tema='pamuk']) #tabbar .tab { font-family: var(--font-display); }
 @media (max-width: 379px) { #tabbar .tab { font-size: 0.6875rem; } } /* altı sekme: "Yavrumuz" kesilmesin */
 #tabbar .tab-icon {
   width: 46px;
   height: 32px;
   transition: background-color 0.2s var(--ease), transform 0.3s var(--ease-hamur), box-shadow 0.2s ease;
 }
-#tabbar .tab-icon svg { width: 23px; height: 23px; stroke-width: 2.3; }
+#tabbar .tab-icon svg { width: 23px; height: 23px; }
+:where([data-tema='pamuk']) #tabbar .tab-icon svg { stroke-width: 2.3; }
 #tabbar .tab[aria-current='page'] { color: var(--accent-strong); font-weight: 800; }
 #tabbar .tab[aria-current='page'] .tab-icon {
   background: var(--accent);
-  color: var(--accent-ink);
-  box-shadow: var(--shadow-renkli);
-  transform: translateY(-2px);
 }
+:where([data-tema='pamuk']) #tabbar .tab[aria-current='page'] .tab-icon { color: var(--accent-ink); box-shadow: var(--shadow-renkli); transform: translateY(-2px); }
 #tabbar .tab[aria-current='page'] .tab-icon .f { fill: color-mix(in srgb, currentColor 18%, transparent); }
-#tabbar .tab:active .tab-icon { transform: scale(0.92, 0.82); box-shadow: var(--shadow-bas); transition-duration: 0.08s; }
+#tabbar .tab:active .tab-icon { transform: scale(0.92, 0.82); }
+:where([data-tema='pamuk']) #tabbar .tab:active .tab-icon { box-shadow: var(--shadow-bas); transition-duration: 0.08s; }
 #tabbar .tab-rozet { box-shadow: 0 0 0 2px var(--surface); }
-@media (max-width: 359px) { #tabbar { padding-inline: 3px; left: 6px; right: 6px; } #tabbar .tab-icon { width: 40px; } }
+@media (max-width: 359px) { #tabbar { padding-inline: 3px; }
+:where([data-tema='pamuk']) #tabbar { left: 6px; right: 6px; } #tabbar .tab-icon { width: 40px; } }
 body.has-tabbar #app { padding-bottom: calc(var(--tabbar-h) + 10px); }
 
 /* Dokunmatik: şeritler zaten opak. Yukarıdaki telefon kuralı geri dönmesin. */
 @media (pointer: coarse) {
-  #shell, #tabbar { background: var(--surface); }
+  :where([data-tema='pamuk']) #shell, :where([data-tema='pamuk']) #tabbar { background: var(--surface); }
 }
 
 @media (prefers-reduced-motion: reduce) {

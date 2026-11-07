@@ -5,6 +5,7 @@
 import { posix } from 'node:path';
 
 const BAGLAM_RE = /^@(media|supports|container|layer)\b/i;
+const ILE_GELEN = /^(color|font|letter-spacing|line-height|text-|word-spacing|white-space|cursor|visibility)/; // kalıtımla gelen özellikler
 
 /** Metinde i'den sonra dize, yorum ve parantez dışındaki ilk `dur` karakterlerinden birini bulur. */
 function tara(m, i, dur) {
@@ -232,15 +233,13 @@ export function temaFarki({ ata = '', ana = '', tema = '', anaKorur = false }) {
     if (o.tur !== 'kural') continue;
     const k = anahtar(o);
     const ap = hAta.kurallar.get(k);
-    // Ana dalda yeni kural: bağlamlısı ekran uyarlamasıdır, kalır. Bağlamsızı ana temanın süsüdür, geri alınır.
-    if (!ap && (anaKorur || o.baglam.length || o.secici.includes('[data-tema='))) continue;
+    if (!ap) continue; // sonradan gelen kural kalır; Pamuk süsü kaynakta [data-tema='pamuk'] ile ayrılır
     const tp = hTema.kurallar.get(k);
     const geri = [];
     for (const [p] of o.bildirimler) {
       if (tp?.has(p) || geri.some((g) => g[0] === p)) continue;
-      if (ap && p.startsWith('--')) continue; // değişken temada başka seçiciye taşınmış olabilir
-      if (anaKorur && !ap.has(p)) continue;
-      geri.push([p, 'revert']);
+      if (p.startsWith('--') || !ap.has(p)) continue; // değişken temada başka seçiciye taşınmış olabilir; sonradan gelen bildirim kalır
+      geri.push([p, ILE_GELEN.test(p) ? 'inherit' : 'initial']); // revert kullanma: düğmeyi tarayıcı varsayılanına düşürür
       for (const iz of izler(o.secici, p)) degen.add(iz);
     }
     if (geri.length) ogeler.push({ tur: 'kural', baglam: o.baglam, secici: o.secici, bildirimler: geri });
@@ -263,8 +262,9 @@ export function temaFarki({ ata = '', ana = '', tema = '', anaKorur = false }) {
       for (const [p, v] of o.bildirimler) {
         if (v.includes('§')) continue;
         const son = tp.get(p);
-        let degisti = hAna.kurallar.get(k)?.get(p) !== son;
-        if (degisti && anaKorur && hAta.kurallar.get(k)?.get(p) === son) degisti = false;
+        const anaDeger = hAna.kurallar.get(k)?.get(p);
+        let degisti = anaDeger !== son;
+        if (degisti && anaKorur && anaDeger !== undefined && hAta.kurallar.get(k)?.get(p) === son) degisti = false;
         const iz = izler(o.secici, p);
         if (degisti || iz.some((x) => degen.has(x))) {
           secilen.push([p, v]);

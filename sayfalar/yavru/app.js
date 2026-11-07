@@ -49,7 +49,7 @@ const app = document.getElementById('app');
 // Temanın oda çizimleri ve simgeleri: ilk çizimden önce. Piksel'in simgeleri ve çubukları sayfa kurulurken seçilir.
 const PIKSEL = 'piksel';
 const acikTema = readTema().tema;
-if (acikTema === PIKSEL) ikonTemasi(await import('./temalar/piksel/ikonlar.js'));
+if (acikTema === PIKSEL) await import('./temalar/piksel/ikonlar.js').then(ikonTemasi).catch((e) => console.warn('[yavru]', e));
 await odaTemaYukle(acikTema).catch((e) => console.warn('[yavru]', e));
 const cizimStil = h('style', { id: 'yv-cizim-stil' });
 const cizimStilYaz = () => { cizimStil.textContent = CIZIM_CSS + BEBEK_CSS + ODA_CSS + OYUN_SEC_CSS + KART_CSS + GOREV_CSS; };

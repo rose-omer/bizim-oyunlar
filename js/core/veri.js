@@ -420,6 +420,16 @@ function readJson(key, fallback) {
   }
 }
 
+/** Saf: giden kutusu listesinde bu belge için yazma var mı? */
+export function bekleyenYazmaVar(liste, kind, id) {
+  return Array.isArray(liste) && liste.some((o) => o.kind === kind && o.id === id);
+}
+
+/** Bu cihazın sunucuya henüz ulaşmamış yazması var mı? */
+export function bekleyenYazma(roomId, clientId, kind, id) {
+  return bekleyenYazmaVar(readJson(outboxKey(roomId, clientId), []), kind, id);
+}
+
 /**
  * Bir türün canlı koleksiyonu.
  * room: joinRoom sonucu (roomId, me, sendAll, on). recent > 0: yalnız son N belgeyi yükler (sohbet); loadOlder ile geri gider.

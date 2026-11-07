@@ -10,7 +10,7 @@ import {
 } from '../../js/core/identity.js';
 import { yapistirilanLinkiUygula } from '../../js/core/kapi.js';
 import {
-  h, icon, toast, confirmDialog, shareInvite, copyInvite, copyText, initial, formatDay, readTema, parseTema, davetHazirla,
+  h, icon, toast, confirmDialog, shareInvite, copyInvite, copyText, initial, formatDay, readTema, parseTema, davetHazirla, temaGec,
 } from '../../js/core/ui.js';
 import {
   cihazlar, cihazOnayla, cihazReddet, cihazCikar, kurtarmaOlustur, odaGiris, uyelikModu, tasimaLinki, davetOlustur,
@@ -575,12 +575,25 @@ h('span', { class: 'ayar-tema-resim' },
 h('span', { class: 'ayar-tema-ad' }, t.ad))));
 const temaAlan = alan('Tema', temaGrup, { grup: true, yardim: 'Seçtiğin tema ikinizde de anında değişir.' });
 
-function temaSec(id) {
-  if (id === tema.tema) return;
-  const temaAt = new Date().toISOString();
-  temaKaydet({ tema: id, temaAt });
-  temaYenile();
-  yaz(profil.setCift({ tema: id, temaAt }), temaAlan);
+// Önce dosyalar iner, sonra kaydedilir ve ikinize de yazılır. İnemezse seçim geri döner.
+let temaIstek = tema.tema;
+async function temaSec(id) {
+  if (id === temaIstek) return;
+  temaIstek = id;
+  temaGrup.sec(id);
+  let gecti;
+  try {
+    gecti = await temaGec(id);
+  } catch (e) {
+    console.warn('[tema]', e);
+    if (temaIstek !== id) return;
+    tema = readTema();
+    temaIstek = tema.tema;
+    temaYenile();
+    toast('Tema indirilemedi. İnternet gelince yeniden dene.');
+    return;
+  }
+  if (gecti) yaz(profil.setCift({ tema: id }), temaAlan);
 }
 
 const temaRenk = renkGrubu('ayar-tema-renk', TEMA_RENKLERI.map((r) => ({ deger: r.id, ad: r.ad, renk: `var(--sw-${r.id}, ${r.renk})` })), (id) => {
@@ -613,7 +626,7 @@ const sesAnahtar = anahtar('ayar-ses', !isMuted(), (ac) => {
 const sesSatiri = anahtarSatiri('Ses efektleri', 'Oyunlardaki ve dokunuşlardaki kısa sesler.', sesAnahtar);
 window.addEventListener('bizim:mute', () => sesAnahtar.setAttribute('aria-checked', String(!isMuted())));
 window.addEventListener('storage', (e) => { if (e.key === K_TEMA) { tema = parseTema(e.newValue); temaYenile(); } });
-window.addEventListener('bizim:tema', () => { tema = readTema(); temaYenile(); }); // karşı taraf temayı değiştirince
+window.addEventListener('bizim:tema', () => { tema = readTema(); temaIstek = tema.tema; temaYenile(); }); // karşı taraf temayı değiştirince
 
 // ---------- Konum paylaşımı: tek satır, ayrıntı Konum sayfasında ----------
 const konumDurum = h('span', { class: 'chip' });

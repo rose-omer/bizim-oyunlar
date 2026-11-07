@@ -23,6 +23,9 @@ const TEMALAR = {
   popbant: '04-pop-bant', balon: '06-cam-balon', piksel: '07-piksel', dergi: '08-dergi',
   yesilcam: '09-yesilcam', iznik: '10-iznik', sivicam: '11-sivi-cam', sessiz: '12-sessiz',
 };
+// Stile yapılan elle düzeltmeler: temel.css'in sonuna eklenir.
+// Piksel açık + Mercan: vurgu üstündeki yazı karşıtlığı 4,3 kalıyordu.
+const EK = { piksel: ':root[data-renk="mercan"] { --rk-accent: #BA4530; }\n:root { --sw-mercan: #BA4530; }\n' };
 const HARIC_RE = /^(mobil|dev|tests|supabase|node_modules|_site|\.)|yavru-eski|^sayfalar\/yavru\/temalar|^css\/temalar/;
 const YAVRU_RE = /^sayfalar\/yavru\//;
 
@@ -118,7 +121,7 @@ for (const [id, klasor] of Object.entries(TEMALAR)) {
   const temel = taban.importlar.map((a) => importYaz(a, 'css/base.css', hedefTemel)).join('')
     + urlCevir(yaz(taban.ogeler), 'css/base.css', hedefTemel, varlik);
   const sw = ornekler(oku(join(wt, 'css/base.css'))).map(([ad, renk]) => `--sw-${ad}: ${renk};`).join(' ');
-  yazDosya(join(KOK, hedefTemel), `/* Üretildi: dev/tema-uret.mjs. Elle düzenleme. */\n${temel}:root { ${sw} }\n`);
+  yazDosya(join(KOK, hedefTemel), `/* Üretildi: dev/tema-uret.mjs. Elle düzenleme. */\n${temel}:root { ${sw} }\n${EK[id] || ''}`);
 
   // ---------- sayfalar.css ----------
   const parcalar = [];

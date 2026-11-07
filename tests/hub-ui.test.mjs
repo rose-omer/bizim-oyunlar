@@ -93,7 +93,7 @@ test('parseTema: geçerli değerler, varsayılanlar', () => {
   assert.deepEqual(ui.parseTema('{"renk":"mor","mod":"koyu"}'), { renk: 'mor', mod: 'koyu', tema: 'pamuk' });
   assert.deepEqual(ui.parseTema({ renk: 'mavi' }), { renk: 'mavi', mod: 'otomatik', tema: 'pamuk' });
   assert.deepEqual(ui.parseTema({ renk: 'yesil', mod: 'gece', tema: 'yok' }), { renk: 'pembe', mod: 'otomatik', tema: 'pamuk' });
-  assert.deepEqual(ui.parseTema({ tema: 'iznik', temaAt: 'x' }), { renk: 'pembe', mod: 'otomatik', tema: 'iznik', temaAt: 'x' });
+  assert.deepEqual(ui.parseTema({ tema: 'iznik' }), { renk: 'pembe', mod: 'otomatik', tema: 'iznik' });
   assert.deepEqual(ui.parseTema('bozuk{'), { renk: 'pembe', mod: 'otomatik', tema: 'pamuk' });
   for (const r of ui.TEMA_RENKLER) assert.equal(ui.parseTema({ renk: r }).renk, r);
   for (const m of ui.TEMA_MODLAR) assert.equal(ui.parseTema({ mod: m }).mod, m);

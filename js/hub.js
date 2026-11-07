@@ -1961,6 +1961,12 @@ function main() {
   app = document.getElementById('app');
   startAppServices();
   buildHeader();
+  // Simgeleri değişen temaya geçilince üst şerit ve kartlar yeni simgeyle yeniden çizilir.
+  window.addEventListener('bizim:tema-hazir', (e) => {
+    if (!e.detail?.simge) return;
+    buildHeader();
+    paintAll();
+  });
 
   window.addEventListener('hashchange', () => {
     const r = takeHashRoom();

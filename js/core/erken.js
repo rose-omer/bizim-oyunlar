@@ -38,7 +38,14 @@
       l.rel = 'stylesheet';
       l.href = new URL('../../css/temalar/' + id + '/' + dosya, betik).href;
       l.setAttribute('data-tema-css', id);
-      l.onload = l.onerror = function () { if (--bekleyen === 0) ac(); };
+      l.onload = function () { if (--bekleyen === 0) ac(); };
+      // Dosya alınamadı (internet yok): yarım tema yerine varsayılan görünüm. ui.js yeniden dener.
+      l.onerror = function () {
+        var hepsi = document.querySelectorAll('link[data-tema-css]');
+        for (var i = 0; i < hepsi.length; i++) hepsi[i].parentNode.removeChild(hepsi[i]);
+        r.dataset.tema = 'pamuk';
+        ac();
+      };
       return l;
     };
     var gozcu = new MutationObserver(function () {

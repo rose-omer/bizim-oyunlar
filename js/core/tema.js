@@ -1,4 +1,4 @@
-// Ortak tema: seçim iki kişide aynıdır (tür 'cift': { tema, temaAt }). Bu cihazda 'bizim.tema' içinde durur.
+// Ortak tema: seçim iki kişide aynıdır (tür 'cift': { tema }). Bu cihazda 'bizim.tema' içinde durur. Doğru kaynak sunucudaki belgedir.
 // Varsayılan temanın (pamuk) dosyası yoktur: css/base.css ve sayfa CSS'leri odur.
 // Diğerleri için css/temalar/<id>/temel.css base.css'in ardına, sayfalar.css <head>'in sonuna takılır (dev/tema-uret.mjs üretir).
 // Kimlikler js/core/erken.js ile aynı olmalı (test eder).
@@ -42,12 +42,12 @@ export function temaAdi(id) {
 }
 
 /**
- * Saf: odadan gelen seçim bu cihaza uygulanmalı mı? -> tema kimliği | null.
- * Son seçen kazanır (temaAt); bilinmeyen tema (daha yeni istemciden) yok sayılır.
+ * Saf: odadaki seçim bu cihaza uygulanmalı mı? -> tema kimliği | null.
+ * Sunucuya son ulaşan yazma kazanır; telefon saati karara girmez. Bilinmeyen tema (daha yeni istemciden) yok sayılır.
+ * Bu cihazın bekleyen yazması varsa çağıran uygulamaz (veri.js bekleyenYazma): yazma ulaşınca odadaki seçim o olur.
  */
 export function temaKarar(yerel, gelen) {
   if (!gelen || !KIMLIK.has(gelen.tema) || gelen.tema === yerel?.tema) return null;
-  if (yerel?.temaAt && !(String(gelen.temaAt || '') > yerel.temaAt)) return null;
   return gelen.tema;
 }
 
@@ -63,14 +63,17 @@ let sira = 0;
 
 /**
  * Tema CSS'ini sayfa yenilenmeden değiştirir: yenisi yüklenince eskisi çıkar (arada boş kalmaz).
+ * gecerken: dosyalar hazır, geçişle aynı anda çalışır (açık/koyu arada eski temada görünmesin).
  * Yüklenemezse eski tema kalır ve hata fırlatır. -> Promise (bu çağrı hâlâ en sonuncuysa true)
  */
-export async function temaCssGec(id) {
+export async function temaCssGec(id, gecerken = () => {}) {
   const benim = ++sira;
   const eski = [...document.querySelectorAll('link[data-tema-css]')];
   if (eski.length ? eski.every((l) => l.dataset.temaCss === id) : id === VARSAYILAN_TEMA) {
     await Promise.all(eski.map(yuklendi));
-    return benim === sira;
+    if (benim !== sira) return false;
+    gecerken();
+    return true;
   }
   const yeni = [];
   if (id !== VARSAYILAN_TEMA) {
@@ -98,6 +101,7 @@ export async function temaCssGec(id) {
     for (const l of yeni) l.remove();
     return false;
   }
+  gecerken();
   for (const l of eski) l.remove();
   document.documentElement.dataset.tema = id;
   return true;

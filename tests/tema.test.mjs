@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { bekleyenYazmaVar } from '../js/core/veri.js';
 import { TEMALAR, VARSAYILAN_TEMA, IKONLU_TEMALAR, KOYU_TEMALAR, temaGecerli, temaKarar, temaAdi, temaModu } from '../js/core/tema.js';
 
 const KOK = fileURLToPath(new URL('../', import.meta.url));
@@ -26,23 +27,39 @@ test('temaGecerli: bilinen kimlik geçer, kalanı varsayılana düşer', () => {
   assert.equal(temaGecerli('__proto__'), 'pamuk');
 });
 
-test('temaKarar: gelen seçim daha yeniyse uygulanır', () => {
-  const y = { tema: 'pamuk', temaAt: '2026-11-07T10:00:00.000Z' };
-  assert.equal(temaKarar(y, { tema: 'iznik', temaAt: '2026-11-07T10:00:01.000Z' }), 'iznik');
+test('temaKarar: odadaki seçim farklıysa uygulanır; telefon saati hesaba katılmaz', () => {
+  assert.equal(temaKarar({ tema: 'pamuk' }, { tema: 'iznik' }), 'iznik');
+  // Eski istemcinin yazdığı ya da saati geri telefondan gelen tarih karara girmez.
+  assert.equal(temaKarar({ tema: 'pamuk', temaAt: '2026-11-07T12:05:00.000Z' }, { tema: 'dergi', temaAt: '2026-11-07T12:01:00.000Z' }), 'dergi');
 });
 
-test('temaKarar: eski, aynı ve geçersiz seçim yok sayılır', () => {
-  const y = { tema: 'pamuk', temaAt: '2026-11-07T10:00:00.000Z' };
-  assert.equal(temaKarar(y, { tema: 'iznik', temaAt: '2026-11-07T09:00:00.000Z' }), null);
-  assert.equal(temaKarar(y, { tema: 'pamuk', temaAt: '2026-11-07T11:00:00.000Z' }), null);
-  assert.equal(temaKarar(y, { tema: 'bilinmeyen', temaAt: '2026-11-07T11:00:00.000Z' }), null);
-  assert.equal(temaKarar(y, {}), null);
-  assert.equal(temaKarar(y, null), null);
+test('temaKarar: aynı, geçersiz ve boş seçim yok sayılır', () => {
+  assert.equal(temaKarar({ tema: 'pamuk' }, { tema: 'pamuk' }), null);
+  assert.equal(temaKarar({ tema: 'pamuk' }, { tema: 'bilinmeyen' }), null);
+  assert.equal(temaKarar({ tema: 'pamuk' }, {}), null);
+  assert.equal(temaKarar({ tema: 'pamuk' }, null), null);
 });
 
-test('temaKarar: cihazda henüz seçim tarihi yoksa ortak seçim geçerlidir', () => {
-  assert.equal(temaKarar({ tema: 'pamuk' }, { tema: 'dergi', temaAt: '2026-11-07T11:00:00.000Z' }), 'dergi');
-  assert.equal(temaKarar({ tema: 'pamuk' }, { tema: 'dergi' }), 'dergi');
+test('bekleyenYazmaVar: giden kutusunda aynı belge varsa true', () => {
+  const liste = [{ n: 1, kind: 'mesaj', id: 'x' }, { n: 2, kind: 'cift', id: 'cift', patch: { tema: 'iznik' } }];
+  assert.equal(bekleyenYazmaVar(liste, 'cift', 'cift'), true);
+  assert.equal(bekleyenYazmaVar(liste, 'cift', 'baska'), false);
+  assert.equal(bekleyenYazmaVar(liste, 'kisi', 'cift'), false);
+  assert.equal(bekleyenYazmaVar([], 'cift', 'cift'), false);
+  assert.equal(bekleyenYazmaVar(null, 'cift', 'cift'), false);
+});
+
+test('Piksel açık modda Mercan düğme yazısı okunur (en az 4,5)', () => {
+  const s = oku('css/temalar/piksel/temel.css');
+  const hepsi = [...s.matchAll(/:root\[data-renk="mercan"\]\s*\{[^}]*?--rk-accent:\s*(#[0-9A-Fa-f]{6})/g)];
+  const renk = hepsi.at(-1)?.[1];
+  assert.ok(renk, 'mercan vurgusu');
+  const L = (h) => {
+    const k = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255).map((x) => (x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * k[0] + 0.7152 * k[1] + 0.0722 * k[2];
+  };
+  const oran = (L('#F4F2E2') + 0.05) / (L(renk) + 0.05);
+  assert.ok(oran >= 4.5, `${renk}: ${oran.toFixed(2)}`);
 });
 
 test('temaModu: koyu tasarlanan tema otomatikte koyu açılır, kullanıcı seçimi korunur', () => {

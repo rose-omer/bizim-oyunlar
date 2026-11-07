@@ -589,13 +589,13 @@ export function mountShell({ title = '', room = null } = {}) {
 }
 
 // ---------- Tema ----------
-// localStorage 'bizim.tema' = { renk, mod, tema, temaAt } (Ayarlar yazar) → <html data-renk data-mod data-tema>.
+// localStorage 'bizim.tema' = { renk, mod, tema } (Ayarlar yazar) → <html data-renk data-mod data-tema>.
 // Renkler css/base.css'te; tema (iki kişide ortak) tema.js'te. renk ve mod bu cihaza özeldir.
 const TEMA_KEY = 'bizim.tema';
 export const TEMA_RENKLER = ['pembe', 'mor', 'kirmizi', 'mercan', 'mavi'];
 export const TEMA_MODLAR = ['otomatik', 'acik', 'koyu'];
 
-/** Saf: metin (JSON) ya da nesne → { renk, mod, tema, temaAt? }. Bilinmeyen değer varsayılana düşer. */
+/** Saf: metin (JSON) ya da nesne → { renk, mod, tema }. Bilinmeyen değer varsayılana düşer. */
 export function parseTema(raw) {
   let v = raw;
   if (typeof v === 'string') {
@@ -606,7 +606,6 @@ export function parseTema(raw) {
     renk: TEMA_RENKLER.includes(v.renk) ? v.renk : 'pembe',
     mod: TEMA_MODLAR.includes(v.mod) ? v.mod : 'otomatik',
     tema: temaGecerli(v.tema),
-    ...(typeof v.temaAt === 'string' ? { temaAt: v.temaAt } : {}),
   };
 }
 
@@ -629,9 +628,7 @@ export function applyTheme(tema = readTema()) {
   if (typeof document === 'undefined') return t;
   const root = document.documentElement;
   root.dataset.renk = t.renk;
-  root.dataset.mod = temaModu(t.tema, t.mod);
-  adresCubugu(t);
-  temaUygula(t);
+  temaUygula(t).catch((e) => console.warn('[tema]', e));
   return t;
 }
 
@@ -662,43 +659,66 @@ async function simgeGec(id) {
 }
 
 let temaSon = null;
+let temaSoz = Promise.resolve(true);
+let modSon = 'otomatik';
+
+/** -> Promise: tema oturduysa true, yerine yenisi seçildiyse false; dosya alınamazsa hata (eski görünüm kalır). */
 function temaUygula(t) {
-  if (temaSon === t.tema) return;
-  temaSon = t.tema;
-  temaCssGec(t.tema).then(async (gecerli) => {
-    if (!gecerli) return;
+  const root = document.documentElement;
+  modSon = t.mod;
+  if (temaSon === t.tema) {
+    root.dataset.mod = temaModu(t.tema, t.mod);
     adresCubugu(t);
-    if (await simgeGec(t.tema)) {
+    return temaSoz;
+  }
+  temaSon = t.tema;
+  temaSoz = temaCssGec(t.tema, () => { root.dataset.mod = temaModu(t.tema, modSon); }).then(async (gecerli) => {
+    if (!gecerli) return false;
+    adresCubugu({ ...t, mod: modSon });
+    const simge = await simgeGec(t.tema);
+    if (simge) {
       if (sonKabuk) mountShell(sonKabuk);
       if (tabActive !== null) mountTabBar(tabActive);
     }
-    window.dispatchEvent(new CustomEvent('bizim:tema-hazir', { detail: { tema: t.tema } }));
+    window.dispatchEvent(new CustomEvent('bizim:tema-hazir', { detail: { tema: t.tema, simge } }));
+    return true;
   }).catch((e) => {
     temaSon = null;
-    console.warn('[tema]', e);
+    throw e;
   });
+  return temaSoz;
 }
 
-/** Odadan gelen seçimi (tür 'cift') bu cihaza uygular. ad varsa kullanıcıya haber verir. */
-function temaAl(veri, ad) {
-  const yerel = readTema();
-  const yeni = temaKarar(yerel, veri);
-  if (!yeni) return;
-  const kayit = { ...readTemaRaw(), tema: yeni };
-  if (veri.temaAt) kayit.temaAt = veri.temaAt;
+/**
+ * Temayı bu cihazda değiştirir: önce dosyalar iner, sonra kaydedilir (yarım tema kalmaz).
+ * -> true: geçti; false: yerine yenisi seçildi. Dosya alınamazsa hata fırlatır, kayıt değişmez.
+ */
+export async function temaGec(id) {
+  const kayit = { ...readTemaRaw(), tema: temaGecerli(id) };
+  delete kayit.temaAt; // eski sürümün alanı
+  if (!(await temaUygula(parseTema(kayit)))) return false;
   try {
     globalThis.localStorage?.setItem(TEMA_KEY, JSON.stringify(kayit));
   } catch { /* gizli sekme: yalnız bu sayfa değişir */ }
-  applyTheme(kayit);
   window.dispatchEvent(new CustomEvent('bizim:tema', { detail: kayit }));
-  if (ad) toast(`${ad} temayı ${temaAdi(yeni)} yaptı.`);
+  return true;
+}
+
+/** Odadan gelen seçimi (tür 'cift') bu cihaza uygular. ad varsa kullanıcıya haber verir. */
+async function temaAl(veri, room, ad) {
+  const yeni = temaKarar(readTema(), veri);
+  if (!yeni) return;
+  const { bekleyenYazma } = await import('./veri.js');
+  if (bekleyenYazma(room.roomId, room.me?.clientId, 'cift', 'cift')) return; // kendi seçimim yolda: o ulaşınca seçim odur
+  if (await temaGec(yeni) && ad) toast(`${ad} temayı ${temaAdi(yeni)} yaptı.`);
 }
 
 const TEMA_CEK_KEY = 'bizim.tema.cekildi';
 const TEMA_CEK_MS = 60000;
 
 /** Kapalıyken yapılan seçim için odadaki son hâli okur (en çok dakikada bir). */
-function temaCek(roomId) {
+function temaCek(room) {
+  const { roomId } = room;
   try {
     if (Date.now() - Number(sessionStorage.getItem(TEMA_CEK_KEY) || 0) < TEMA_CEK_MS) return;
     sessionStorage.setItem(TEMA_CEK_KEY, String(Date.now()));
@@ -706,7 +726,7 @@ function temaCek(roomId) {
   uyelikGecince(roomId, () => {
     import('./veri.js')
       .then((m) => m.listDocs(roomId, 'cift'))
-      .then((belgeler) => temaAl(belgeler.find((d) => d.id === 'cift')?.data))
+      .then((belgeler) => temaAl(belgeler.find((d) => d.id === 'cift')?.data, room))
       .catch((e) => console.warn('[tema]', e));
   }, 'tema');
 }
@@ -714,11 +734,13 @@ function temaCek(roomId) {
 /** Odadaki ortak temayı izler: açılışta okur, karşı taraf değiştirince hemen uygular. -> abonelikten çık */
 export function temaEsitle(room) {
   if (!room?.roomId || typeof room.on !== 'function' || room.backend === 'solo') return () => {};
-  temaCek(room.roomId);
+  temaCek(room);
   const off = room.on('message', (msg, from) => {
-    if (msg?.t === 'veri' && msg.kind === 'cift' && msg.doc?.id === 'cift') temaAl(msg.doc.data, from?.name);
+    if (msg?.t === 'veri' && msg.kind === 'cift' && msg.doc?.id === 'cift') {
+      temaAl(msg.doc.data, room, from?.name).catch((e) => console.warn('[tema]', e));
+    }
   });
-  const gorunur = () => { if (document.visibilityState === 'visible') temaCek(room.roomId); };
+  const gorunur = () => { if (document.visibilityState === 'visible') temaCek(room); };
   document.addEventListener('visibilitychange', gorunur);
   return () => {
     off?.();

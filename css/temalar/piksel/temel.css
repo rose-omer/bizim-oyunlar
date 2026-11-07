@@ -719,3 +719,5 @@ dialog.foto-buyut::backdrop { background: var(--perde-doku), color-mix(in srgb, 
 .dt-hole { clip-path: var(--daire); box-shadow: none; }
 .sd-iz, .rz-cubuk, .so-cubuk, .kb-cubuk { -webkit-mask: repeating-linear-gradient(90deg, #000 0 9px, transparent 9px 12px); mask: repeating-linear-gradient(90deg, #000 0 9px, transparent 9px 12px); }
 :root { --sw-pembe: #A8214F; --sw-mor: #8A3FB0; --sw-kirmizi: #C4262E; --sw-mercan: #C24A33; --sw-mavi: #2F5FB3; }
+:root[data-renk="mercan"] { --rk-accent: #BA4530; }
+:root { --sw-mercan: #BA4530; }

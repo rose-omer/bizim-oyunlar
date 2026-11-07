@@ -299,3 +299,8 @@
   .dt-hole.is-win .dt-disc { animation: none; }
   .dt-mark.is-new path, .dt-mark.is-new circle, .dt-strike line { animation: none; stroke-dasharray: none; }
 }
+
+/* Pamuk Şeker: tahta lavanta hamur, oyuklar gömük; XOX çizgileri belirgin. */
+.dt-board.dort { border: 0; background: var(--tint-2); }
+.dt-hole { background: var(--surface); box-shadow: var(--shadow-oyuk); }
+.dt-board.xox { gap: 6px; background: var(--tint-2); }

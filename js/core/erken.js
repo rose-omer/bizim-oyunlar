@@ -30,7 +30,7 @@
       + 'box-sizing:border-box;width:calc(100% - 32px);max-width:320px;padding:24px 20px;border-radius:22px;'
       + 'display:flex;flex-direction:column;align-items:center;gap:16px;text-align:center;'
       + 'background:var(--surface,#fff);color:var(--text,#3B1F2B);border:1px solid var(--line,#EADAD1);'
-      + 'box-shadow:0 24px 48px -20px rgb(94 43 79 / .4);font:600 1rem/1.5 Nunito,ui-rounded,"Segoe UI",system-ui,sans-serif';
+      + 'box-shadow:0 24px 48px -20px rgb(94 43 79 / .4);font:600 1rem/1.5 Quicksand,ui-rounded,"Segoe UI",system-ui,sans-serif';
     var metin = document.createElement('p');
     metin.style.margin = '0';
     metin.textContent = 'Kilit yüklenemedi.';

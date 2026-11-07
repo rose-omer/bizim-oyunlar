@@ -182,3 +182,6 @@
 @media (prefers-reduced-motion: reduce) {
   .cz-banner { animation: none; }
 }
+
+/* Pamuk Şeker: vurgu yazısı güçlü tonda. */
+.cz-word { color: var(--accent-strong); }

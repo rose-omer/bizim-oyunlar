@@ -12,11 +12,11 @@ export const SURUM = '2.0';
 // Renkler base.css açık tema --rk-accent değerleri; yalnız örnek göstermek için.
 export const K_TEMA = 'bizim.tema';
 export const TEMA_RENKLERI = [
-  { id: 'pembe', ad: 'Pembe', renk: '#C2375C' },
-  { id: 'mor', ad: 'Mor', renk: '#8A3FB0' },
-  { id: 'kirmizi', ad: 'Kırmızı', renk: '#C4262E' },
-  { id: 'mercan', ad: 'Mercan', renk: '#C24A33' },
-  { id: 'mavi', ad: 'Mavi', renk: '#2F5FB3' },
+  { id: 'pembe', ad: 'Pembe', renk: '#E8478B' },
+  { id: 'mor', ad: 'Mor', renk: '#A963EE' },
+  { id: 'kirmizi', ad: 'Kırmızı', renk: '#F0505A' },
+  { id: 'mercan', ad: 'Mercan', renk: '#EE5F35' },
+  { id: 'mavi', ad: 'Mavi', renk: '#4C8DF0' },
 ];
 export const TEMA_MODLARI = [
   { id: 'otomatik', ad: 'Otomatik' },
@@ -26,7 +26,7 @@ export const TEMA_MODLARI = [
 
 // Kişi rengi (kisi.renk): CSS renk dizesi olarak saklanır; başka sayfalar doğrudan kullanabilir.
 export const KISI_RENKLERI = [
-  { ad: 'Gül', renk: '#C2375C' },
+  { ad: 'Gül', renk: '#E8478B' },
   { ad: 'Erik', renk: '#5E2B4F' },
   { ad: 'Mercan', renk: '#D9573F' },
   { ad: 'Gece mavisi', renk: '#2F6DB5' },

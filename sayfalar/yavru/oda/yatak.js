@@ -10,14 +10,22 @@ const PENCERE = '<path class="yvo-cam" d="M250 234V150a54 54 0 0 1 108 0v84Z"/>'
 
 // Sarkan lamba: ışık (huzme ve ampul) gece söner.
 const LAMBA = '<g class="yvo-yatak-isik"><path class="yvo-sicak" d="M38 172h44l26 62a48 12 0 0 1-96 0Z" opacity="0.22"/><path class="yvo-sicak" d="M50 172a10 9 0 0 0 20 0Z"/></g>'
-  + '<path class="yvo-cizgi" d="M60 90v52"/><path class="yvo-esya2" d="M34 172a26 30 0 0 1 52 0Z"/>';
+  + '<path class="yvo-cizgi" d="M60 90v52"/><path class="yvo-esya2" d="M32 174a28 34 0 0 1 56 0 4 4 0 0 1-4 4H36a4 4 0 0 1-4-4Z"/>';
 
-const YILDIZLAR = '<path class="yvo-esya2" d="M46 220l2.6 5.4 5.9.8-4.3 4.1 1 5.9-5.2-2.8-5.2 2.8 1-5.9-4.3-4.1 5.9-.8Z"/>'
-  + '<path class="yvo-esya2" d="M70 262l1.9 3.9 4.3.6-3.1 3 .7 4.3-3.8-2-3.8 2 .7-4.3-3.1-3 4.3-.6Z"/>';
+const YILDIZ = 'M46 220l2.6 5.4 5.9.8-4.3 4.1 1 5.9-5.2-2.8-5.2 2.8 1-5.9-4.3-4.1 5.9-.8Z';
+const YILDIZLAR = `<path class="yvo-esya2" d="${YILDIZ}"/>`
+  + `<path class="yvo-esya2" d="${YILDIZ}" transform="translate(112 -122)"/>`
+  + `<path class="yvo-esya2" d="${YILDIZ}" transform="translate(166 -136)"/>`;
 
-const HALI = '<ellipse class="yvo-zemin2" cx="195" cy="430" rx="164" ry="28"/>';
+// Beşik bebeğin arkasında: yalnız kenarları ve parmaklıkların ucu görünür.
+const BESIK = '<path class="yvo-yatak-cubuk" d="M76 274V354M100 274V354M124 274V354M266 274V354M290 274V354M314 274V354"/>'
+  + '<rect class="yvo-esya" x="56" y="262" width="278" height="12" rx="6"/>'
+  + '<rect class="yvo-esya2" x="48" y="248" width="14" height="110" rx="7"/><rect class="yvo-esya2" x="328" y="248" width="14" height="110" rx="7"/>'
+  + '<circle class="yvo-esya" cx="55" cy="244" r="9"/><circle class="yvo-esya" cx="335" cy="244" r="9"/>';
 
-export const sahne = () => sar('yatak', TABAN + PENCERE + LAMBA + YILDIZLAR + HALI);
+const HALI = '<ellipse class="yvo-zemin2 yvo-puf" cx="195" cy="430" rx="164" ry="28"/>';
+
+export const sahne = () => sar('yatak', TABAN + PENCERE + LAMBA + YILDIZLAR + BESIK + HALI);
 
 export const CSS = `
 .yv-sahne[data-gece] .yvo-svg[data-oda='yatak'] {
@@ -25,9 +33,11 @@ export const CSS = `
   --yvo-duvar2: var(--yvo-gece);
   --yvo-zemin: var(--yvo-gece2);
   --yvo-zemin2: color-mix(in srgb, var(--yvo-gece2) 94%, var(--yvo-ay));
+  --yvo-esya: color-mix(in srgb, var(--yvo-gece2) 92%, var(--yvo-ay));
   --yvo-esya2: color-mix(in srgb, var(--yvo-gece2) 88%, var(--yvo-ay));
   --yvo-cam: color-mix(in srgb, var(--yvo-cam2) 25%, var(--yvo-gece));
 }
+.yvo-yatak-cubuk { fill: none; stroke: var(--yvo-esya2); stroke-width: 6; stroke-linecap: round; }
 .yvo-yatak-gece { opacity: 0; }
 .yv-sahne[data-gece] .yvo-yatak-gece { opacity: 1; }
 .yv-sahne[data-gece] .yvo-yatak-isik { opacity: 0; }

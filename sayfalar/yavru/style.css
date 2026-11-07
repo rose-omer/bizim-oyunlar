@@ -598,3 +598,193 @@ body.yv-tam .toasts { bottom: calc(var(--tabbar-h) + 100px); }
 @keyframes yv-ninni-kirp { 0%, 38%, 100% { transform: scaleY(1); } 50% { transform: scaleY(0.12); } 60% { transform: scaleY(0.85); } 72% { transform: scaleY(0.1); } 86% { transform: scaleY(1); } }
 @keyframes yv-sallan { 0%, 100% { transform: none; } 20% { transform: rotate(-5deg); } 50% { transform: rotate(4deg); } 80% { transform: rotate(-2deg); } }
 @keyframes yv-nota { 0% { opacity: 0; transform: translateY(10px) scale(0.7); } 20% { opacity: 1; } 100% { opacity: 0; transform: translate(14px, -70px) rotate(12deg); } }
+
+/* ==========================================================================
+   Pamuk Şeker: Yavrumuz, stilin en güçlü yeri. Sahne oyuncak diorama kutusu; düğmeler şişkin şeker.
+   Düzen aynı; malzeme değişir. Oda renkleri oda/ortak.js.
+   ========================================================================== */
+.yv-ikon { stroke-width: 2.3; }
+.yv-ikon.renkli { stroke-width: 1.6; }
+
+/* Önceki düzenden: odanın görünmesi için bebek biraz küçük, kimlik ve değerler göz önünde, ses bir dokunuşta. */
+.yv-dokun { width: min(78cqw, 66cqh); }
+@media (max-height: 680px) { .yv-dokun { width: min(86cqw, 76cqh); margin-bottom: 3cqh; } }
+.yv-durum-ust { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.yv-soz { min-width: 0; }
+.yv-rozetler { display: flex; flex: none; flex-wrap: wrap; justify-content: flex-end; gap: 4px; max-width: 58%; padding-top: 2px; }
+.yv-rozetler[hidden] { display: none; }
+.yv-rozet { box-shadow: var(--shadow-sm); color: var(--text); font-family: var(--font-display); font-weight: 700; }
+.yv-rozet.evre { background: var(--tint-1); }
+.yv-rozet.kisilik { background: var(--tint-6); }
+.yv-ust-sag { display: flex; flex: none; flex-direction: column; align-items: flex-end; gap: 8px; }
+.yv-ust-ses {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  color: var(--text);
+  cursor: pointer;
+  transition: box-shadow 0.18s ease, transform 0.26s var(--ease-hamur);
+}
+.yv-ust-ses:active { transform: scale(0.94, 0.88); box-shadow: var(--shadow-bas); transition-duration: 0.08s; }
+.yv-ust-ses:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.yv-ust-nokta { margin-right: 3px; vertical-align: 1px; }
+.yv-mik, .yv-salla { top: calc(114px + var(--safe-top)); }
+.yv-halka-deger {
+  position: absolute;
+  right: -5px;
+  bottom: -3px;
+  min-width: 24px;
+  padding: 0 4px;
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: 0.75rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 18px;
+  text-align: center;
+}
+.yv-oda-sekme[data-uyari] .yv-halka-deger { background: var(--accent); color: var(--accent-ink); }
+@media (prefers-reduced-motion: reduce) { .yv-ust-ses:active { transform: none; } }
+
+.yv-sahne {
+  margin: calc(8px + var(--safe-top)) 10px 0;
+  border-radius: 38px;
+  box-shadow: var(--kutu-dis);
+}
+/* Kutunun şişkin çerçevesi: bebek ve oda bunun altında kalır, dokunuşu geçirir. */
+.yv-sahne::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow:
+    inset 0 0 0 5px color-mix(in srgb, var(--surface) 92%, transparent),
+    inset 5px 7px 10px 5px var(--kutu-isik),
+    inset -7px -10px 14px 5px var(--kutu-golge);
+}
+.yv-ust { top: 13px; left: 15px; right: 15px; }
+.yv-ust-kart, .yv-ust-jeton { background: var(--surface); box-shadow: var(--shadow); transition: box-shadow 0.18s ease, transform 0.26s var(--ease-hamur); }
+.yv-ust-kart { padding: 4px 16px 5px; border-radius: 24px; }
+.yv-ust-kart:active, .yv-ust-jeton:active { transform: scale(0.97, 0.93); box-shadow: var(--shadow-bas); transition-duration: 0.08s; }
+.yv-ust-ad { font-size: 1.375rem; font-weight: 800; line-height: 1.15; letter-spacing: 0; }
+.yv-ust-alt { color: var(--muted); font-weight: 700; }
+.yv-ust-jeton { font-family: var(--font-display); font-size: 1.125rem; }
+.yv-kisayol-btn { box-shadow: var(--shadow); font-family: var(--font-display); }
+.yv-mik, .yv-salla { box-shadow: var(--shadow-sm); }
+
+.yv-alt { padding: 12px 14px 10px; }
+.yv-soz { font-size: 1.4375rem; font-weight: 800; line-height: 1.15; }
+.yv-durum-alt { color: var(--muted); font-weight: 700; }
+
+/* Eylem: şişkin şeker; üç düğme üç tat. */
+.yv-eylem[data-eylem='mama'], .yv-eylem[data-eylem='yika'], .yv-eylem[data-ek='oyunlar'] { --seker: var(--tint-1); }
+.yv-eylem[data-eylem='meyve'], .yv-eylem[data-eylem='uyut'], .yv-eylem[data-eylem='uyandir'], .yv-eylem[data-eylem='oyna'] { --seker: var(--tint-6); }
+.yv-eylem[data-eylem='tatli'], .yv-eylem[data-ek='ninni'], .yv-eylem[data-ek='magaza'] { --seker: var(--tint-4); }
+.yv-eylem[data-eylem='lazimlik'], .yv-eylem[data-ek='konus'] { --seker: var(--tint-2); }
+.yv-eylem[data-ek='durula'] { --seker: var(--tint-5); }
+.yv-eylem {
+  min-height: 94px;
+  border-radius: 30px;
+  background: var(--seker, var(--surface));
+  box-shadow: var(--shadow);
+  transition: background-color 0.15s ease, box-shadow 0.18s ease, transform 0.28s var(--ease-hamur), opacity 0.2s ease;
+}
+.yv-eylem-ikon {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+.yv-eylem-ad { font-family: var(--font-display); font-size: 1.0625rem; font-weight: 800; line-height: 1.15; }
+.yv-eylem-alt { color: var(--text); opacity: 0.86; font-weight: 700; }
+.yv-eylem-favori { top: 8px; right: 10px; }
+.yv-eylem[data-ana] { background: var(--accent); box-shadow: var(--shadow-renkli); }
+.yv-eylem[data-ana] .yv-eylem-ikon { color: var(--text); }
+.yv-eylem[data-eylem='ilac'] { background: var(--good-soft); }
+.yv-eylem[data-eylem='ilac'] .yv-eylem-ikon { width: 38px; height: 38px; }
+.yv-eylem:active:not([aria-disabled='true']) {
+  transform: translateY(3px) scale(0.97, 0.9);
+  box-shadow: var(--shadow-bas);
+  transition: box-shadow 0.08s ease, transform 0.1s ease-out;
+}
+@media (hover: hover) {
+  .yv-eylem:hover:not([aria-disabled='true']):not([data-ana]) { background: var(--seker, var(--surface)); box-shadow: var(--shadow-lg); }
+}
+.yv-eylem[aria-disabled='true'] { background: var(--surface-2); box-shadow: var(--shadow-oyuk); color: var(--muted); }
+.yv-eylem[aria-disabled='true'] .yv-eylem-alt { color: var(--muted); opacity: 1; }
+.yv-hayalet { box-shadow: var(--shadow-lg); }
+
+/* Odalar sırası: yuvarlak şekerler, seçili olan kalkık. */
+.yv-odalar {
+  gap: 4px;
+  padding: 4px 8px 8px;
+  border-top: 0;
+  border-radius: 26px 26px 0 0;
+  background: var(--bg);
+}
+.yv-oda-sekme {
+  gap: 3px;
+  padding: 4px 0 4px;
+  border-radius: 24px;
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: 0.875rem;
+  font-weight: 600;
+  transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+.yv-oda-sekme[aria-selected='true'] { background: none; color: var(--accent-strong); font-weight: 800; }
+@media (hover: hover) { .yv-oda-sekme:hover:not([aria-selected='true']) { background: none; } }
+.yv-halka {
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  transition: transform 0.3s var(--ease-hamur), background-color 0.2s ease, box-shadow 0.18s ease;
+}
+.yv-halka-iz { stroke: var(--surface-2); stroke-width: 5; }
+.yv-halka-dolu { stroke-width: 5; }
+.yv-oda-sekme[aria-selected='true'] .yv-halka { background: var(--accent-soft); transform: translateY(-3px) scale(1.06); box-shadow: var(--shadow); }
+.yv-oda-sekme:active .yv-halka { transform: scale(0.92, 0.84); box-shadow: var(--shadow-bas); transition-duration: 0.08s; }
+.yv-oda-nokta { box-shadow: 0 0 0 2.5px var(--surface); }
+.yv-oda-sekme[aria-selected='true'] .yv-oda-nokta { box-shadow: 0 0 0 2.5px var(--accent-soft); }
+@media (max-height: 680px) {
+  .yv-eylem { min-height: 76px; border-radius: 26px; }
+  .yv-eylem-ikon { width: 32px; height: 32px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .yv-eylem:active:not([aria-disabled='true']), .yv-ust-kart:active, .yv-ust-jeton:active, .yv-oda-sekme:active .yv-halka { transform: none; }
+  .yv-oda-sekme[aria-selected='true'] .yv-halka { transform: none; }
+}
+
+/* Pamuk Şeker: mağaza, görev şeridi, oyun listesi, Yavrumuz kartı */
+body .yvm-sayfa, body .yv-alt-sayfa { border-radius: 34px 34px 0 0; }
+body .yvm-baslik, body .yvm-oniz-ad { font-weight: 800; }
+body .yvm-bakiye { background: var(--surface); box-shadow: var(--shadow-sm); font-family: var(--font-display); }
+body .yvm-sekmeler { padding: 5px; border-radius: 26px; box-shadow: var(--shadow-oyuk); }
+body .yvm-sekmeler > button { border-radius: 21px; font-family: var(--font-display); font-size: 1.0625rem; }
+body .yvm-sekmeler > button[aria-selected='true'] { background: var(--raised); box-shadow: var(--shadow-sm); }
+body .yvm-oniz { border-radius: 30px; box-shadow: 0 0 0 8px var(--bg), var(--shadow); }
+body .yvm-filtre { font-family: var(--font-display); font-size: 0.9375rem; font-weight: 600; color: var(--text); }
+body .yvm-filtre[aria-pressed='true'] { background-color: var(--accent); color: var(--accent-ink); font-weight: 800; }
+body .yvm-kart { border-radius: 28px; box-shadow: var(--shadow); }
+body .yvm-gorsel { border-radius: 21px; box-shadow: var(--shadow-oyuk); }
+body .yvm-eylem { font-family: var(--font-display); font-size: 1.0625rem; font-weight: 800; }
+body .yvm-kart[data-durum='al'] .yvm-eylem { box-shadow: var(--shadow-renkli); }
+body .yvm-kart[data-durum='giyili'] { box-shadow: 0 0 0 3px var(--accent), var(--shadow); }
+body .yvm-cikar { border: 0; background: var(--surface); box-shadow: var(--shadow-sm); font-family: var(--font-display); }
+body .yvg-serit { border: 0; background: var(--surface); box-shadow: var(--shadow-sm); border-radius: 26px; }
+body .yvg-hap { background: var(--tint-6); box-shadow: var(--shadow-sm); color: var(--text); font-family: var(--font-display); font-weight: 800; }
+body .yvos-kutu { border-radius: 18px; box-shadow: var(--shadow-sm); }
+body .yvos-iz { height: 8px; border-radius: 4px; box-shadow: var(--shadow-oyuk); background: var(--surface-2); }
+body .yvos-dolu { border-radius: 4px; box-shadow: var(--dolu-isik); }

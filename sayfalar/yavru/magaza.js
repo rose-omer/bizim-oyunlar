@@ -392,9 +392,9 @@ export function magazaAc(kok, { veri, kim, simdi = () => Date.now(), yaz, bebekO
 /** Mağaza stili (yvm-*). Renkler base.css değişkenlerinden; iki tema; hareket yalnız isteyene. */
 export const MAGAZA_CSS = `
 /* Görsel kutusu iki temada açık: koyu parçalar seçilsin. */
-:root { --yvm-tabak: #F8EEE8; }
-@media (prefers-color-scheme: dark) { :root:not([data-mod="acik"]) { --yvm-tabak: #F3E7DF; } }
-:root[data-mod="koyu"] { --yvm-tabak: #F3E7DF; }
+:root { --yvm-tabak: #FCEAF4; }
+@media (prefers-color-scheme: dark) { :root:not([data-mod="acik"]) { --yvm-tabak: #F3E4F0; } }
+:root[data-mod="koyu"] { --yvm-tabak: #F3E4F0; }
 .yvm-kat { position: fixed; inset: 0; z-index: 870; display: grid; grid-template-columns: minmax(0, 1fr); align-items: end; justify-items: center; }
 .yvm-kat [hidden] { display: none !important; }
 .yvm-kat .yv-ikon, .yvm-kat .yv-para { display: block; flex: none; }

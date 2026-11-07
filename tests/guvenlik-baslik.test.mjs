@@ -81,14 +81,14 @@ test('fontlar sitede: Google Fonts yok, @font-face yerel WOFF2 ve font-display: 
   assert.doesNotMatch(base, DIS);
   assert.doesNotMatch(oku('sw.js'), DIS);
   const yuzler = base.match(/@font-face\s*{[^}]*}/g) || [];
-  assert.equal(yuzler.length, 3);
+  assert.equal(yuzler.length, 12); // 2 aile × 3 ağırlık × latin ve latin-ext
   for (const y of yuzler) {
     assert.match(y, /font-display: swap/);
     const dosya = y.match(/url\('\.\.\/(assets\/fonts\/[a-z-]+\.woff2)'\)/)?.[1];
     assert.ok(dosya, y);
     assert.ok(statSync(join(KOK, dosya)).size > 10_000, dosya);
   }
-  for (const y of ['assets/fonts/OFL-Fraunces.txt', 'assets/fonts/OFL-Nunito.txt']) assert.match(oku(y), /SIL OPEN FONT LICENSE/);
+  for (const y of ['assets/fonts/OFL-Baloo2.txt', 'assets/fonts/OFL-Quicksand.txt']) assert.match(oku(y), /SIL OPEN FONT LICENSE/);
 });
 
 test('referrer: YouTube gömmesi ve OSM karoları kaynak bekler; no-referrer olmaz', () => {

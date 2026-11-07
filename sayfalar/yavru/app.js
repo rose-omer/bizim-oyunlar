@@ -38,7 +38,7 @@ import { magazaAc as magazaKatmani } from './magaza.js';
 import { buyumeSahnesi, buyumeSahnesiGerekli, kutlamaSahnesi } from './buyume-sahne.js';
 import { ninniCal, ninniRuhu } from './ninni.js';
 import { tazelikIzleyici, otoYazimIzinli, kazaKarari } from './tazelik.js';
-import { ikon, paraIkon, ODA_IKON, EYLEM_IKON } from './ikonlar.js';
+import { ikon, renkliIkon, paraIkon, ODA_IKON, EYLEM_IKON } from './ikonlar.js';
 import { altSayfaAc } from './alt-sayfa.js';
 import { oyunSecKur, CSS as OYUN_SEC_CSS } from './oyun-sec.js';
 import { bilgeKartiKur, CSS as KART_CSS } from './bilge-karti.js';
@@ -68,7 +68,7 @@ const IHTIYAC_ADI = { tokluk: 'Tokluk', mutluluk: 'Mutluluk', temizlik: 'Temizli
 function ikonYaz(el, ad, boy = 28) {
   if (el.dataset.ikon === ad) return;
   el.dataset.ikon = ad;
-  el.innerHTML = ikon(ad, boy);
+  el.innerHTML = renkliIkon(ad, boy);
 }
 const IKON = 'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"';
 const IHTIYAC_IKON = {
@@ -159,13 +159,22 @@ const ustAd = h('span', { class: 'yv-ust-ad' });
 const ustAlt = h('span', { class: 'yv-ust-alt' });
 const jetonSayi = h('span', { class: 'yv-ust-sayi' });
 const ustJeton = h('button', { type: 'button', class: 'yv-ust-jeton', onclick: () => magazaAc() }, h('span', { html: paraIkon(20) }), jetonSayi);
+const ustSes = h('button', { type: 'button', class: 'yv-ust-ses', onclick: () => { setMuted(!isMuted()); sesCiz(); if (kartSayfa) kartCiz(); } });
 const ustEl = h('header', { class: 'yv-ust' },
   h('button', { type: 'button', class: 'yv-ust-kart', onclick: () => kartAc() }, ustAd, ustAlt),
-  ustJeton);
+  h('div', { class: 'yv-ust-sag' }, ustJeton, ustSes));
+/** Üstteki ses düğmesi: kart açıkken karttaki düğmeyle aynı ayarı değiştirir. */
+function sesCiz() {
+  const sessiz = isMuted();
+  ustSes.innerHTML = ikon(sessiz ? 'sessiz' : 'ses', 22);
+  ustSes.setAttribute('aria-label', sessiz ? 'Sesi aç' : 'Sesi kapat');
+}
+sesCiz();
 const sahne = h('section', { class: 'yv-sahne', 'aria-label': 'Yavrumuz' },
   odaZeminEl, h('span', { class: 'yv-gok', 'aria-hidden': 'true' }), ustEl, mikEl, lazimlikEl, dokunBtn, sallaBtn, kisayolEl, parcaEl);
 const durumAltEl = h('p', { class: 'yv-durum-alt' });
-const durumEl = h('div', { class: 'yv-durum' }, sozEl, durumAltEl);
+const rozetEl = h('div', { class: 'yv-rozetler' });
+const durumEl = h('div', { class: 'yv-durum' }, h('div', { class: 'yv-durum-ust' }, sozEl, rozetEl), durumAltEl);
 
 // Oda sekmeleri: otomatik etkinleşen sekme listesi (oklar, Home, End); sekme paneli odanın eylem düğmeleri.
 const odaSekme = {};
@@ -173,12 +182,13 @@ const HALKA_C = Math.round(2 * Math.PI * 22 * 10) / 10;
 const odaSekmeEl = h('div', { class: 'yv-odalar', role: 'tablist', 'aria-label': 'Odalar', hidden: true, onkeydown: sekmeTus },
   O.ODALAR.map((o) => {
     const nokta = h('span', { class: 'yv-oda-nokta', 'aria-hidden': 'true', hidden: true });
-    const halka = h('span', { class: 'yv-halka', 'aria-hidden': 'true', html: `<svg viewBox="0 0 52 52" focusable="false"><circle class="yv-halka-iz" cx="26" cy="26" r="22"/><circle class="yv-halka-dolu" cx="26" cy="26" r="22" stroke-dasharray="0 ${HALKA_C}"/></svg><span class="yv-halka-ikon">${ikon(ODA_IKON[o.id], 23)}</span>` }, nokta);
+    const deger = h('span', { class: 'yv-halka-deger' });
+    const halka = h('span', { class: 'yv-halka', 'aria-hidden': 'true', html: `<svg viewBox="0 0 52 52" focusable="false"><circle class="yv-halka-iz" cx="26" cy="26" r="22"/><circle class="yv-halka-dolu" cx="26" cy="26" r="22" stroke-dasharray="0 ${HALKA_C}"/></svg><span class="yv-halka-ikon">${renkliIkon(ODA_IKON[o.id], 26)}</span>` }, nokta, deger);
     const btn = h('button', {
       type: 'button', role: 'tab', id: `yv-oda-${o.id}`, class: 'yv-oda-sekme', 'aria-controls': 'yv-oda-panel',
       dataset: { oda: o.id }, onclick: () => odaSec(o.id),
     }, halka, h('span', { class: 'yv-oda-ad' }, o.kisa));
-    odaSekme[o.id] = { btn, nokta, dolu: halka.querySelector('.yv-halka-dolu') };
+    odaSekme[o.id] = { btn, nokta, deger, dolu: halka.querySelector('.yv-halka-dolu') };
     return btn;
   }));
 
@@ -434,8 +444,9 @@ function cizOda() {
   const tuvalet = T.tuvaletDurumu(y, simdi);
   const durumlar = O.odaDurumlari({ ihtiyac: M.ihtiyaclar(y, simdi), tuvaletDeger: tuvalet?.deger, cisVar: !!tuvalet?.cisVar, uyuyor });
   for (const o of O.ODALAR) {
-    const { btn, nokta, dolu } = odaSekme[o.id];
+    const { btn, nokta, dolu, deger } = odaSekme[o.id];
     const d = durumlar[o.id];
+    deger.textContent = String(d.deger);
     const secili = o.id === oda;
     btn.setAttribute('aria-selected', String(secili));
     btn.tabIndex = secili ? 0 : -1;
@@ -511,6 +522,14 @@ function cizBilgi() {
   adOneriEl.hidden = !adYok;
   adBaslik.textContent = yumurta ? 'Yumurtamız' : y.ad || 'Yavrumuz';
   adBtn.hidden = yumurta;
+  rozetEl.hidden = yumurta;
+  if (!yumurta) {
+    const kisilik = Object.hasOwn(KISILIKLER, y.kisilik ?? '') ? KISILIKLER[y.kisilik] : null;
+    rozetEl.replaceChildren(
+      h('span', { class: 'chip yv-rozet evre' }, E.evreSon(y)?.unvan || ASAMA_ADI[y.asama]),
+      ...(kisilik ? [h('span', { class: 'chip yv-rozet kisilik', title: kisilik.aciklama }, kisilik.ad,
+        h('span', { class: 'sr-only' }, `: ${kisilik.aciklama}`))] : []));
+  }
   ustAd.textContent = adBaslik.textContent;
   ustJeton.hidden = yumurta;
   if (!yumurta) {
@@ -541,7 +560,8 @@ function cizUst() {
       : yavru && !y.ad ? 'Ona bir ad koyalım' : M.yasMetni(y, simdi);
   const yer = partnerGoruyor(partner, 'yavru') ? (O.partnerOdaKisa(partnerAdi(), partner.alan) || `${partnerAdi()} burada`)
     : partner ? `${partnerAdi()} çevrimiçi` : '';
-  ustAlt.textContent = yer ? `${yas} · ${yer}` : yas;
+  if (yer) ustAlt.replaceChildren(`${yas} · `, h('span', { class: 'dot on yv-ust-nokta', 'aria-hidden': 'true' }), yer);
+  else ustAlt.textContent = yas;
   ustEl.querySelector('.yv-ust-kart').setAttribute('aria-label', `${ustAd.textContent}: ${ustAlt.textContent}. Kartı aç`);
 }
 
@@ -567,7 +587,7 @@ function kartCiz() {
     seriN: yumurta ? 0 : seriDurumu(y, toDay(new Date(simdi))).n,
     yasMetni: y ? M.yasMetni(y, simdi) : 'Yeni yumurta',
     sesAcik: !isMuted(),
-    onSes: () => { setMuted(!isMuted()); kartCiz(); },
+    onSes: () => { setMuted(!isMuted()); sesCiz(); kartCiz(); },
   });
 }
 
@@ -1399,7 +1419,7 @@ for (const d of dugmeler.filter((x) => YEMEK.includes(x.btn.dataset.eylem))) {
     basla: () => {
       // Beklemede ya da uykuda sürükleme yok; nedeni eylemTikla söyler.
       if (d.btn.getAttribute('aria-disabled') === 'true') { eylemTikla(eylem); return false; }
-      hayalet = h('span', { class: 'yv-hayalet', 'aria-hidden': 'true', html: ikon(EYLEM_IKON[eylem], 30) });
+      hayalet = h('span', { class: 'yv-hayalet', 'aria-hidden': 'true', html: renkliIkon(EYLEM_IKON[eylem], 36) });
       document.body.append(hayalet);
       d.btn.dataset.suruklenen = '';
       return true;
@@ -1734,9 +1754,9 @@ function tepki(tur) {
   tepkiZaman = setTimeout(() => { delete sahne.dataset.tepki; }, 1500);
   const bit = (cls, style, kid = null, html = null) => h('span', { class: `yv-p ${cls}`, style, html }, kid);
   if (YEMEK.includes(tur)) {
-    parcalar([bit('yv-p-yemek', {}, null, ikon(EYLEM_IKON[tur], 30))]);
+    parcalar([bit('yv-p-yemek', {}, null, renkliIkon(EYLEM_IKON[tur], 32))]);
   } else if (tur === 'oyna') {
-    parcalar([bit('yv-p-top', {}, null, ikon('top', 28))]);
+    parcalar([bit('yv-p-top', {}, null, renkliIkon('top', 30))]);
   } else if (tur === 'yika') {
     parcalar(Array.from({ length: 9 }, () => bit('yv-p-kopuk', {
       '--x': `${rnd(22, 78).toFixed(1)}%`, '--s': `${Math.round(rnd(10, 26))}px`,

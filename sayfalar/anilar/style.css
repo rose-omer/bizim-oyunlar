@@ -1042,3 +1042,6 @@ dialog.ani-secici::backdrop { background: var(--overlay); }
   .ani-harita-kart, dialog.ani-secici[open] { animation: none; }
   .ani-secici-igne { transition: none; }
 }
+
+/* Pamuk Şeker: küçük vurgu yazısı güçlü tonda. */
+.ani-kart-begeni { color: var(--accent-strong); }

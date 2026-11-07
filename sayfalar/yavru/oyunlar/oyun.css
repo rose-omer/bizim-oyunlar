@@ -412,3 +412,12 @@
   .oy-yildiz.yanik svg { transform: none; }
   .oy-yildiz.hatali svg { animation: none; }
 }
+
+/* Pamuk Şeker: mini oyun çerçevesi hamur malzemesiyle. */
+.oy-cubuk { height: 8px; box-shadow: var(--shadow-oyuk); }
+.oy-skor, .oy-sayac { font-family: var(--font-display); }
+.oy-giris-ikon { box-shadow: var(--shadow); }
+.oy-giris-sinir { box-shadow: var(--shadow-oyuk); }
+.oy-jeton { box-shadow: var(--shadow-sm); }
+.oy-giris-ad, .oy-sonuc-baslik { font-weight: 800; letter-spacing: 0; }
+.oy-sayi { font-weight: 800; color: var(--sayi-yuz); text-shadow: 0 3px 0 var(--sayi-kenar), 0 6px 0 var(--sayi-dip), 0 14px 14px var(--sayi-golge); }

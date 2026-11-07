@@ -6,8 +6,8 @@ const H = 1350;
 const P = 96;
 const HEART_D =
   'M12 20.7c-.27 0-.53-.09-.75-.27C6.6 16.6 3 13.5 3 9.45 3 6.68 5.13 4.5 7.8 4.5c1.68 0 3.2.83 4.2 2.15 1-1.32 2.52-2.15 4.2-2.15 2.67 0 4.8 2.18 4.8 4.95 0 4.05-3.6 7.15-8.25 10.98-.22.18-.48.27-.75.27z';
-const DISPLAY = "'Fraunces', Georgia, serif";
-const BODY = "'Nunito', 'Segoe UI', system-ui, sans-serif";
+const DISPLAY = "'Baloo 2', 'Segoe UI', system-ui, sans-serif";
+const BODY = "'Quicksand', 'Segoe UI', system-ui, sans-serif";
 
 function renkler() {
   const css = getComputedStyle(document.documentElement);

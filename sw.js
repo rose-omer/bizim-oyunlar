@@ -7,7 +7,7 @@
 const SURUM = '2026-11-04.1';
 const ONBELLEK = `biz-${SURUM}`;
 const KOK = new URL('./', self.location.href).href;
-const ON_YUKLE = ['./', 'css/base.css', 'assets/favicon.svg', 'manifest.webmanifest', 'assets/icons/icon-192.png', 'assets/icons/rozet-96.png', 'assets/fonts/fraunces.woff2', 'assets/fonts/nunito.woff2'];
+const ON_YUKLE = ['./', 'css/base.css', 'assets/favicon.svg', 'manifest.webmanifest', 'assets/icons/icon-192.png', 'assets/icons/rozet-96.png', 'assets/fonts/baloo-latin-extrabold.woff2', 'assets/fonts/quicksand-latin-regular.woff2', 'assets/fonts/quicksand-latin-ext-regular.woff2'];
 const VARLIK_RE = /\.(png|jpe?g|webp|gif|svg|ico|woff2?|ttf|otf|webmanifest)$/i;
 const VARLIK_HEDEF = new Set(['image', 'font', 'manifest']);
 
@@ -107,10 +107,10 @@ function cevrimdisiSayfa() {
 @media (prefers-color-scheme:dark){:root{--bg:#1C1120;--text:#F7E9EF;--muted:#BBA2B2;--accent:#F08DA8;--ink:#2B0E1B}}
 *{box-sizing:border-box}
 body{margin:0;min-height:100dvh;display:grid;place-items:center;padding:24px;background:var(--bg);color:var(--text);
-font-family:'Nunito',ui-rounded,'Segoe UI',system-ui,sans-serif;text-align:center}
+font-family:'Quicksand',ui-rounded,'Segoe UI',system-ui,sans-serif;text-align:center}
 main{max-width:340px;display:flex;flex-direction:column;align-items:center;gap:14px}
 svg{width:64px;height:64px;color:var(--accent)}
-h1{font-family:'Fraunces',Georgia,serif;font-size:1.6rem;margin:0}
+h1{font-family:'Baloo 2',ui-rounded,system-ui,sans-serif;font-size:1.6rem;margin:0}
 p{margin:0;color:var(--muted);line-height:1.5}
 button{min-height:48px;padding:0 24px;border:0;border-radius:999px;background:var(--accent);color:var(--ink);font:inherit;font-weight:700;cursor:pointer}
 button:focus-visible{outline:3px solid var(--text);outline-offset:3px}

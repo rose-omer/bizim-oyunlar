@@ -46,6 +46,37 @@ export function ikon(ad, boy = 24) {
   return `<svg class="yv-ikon" width="${boy}" height="${boy}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="${YOL[ad]}"/></svg>`;
 }
 
+// Dolgu katmanları: [renk jetonu, yol]. Çizgi YOL'dan gelir, dolgu altında kalır. Emoji değil, her cihazda aynı görünür.
+const R1 = '--yv-r1'; const R2 = '--yv-r2'; const R4 = '--yv-r4'; const R5 = '--yv-r5'; const R6 = '--yv-r6';
+const AK = '--yvb-ak'; const PEMBE = '--yvb-fiyonk';
+const DOLGU = Object.freeze({
+  biberon: [[R5, 'M10.5 5.500 8 9v10.500a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2V9l-2.500-3.500Z'], [AK, 'M8 13.500h8v6a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2Z'], [PEMBE, 'M10.500 2.500h3v3h-3Z']],
+  baloncuk: [[R5, 'M14 15a5 5 0 1 1-10 0 5 5 0 0 1 10 0Z'], [R2, 'M20.500 8a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z'], [R1, 'M20.500 17a1.700 1.700 0 1 1-3.400 0 1.700 1.700 0 0 1 3.400 0Z']],
+  lazimlik: [[R2, 'M7 9.500V4h5.500v5.500Z'], [R5, 'M4 9.500h16v1a6.500 6.500 0 0 1-6.500 6.500h-3A6.500 6.500 0 0 1 4 10.500v-1ZM8.500 17h7v3.500h-7Z']],
+  ay: [[R6, YOL.ay]],
+  cingirak: [[PEMBE, 'M16.800 7.800a4.800 4.800 0 1 1-9.600 0 4.800 4.800 0 0 1 9.600 0Z'], [R6, 'M14.200 19.200a2.200 2.200 0 1 1-4.400 0 2.200 2.200 0 0 1 4.400 0Z']],
+  top: [[R5, 'M20.500 12a8.500 8.500 0 1 1-17 0 8.500 8.500 0 0 1 17 0Z']],
+  elma: [[R4, 'M13.500 4.800c1.400-1.700 3.600-2 5-1.300-.6 2-2.700 3.100-5 1.300Z'], [PEMBE, 'M12 7.500C10 5.500 4.500 6 4.500 11.500c0 4.500 3 9 5.200 9 1 0 1.300-.6 2.300-.6s1.300.6 2.300.6c2.200 0 5.200-4.500 5.200-9 0-5.500-5.500-6-7.500-4Z']],
+  pasta: [[R6, 'M4 20.500h16V12H4Z'], [R1, 'M4 12h16v3.500c-2.700-1.700-5.300-1.700-8 0s-5.300 1.700-8 0Z'], [R5, 'M11 8.500h2V12h-2Z']],
+  sabun: [[R1, 'M4.500 14a5 5 0 0 1 5-5h5a5 5 0 0 1 5 5v1.500a5 5 0 0 1-5 5h-5a5 5 0 0 1-5-5V14Z'], [R5, 'M17 4.800a1.600 1.600 0 1 1-3.200 0 1.600 1.600 0 0 1 3.200 0ZM10.500 5.200a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z']],
+  dus: [[R2, 'M8 11a5 4 0 0 1 10 0Z'], [R5, 'M11 14.500a1.500 1.500 0 1 1-3 0 1.500 1.500 0 0 1 3 0ZM14.500 14.500a1.500 1.500 0 1 1-3 0 1.500 1.500 0 0 1 3 0ZM18 14.500a1.500 1.500 0 1 1-3 0 1.500 1.500 0 0 1 3 0ZM11 18a1.500 1.500 0 1 1-3 0 1.500 1.500 0 0 1 3 0ZM14.500 18a1.500 1.500 0 1 1-3 0 1.500 1.500 0 0 1 3 0ZM18 18a1.500 1.500 0 1 1-3 0 1.500 1.500 0 0 1 3 0Z']],
+  nota: [[R1, 'M9 6l10.500-2.500v3L9 9Z'], [R2, 'M9 18a2.700 2.700 0 1 1-5.400 0A2.700 2.700 0 0 1 9 18ZM19.500 15.500a2.700 2.700 0 1 1-5.400 0 2.700 2.700 0 0 1 5.400 0Z']],
+  dur: [[R1, YOL.dur]],
+  gunes: [[R6, 'M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z']],
+  kumanda: [[R2, 'M7 8h10a5 5 0 0 1 4.900 6l-.6 3a2.500 2.500 0 0 1-4.300 1.200L15 16H9l-2 2.200A2.500 2.500 0 0 1 2.700 17l-.6-3A5 5 0 0 1 7 8Z']],
+  mikrofon: [[R1, 'M12 3a3 3 0 0 0-3 3v5a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3Z']],
+  canta: [[R5, 'M5.800 8h12.400l1.300 12.500h-15L5.800 8Z']],
+  ilac: [[R4, 'M10.200 20.800a5.100 5.100 0 0 1-7.200-7.200l6.800-6.800a5.100 5.100 0 0 1 7.200 7.200l-6.800 6.800Z'], [R1, 'M6.400 10.200 3 13.600a5.100 5.100 0 0 0 7.200 7.200l3.400-3.400Z']],
+  kalp: [[PEMBE, YOL.kalp]],
+});
+
+/** Dolgulu ikon: tek ikonla aynı çizgi, altında şeker rengi. Bilinmeyen ad -> ''. Süs: aria-hidden. */
+export function renkliIkon(ad, boy = 28) {
+  if (!Object.hasOwn(DOLGU, ad ?? '')) return '';
+  const dolgu = DOLGU[ad].map(([renk, d]) => `<path fill="var(${renk})" stroke="none" d="${d}"/>`).join('');
+  return `<svg class="yv-ikon renkli" width="${boy}" height="${boy}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${dolgu}<path d="${YOL[ad]}"/></svg>`;
+}
+
 /** Jeton: dolu altın para (tek renkli ikon değil; --yvb-altin ve --yvb-altin-koyu bebek.js'te). */
 export function paraIkon(boy = 18) {
   return `<svg class="yv-para" width="${boy}" height="${boy}" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10" fill="var(--yvb-altin)"/><circle cx="12" cy="12" r="6.5" fill="none" stroke="var(--yvb-altin-koyu)" stroke-width="1.6"/></svg>`;

@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ODALAR, odaDurumlari, durumAltMetni, onerilenEylem, partnerOdaKisa, eylemAltMetni, UYARI } from '../sayfalar/yavru/odalar.js';
-import { ikon, ODA_IKON, EYLEM_IKON } from '../sayfalar/yavru/ikonlar.js';
+import { ikon, renkliIkon, ODA_IKON, EYLEM_IKON } from '../sayfalar/yavru/ikonlar.js';
 import { EYLEMLER, DUSUK } from '../sayfalar/yavru/mantik.js';
 import { readFileSync } from 'node:fs';
 import { SEKMELER } from '../js/core/games.js';
@@ -98,6 +98,19 @@ test('ikonlar: her oda ve eylemin ikonu var; tek biçim, emoji yok', () => {
     assert.doesNotMatch(c, /\p{Extended_Pictographic}/u, ad);
     assert.doesNotMatch(c, /undefined|NaN/, ad);
   }
+});
+
+test('renkli ikonlar: her oda ve eylemde dolgu var; emoji ve sabit renk yok', () => {
+  for (const ad of [...Object.values(ODA_IKON), ...Object.values(EYLEM_IKON), 'top']) {
+    const c = renkliIkon(ad, 28);
+    assert.match(c, /^<svg [^>]*class="yv-ikon renkli"[^>]*aria-hidden="true"/, ad);
+    assert.match(c, /fill="var\(--yv/, ad);
+    assert.match(c, /stroke="currentColor"/, ad);
+    assert.doesNotMatch(c, /\p{Extended_Pictographic}/u, ad);
+    assert.doesNotMatch(c, /#[0-9a-f]{3,8}\b|undefined|NaN|\sid="/i, ad);
+  }
+  assert.equal(renkliIkon('yok'), '');
+  assert.equal(renkliIkon('__proto__'), '');
 });
 
 test('alt bar: Yavrumuz sekmesi Anılar ile Günler arasında, sayfada bar görünür', () => {

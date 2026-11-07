@@ -97,7 +97,7 @@ export const CIZIM_CSS = `
   --yv-r5: #B8D6F3;
   --yv-r6: #F3DD95;
   --yv-damla: #8EC5F0;
-  --yv-sicak: #B85F17;
+  --yv-sicak: #A34F0F;
   --yv-cs-sis: 46%;
   --yv-cs-isik: 95%;
 }

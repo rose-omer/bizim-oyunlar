@@ -913,7 +913,7 @@ async function geriYuklemeCalistir(belgelerIlk, medyaAdimi = null) {
 
 // ---------- Son silinenler ----------
 // Silme veriyi korur; içerik türlerinin son 50 silineni listelenir. Geri al = putDoc (deleted=false). İkiniz de geri alırsınız.
-const COP_SAYFA = { mesaj: 'sohbet', ani: 'anilar', mektup: 'mektup', gun: 'gunler', liste: 'listeler', randevu: 'randevu', harcama: 'harcama', kupon: 'kupon', gunfoto: 'gunfoto' };
+const COP_SAYFA = { mesaj: 'sohbet', ani: 'anilar', mektup: 'mektup', gun: 'gunler', liste: 'listeler', randevu: 'randevu', harcama: 'harcama', kupon: 'kupon', izin: 'izin', gunfoto: 'gunfoto' };
 const copIcerik = h('div', { class: 'cop-icerik' });
 let copKayitlar = null; // null: yüklenmedi
 let copEksik = false;

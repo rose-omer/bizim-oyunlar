@@ -116,7 +116,7 @@ export const YEDEK_TURLERI = [
   'skor',
   'gunfoto', 'haftalik', 'harcama',
   'yavru', 'yavrubakim',
-  'kupon', 'bilgi',
+  'kupon', 'izin', 'bilgi',
   'kumbara', 'katki',
   'not',
   'sohbetozet',
@@ -203,7 +203,7 @@ const TUR_ADLARI = {
   mektup: 'mektup', liste: 'liste öğesi', randevu: 'randevu fikri', gs: 'soru cevabı', sevgidili: 'sevgi dili sonucu',
   ruh: 'ruh hâli', dokunus: 'dokunuş', konum: 'konum', oyunkayit: 'oyun kaydı',
   ruhgecmis: 'ruh hâli geçmişi', skor: 'skor', gunfoto: 'günün fotoğrafı', haftalik: 'haftalık kontrol',
-  harcama: 'harcama', yavru: 'yavru', yavrubakim: 'yavru bakımı', kupon: 'kupon', bilgi: 'kişi bilgisi',
+  harcama: 'harcama', yavru: 'yavru', yavrubakim: 'yavru bakımı', kupon: 'kupon', izin: 'izin belgesi', bilgi: 'kişi bilgisi',
   kumbara: 'kumbara', katki: 'kumbara hareketi',
   not: 'not',
 };
@@ -282,7 +282,7 @@ export function yedekOzeti(sayilar) {
 
 // ---------- Son silinenler ----------
 // Silme veriyi korur (deleted = true, data kalır). Geri al = putDoc(roomId, tür, id, data).
-export const COP_TURLERI = ['mesaj', 'ani', 'mektup', 'gun', 'liste', 'randevu', 'harcama', 'kupon', 'gunfoto', 'kumbara', 'not'];
+export const COP_TURLERI = ['mesaj', 'ani', 'mektup', 'gun', 'liste', 'randevu', 'harcama', 'kupon', 'izin', 'gunfoto', 'kumbara', 'not'];
 const COP_EN_COK = 50;
 const ONIZLEME_MAX = 80;
 
@@ -328,6 +328,8 @@ export function copOnizleme(tur, data) {
     metin = [yazi(d.emoji), yazi(d.baslik)].filter(Boolean).join(' ');
   } else if (tur === 'harcama') {
     metin = [yazi(d.baslik), Number.isFinite(d.tutar) ? paraMetni(d.tutar) : ''].filter(Boolean).join(' · ');
+  } else if (tur === 'izin') {
+    metin = [yazi(d.kisi), yazi(d.yer)].filter(Boolean).join(', ');
   } else if (tur === 'gunfoto') {
     foto = fotoOf(d.foto);
     metin = yazi(d.not);

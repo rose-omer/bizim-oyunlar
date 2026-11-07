@@ -12,7 +12,7 @@ test('DAHA_GRUPLARI: dört grup, talimattaki sıra', () => {
     ['Konuşalım', ['mektup', 'gunsorusu', 'haftalik', 'gunfoto', 'not']],
     ['Planlayalım', ['listeler', 'randevu', 'harcama', 'onun', 'cark']],
     ['Biz', ['ruh', 'sevgidili', 'yilimiz', 'sohbetozet', 'rozetler', 'skor', 'konum']],
-    ['Birlikte', ['yavru', 'kupon', 'izle', 'oyunlar']],
+    ['Birlikte', ['yavru', 'kupon', 'izin', 'izle', 'oyunlar']],
   ]);
 });
 

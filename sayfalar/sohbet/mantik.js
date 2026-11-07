@@ -342,6 +342,12 @@ export function yaziyorGonderilsinMi(sonGonderim, simdi, aralik = YAZIYOR_GONDER
   return simdi - sonGonderim >= aralik;
 }
 
+/** Yüzen alt çubuğun ekranın altından kapladığı yer (px): yükseklik + alttaki boşluk. Gizliyken 0. */
+export function altCubukPayi(yukseklik, altBosluk) {
+  if (!yukseklik) return 0;
+  return yukseklik + (Number.parseFloat(altBosluk) || 0);
+}
+
 /** Kaydırma kutusu en alta yakın mı? */
 export function altaYakinMi({ scrollHeight, scrollTop, clientHeight }, esik = 120) {
   return scrollHeight - scrollTop - clientHeight <= esik;

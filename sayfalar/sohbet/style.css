@@ -2,7 +2,7 @@
 
 /* ---------- Sayfa iskeleti ----------
    Gövde görünür alana (visualViewport) oturur: klavye açılınca giriş alanı klavyenin üstünde kalır.
-   --sh-vh / --sh-vtop app.js'te ölçülür; --sh-tab-h alt sekme çubuğunun gerçek yüksekliği. */
+   --sh-vh / --sh-vtop app.js'te ölçülür; --sh-tab-h alt sekme çubuğunun ekranın altından kapladığı yer. */
 /* :has() yerine sınıf: her yeni balon eklenişinde kökün stili yeniden denetlenmesin. */
 html.sohbet-kok { height: 100%; overflow: hidden; overscroll-behavior: none; }
 body.sohbet-sayfa {

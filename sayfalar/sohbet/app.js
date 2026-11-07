@@ -56,10 +56,12 @@ window.addEventListener('resize', gorunurAlan);
 const { room, roomId, me } = await bootPage({ ns: 'sohbet', title: 'Sohbet', tab: 'sohbet' });
 const benId = me.clientId;
 
-// Alt sekme çubuğunun yüksekliği (#app alt boşluğu).
+// Alt sekme çubuğunun ekranın altından kapladığı yer (#app alt boşluğu). Çubuk yüzer: alttaki boşluk da sayılır.
 const tabbar = document.getElementById('tabbar');
 if (tabbar && typeof ResizeObserver === 'function') {
-  new ResizeObserver(() => kokDegisken('--sh-tab-h', `${tabbar.offsetHeight}px`)).observe(tabbar);
+  const cubukOlc = () => kokDegisken('--sh-tab-h', `${M.altCubukPayi(tabbar.offsetHeight, getComputedStyle(tabbar).bottom)}px`);
+  new ResizeObserver(cubukOlc).observe(tabbar);
+  window.addEventListener('resize', cubukOlc); // Dönünce güvenli alan değişir, çubuğun boyu değişmez.
 }
 
 // ---------- İskelet ----------

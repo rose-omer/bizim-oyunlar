@@ -15,7 +15,7 @@ export const DAHA_GRUPLARI = [
   { id: 'konusalim', baslik: 'Konuşalım', uyeler: ['mektup', 'gunsorusu', 'haftalik', 'gunfoto', 'not'] },
   { id: 'planlayalim', baslik: 'Planlayalım', uyeler: ['listeler', 'randevu', 'harcama', 'onun', 'cark'] },
   { id: 'biz', baslik: 'Biz', uyeler: ['ruh', 'sevgidili', 'yilimiz', 'sohbetozet', 'rozetler', 'skor', 'konum'] },
-  { id: 'birlikte', baslik: 'Birlikte', uyeler: ['yavru', 'kupon', 'izle', 'oyunlar'] },
+  { id: 'birlikte', baslik: 'Birlikte', uyeler: ['yavru', 'kupon', 'izin', 'izle', 'oyunlar'] },
 ];
 const DIGER = { id: 'diger', baslik: 'Diğer' };
 // Ayarlar listede değil: başlığın sağında ikon düğme.

@@ -19,6 +19,28 @@ Adres: https://rose-omer.github.io/bizim-oyunlar/
 - **Güncelleme:** açık uygulama yeni yayını kendiliğinden alır. Android ana ekran widget'ı (gün sayacı).
 - **Bildirim:** dokunuş, mesaj, mektup; her sabah 09:00 özel gün, akşam 20:00 günün sorusu hatırlatması.
 
+## Ekran görüntüleri
+
+| Giriş | Biz | Bugün |
+|---|---|---|
+| <img src="docs/1-giris.png" width="240" alt="Ad girişi"> | <img src="docs/2-biz.png" width="240" alt="Gün sayacı"> | <img src="docs/3-bugun.png" width="240" alt="Ruh hâli ve dokunuş"> |
+
+| Oyunlar | Özel günler | Yavrumuz |
+|---|---|---|
+| <img src="docs/4-oyunlar.png" width="240" alt="Oyun listesi"> | <img src="docs/5-ozel-gunler.png" width="240" alt="Özel günler"> | <img src="docs/6-yavru.png" width="240" alt="Sanal yavru"> |
+
+## Kullanım
+
+<img src="docs/kullanim.gif" width="320" alt="Kullanım: oda kurma, gün sayacı, ruh hâli, oyunlar">
+
+1. Adınızı yazın, **Devam** deyin.
+2. **Odamızı kur** ile odayı açın. Linki sevgilinize gönderin; o **Odaya katıl** ile girer.
+3. Başlangıç tarihini girin; gün sayacı başlar.
+4. **Bugün** bölümünde ruh hâlinizi seçin, **Seni düşünüyorum** ile dokunuş gönderin.
+5. **Ne oynayalım?** altından oyun seçin; **Tüm oyunlar** 19 oyunu listeler.
+
+Görseller yerel test kipiyle alındı (`?yerel=1`, Supabase'siz).
+
 ## Telefona kurma
 - **iPhone:** Safari → Paylaş → **Ana Ekrana Ekle**. Bildirim yalnız böyle kurulunca çalışır (iOS 16.4+).
 - **Android:** Chrome → menü → **Uygulamayı yükle**. Ya da APK:

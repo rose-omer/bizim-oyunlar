@@ -4,7 +4,7 @@
 Adres: https://rose-omer.github.io/bizim-oyunlar/
 
 ## Özellikler
-- **Biz:** kaç gündür birlikteyiz, yaklaşan özel günler, buluşma geri sayımı, dokunuş (💗 💋 🤗 🥺 💭), ruh hâli, mesafe (isteğe bağlı).
+- **Biz:** kaç gündür birlikteyiz, yaklaşan özel günler, buluşma geri sayımı, dokunuş (kalp, öpücük, sarılma, özledim, düşünüyorum), ruh hâli, mesafe (isteğe bağlı).
 - **Sohbet:** fotoğraf (WebP), sesli mesaj, tepki, yanıt, görüldü, yazıyor, arama, yıldızlı mesajlar.
 - **Anılar:** fotoğraflı zaman çizelgesi, albüm, harita, "geçen yıl bugün". **Mektuplar:** zaman kapsülü.
 - **Özel Günler:** takvim, doğum günleri, kilometre taşları, hatırlatma.

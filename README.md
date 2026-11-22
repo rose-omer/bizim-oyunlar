@@ -10,10 +10,12 @@ Adres: https://rose-omer.github.io/bizim-oyunlar/
 - **Özel Günler:** takvim, doğum günleri, kilometre taşları, hatırlatma.
 - **Listelerimiz** (Şarkılarımız dahil), **Randevu Fikirleri** (200 fikir), **Günün Sorusu** (432 soru, seri), **Sevgi Dili Testi**,
   **Birlikte İzle** (YouTube eş zamanlı), **Ruh Hâlimiz** (30/90 gün), **Günün Fotoğrafı**, **Haftalık Kontrol**, **Ortak Harcamalar**,
-  **Yılımız** (yıl özeti), **Rozetlerimiz**, **Skor Tablosu**.
+  **Yılımız** (yıl özeti), **Rozetlerimiz**, **Skor Tablosu**, **Aşk Kuponları**, **İzin Belgesi**, **Onun Hakkında**
+  (ölçüler, sevdikleri, alerjiler), **Karar Çarkı**, **Not Bırak** (yazı, çizim, fotoğraf), **Konum** (canlı konum, mesafe),
+  **Sohbet Özetimiz** (WhatsApp sohbeti dışa aktarımından özet).
 - **Yavrumuz:** birlikte baktığınız sanal yavru; yumurtayı ikiniz ısıtırsınız, çatlayınca besler, oynar, yıkar, uyutursunuz; bakımla büyür.
-- **Oyunlar (18):** Yapboz, Beni Ne Kadar Tanıyorsun, Aynı Kafa, Doğruluk mu Cesaret mi, Hafıza, Çiz Bakalım,
-  Kim Daha Çok, Hiç Yaptın mı, Derin Sohbet, Dama, Tavla, Dört Taş/XOX, Amiral Battı, Satranç, Pişti, Kelime Zinciri, Kelime Düellosu, Birlikte Sudoku.
+- **Oyunlar (19):** Yapboz, Beni Ne Kadar Tanıyorsun, Aynı Kafa, Doğruluk mu Cesaret mi, Hafıza, Çiz Bakalım,
+  Kim Daha Çok, Hiç Yaptın mı, Derin Sohbet, Dama, Tavla, Dört Taş, XOX, Amiral Battı, Satranç, Pişti, Kelime Zinciri, Kelime Düellosu, Birlikte Sudoku.
 - **Güvenlik:** her cihaz odaya onayla girer (Ayarlar › Cihazlar); tek kullanımlık davet linki; kurtarma kodu.
 - **Ayarlar:** profil, başlangıç tarihi, PIN kilidi, tema, bildirim, yedek indirme ve geri yükleme.
 - **Güncelleme:** açık uygulama yeni yayını kendiliğinden alır. Android ana ekran widget'ı (gün sayacı).
@@ -45,7 +47,7 @@ Görseller yerel test kipiyle alındı (`?yerel=1`, Supabase'siz).
 - **iPhone:** Safari → Paylaş → **Ana Ekrana Ekle**. Bildirim yalnız böyle kurulunca çalışır (iOS 16.4+).
 - **Android:** Chrome → menü → **Uygulamayı yükle**. Ya da APK:
   https://rose-omer.github.io/bizim-oyunlar/indir/BizIkimiz.apk
-  (APK'da partnerden anlık bildirim yok; cihaz hatırlatıcıları var. Anlık bildirim için Chrome kurulumu.)
+  (APK partner bildirimini FCM ile alır; bkz. **Android anlık bildirim (FCM)**. Derleme FCM'siz olursa yalnız cihaz hatırlatıcıları çalışır.)
 
 ## Yerel çalıştırma
 ```bash

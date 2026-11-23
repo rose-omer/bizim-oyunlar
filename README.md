@@ -44,6 +44,7 @@ Adres: https://rose-omer.github.io/bizim-oyunlar/
 Görseller yerel test kipiyle alındı (`?yerel=1`, Supabase'siz).
 
 ## Telefona kurma
+- İndirme sayfası (Android ve iPhone yan yana): https://rose-omer.github.io/bizim-oyunlar/indir/
 - **iPhone:** Safari → Paylaş → **Ana Ekrana Ekle**. Bildirim yalnız böyle kurulunca çalışır (iOS 16.4+).
 - **Android:** Chrome → menü → **Uygulamayı yükle**. Ya da APK:
   https://rose-omer.github.io/bizim-oyunlar/indir/BizIkimiz.apk

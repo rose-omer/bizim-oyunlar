@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.youtube.com; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https://blgtlflryxknyalutugw.supabase.co https://tile.openstreetmap.org https://i.ytimg.com; media-src blob: https://blgtlflryxknyalutugw.supabase.co; connect-src 'self' https://blgtlflryxknyalutugw.supabase.co wss://blgtlflryxknyalutugw.supabase.co https://nominatim.openstreetmap.org; frame-src https://www.youtube.com; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>İndir · Biz İkimiz</title>
+  <meta name="description" content="Biz İkimiz'i telefonuna kur: Android için APK, iPhone için ana ekrana ekle. Ücretsiz, hesap gerekmez.">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#F9E8F4" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#241029" media="(prefers-color-scheme: dark)">
+  <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+  <link rel="manifest" href="../manifest.webmanifest">
+  <link rel="apple-touch-icon" href="../assets/icons/apple-touch-icon.png">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Biz İkimiz">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <script src="../js/core/erken.js"></script>
+  <link rel="stylesheet" href="../css/base.css">
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body class="indir">
+  <main class="indir-sayfa">
+    <header class="indir-bas">
+      <img class="indir-logo" src="../assets/icons/icon-192.png" alt="" width="88" height="88">
+      <h1 class="title">Biz İkimiz</h1>
+      <p class="subtitle">İki sevgilinin ücretsiz uygulaması. Hesap yok: adını yaz, odanı kur, linki sevgiline gönder.</p>
+    </header>
+
+    <p class="indir-not" id="ios-safari" hidden>
+      iPhone'da Chrome ya da başka bir tarayıcıdasın. Ana ekrana eklemek için bu sayfayı <strong>Safari</strong>'de aç.
+    </p>
+    <p class="indir-not" id="kurulu" hidden>Biz İkimiz bu cihazda zaten kurulu.</p>
+
+    <div class="indir-kartlar">
+      <section class="card indir-kart" id="android" aria-labelledby="android-baslik">
+        <div class="indir-kart-bas">
+          <span class="indir-ikon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6.5" y="2.5" width="11" height="19" rx="2.5"/><path d="M10.5 18.5h3"/></svg>
+          </span>
+          <div>
+            <h2 id="android-baslik">Android</h2>
+            <p class="muted" id="apk-surum">Uygulama dosyası (APK)</p>
+          </div>
+        </div>
+        <a class="btn primary wide" id="apk-indir" href="./BizIkimiz.apk" rel="noopener">APK'yı indir</a>
+        <ol class="indir-adimlar">
+          <li>İnen <strong>BizIkimiz.apk</strong> dosyasını aç.</li>
+          <li>Telefon sorarsa "Bu kaynaktan yüklemeye izin ver"i aç.</li>
+          <li><strong>Yükle</strong>'ye dokun. Eski sürüm varsa üstüne kur; bilgilerin kalır.</li>
+        </ol>
+      </section>
+
+      <section class="card indir-kart" id="iphone" aria-labelledby="iphone-baslik">
+        <div class="indir-kart-bas">
+          <span class="indir-ikon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M12 8.5v7M8.5 12h7"/></svg>
+          </span>
+          <div>
+            <h2 id="iphone-baslik">iPhone ve iPad</h2>
+            <p class="muted">Ana ekrana ekle; App Store gerekmez</p>
+          </div>
+        </div>
+        <a class="btn primary wide" id="ios-ac" href="../">Uygulamayı Safari'de aç</a>
+        <ol class="indir-adimlar" id="ios-adimlar"></ol>
+        <p class="muted indir-ek">Bildirimler iOS 16.4 ve üstünde, ana ekrana eklenmiş uygulamada çalışır.</p>
+      </section>
+    </div>
+
+    <p class="muted indir-alt">Bilgisayardasın ya da kurmak istemiyor musun? <a href="../">Tarayıcıda aç</a>.</p>
+  </main>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

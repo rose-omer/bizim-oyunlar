@@ -1,0 +1,93 @@
+/* Birlikte Hikâye. Renkler yalnız base.css değişkenlerinden. */
+
+.hk {
+  --c0: var(--accent);
+  --c1: var(--plum);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  max-width: 620px;
+  margin: 0 auto;
+  padding: 8px 12px calc(10px + var(--safe-bottom, 0px));
+  box-sizing: border-box;
+  overflow: hidden;
+}
+.hk .p0 { --c: var(--c0); }
+.hk .p1 { --c: var(--c1); }
+
+.hk-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
+  min-height: 44px;
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  outline: 2px solid transparent;
+  outline-offset: -2px;
+}
+.hk-top.is-turn { background: var(--accent-soft); outline-color: var(--accent); }
+.hk-who { font-family: var(--font-display); font-weight: 600; font-size: 1.02rem; }
+.hk-top.is-turn .hk-who { color: var(--accent-strong); }
+.hk-legend { display: inline-flex; align-items: center; gap: 6px; font-size: .8125rem; color: var(--muted); }
+.hk-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--c); }
+.hk-dot.p1 { margin-left: 6px; }
+
+/* Hikâye: defter sayfası */
+.hk-story {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 18px 18px 22px;
+  border-radius: var(--radius-lg);
+  background:
+    repeating-linear-gradient(to bottom, transparent 0 31px, color-mix(in srgb, var(--line) 75%, transparent) 31px 32px),
+    var(--surface);
+  background-position: 0 18px, 0 0;
+  background-attachment: local, local;
+  box-shadow: inset 0 0 0 1px var(--line), var(--shadow);
+  font-size: 1.05rem;
+  line-height: 32px;
+}
+.hk-open {
+  margin: 0 0 4px;
+  font-family: var(--font-display);
+  font-weight: 600;
+  color: var(--text);
+}
+.hk-open::first-letter { color: var(--accent-strong); }
+.hk-part {
+  margin: 0;
+  padding-left: 12px;
+  border-left: 3px solid var(--c);
+  color: var(--text);
+}
+.hk-part + .hk-part { margin-top: 0; }
+.hk-part.is-new { animation: hk-in .35s var(--ease) both; }
+
+/* Yazma alanı */
+.hk-compose { display: flex; flex-direction: column; gap: 6px; }
+.hk-compose.hidden { display: none; }
+.hk-text { resize: none; min-height: 64px; font: inherit; line-height: 1.4; }
+.hk-text:disabled { opacity: .65; }
+.hk-row { display: flex; align-items: center; gap: 8px; }
+.hk-count { flex: 1; font-size: .8125rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.hk-tools { display: flex; gap: 8px; }
+.hk-row .btn { min-height: 44px; }
+.hk-row .btn:disabled { opacity: .5; cursor: not-allowed; }
+
+.hk-end { display: flex; justify-content: center; gap: 8px; }
+.hk-end.hidden { display: none; }
+
+@keyframes hk-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hk-part.is-new { animation: none; }
+}

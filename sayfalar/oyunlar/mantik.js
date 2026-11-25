@@ -13,9 +13,9 @@ export const DIGER = { id: 'diger', ad: 'Diğer', ton: '2' };
 /** Grup üyeliği: tek harita (oyun id → grup id). Grup içi sıra = buradaki sıra. Haritada olmayan oyun "Diğer"e düşer. */
 export const OYUN_GRUBU = {
   tanis: 'tanisalim', aynikafa: 'tanisalim', kimdaha: 'tanisalim', hicyaptin: 'tanisalim', derin: 'tanisalim', dogruluk: 'tanisalim',
-  dama: 'masa', tavla: 'masa', satranc: 'masa', dorttas: 'masa', xox: 'masa', amiral: 'masa', pisti: 'masa', mangala: 'masa', kutu: 'masa',
+  dama: 'masa', tavla: 'masa', satranc: 'masa', dorttas: 'masa', xox: 'masa', amiral: 'masa', pisti: 'masa', mangala: 'masa', kutu: 'masa', reversi: 'masa',
   kelime: 'zeka', duello: 'zeka', sudoku: 'zeka', hafiza: 'zeka',
-  yapboz: 'yarat', ciz: 'yarat',
+  yapboz: 'yarat', ciz: 'yarat', hikaye: 'yarat',
 };
 
 const grupOf = (id) => GRUPLAR.find((g) => g.id === OYUN_GRUBU[id]) || DIGER;

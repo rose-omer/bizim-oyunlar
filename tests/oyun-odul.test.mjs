@@ -80,7 +80,7 @@ test('geçersiz girdi yama vermez; bozuk hak kaydı yok sayılır', () => {
 
 test('liste: yalnız birlikte oynanabilen oyunlar; xox yok', () => {
   assert.ok(!SITE_OYUNLARI.includes('xox'));
-  for (const id of ['dama', 'tavla', 'dorttas', 'amiral', 'satranc', 'pisti', 'kelime', 'duello', 'sudoku', 'hafiza', 'ciz', 'yapboz', 'mangala', 'kutu']) {
+  for (const id of ['dama', 'tavla', 'dorttas', 'amiral', 'satranc', 'pisti', 'kelime', 'duello', 'sudoku', 'hafiza', 'ciz', 'yapboz', 'mangala', 'kutu', 'reversi', 'hikaye']) {
     assert.ok(SITE_OYUNLARI.includes(id), id);
   }
 });
@@ -88,7 +88,7 @@ test('liste: yalnız birlikte oynanabilen oyunlar; xox yok', () => {
 test('bağlantı: her oyun bitişte oyunOdulu çağırır ve tek kişilikte ödül vermez', () => {
   for (const yol of ['amiral/app.js', 'dama/app.js', 'dorttas/app.js', 'satranc/app.js', 'tavla/app.js', 'pisti/app.js',
     'duello/app.js', 'kelime/app.js', 'sudoku/app.js', 'hafiza/app.js', 'ciz/app.js', 'yapboz/app.js', '_soru/view.js',
-    'mangala/app.js', 'kutu/app.js']) {
+    'mangala/app.js', 'kutu/app.js', 'reversi/app.js', 'hikaye/app.js']) {
     const s = readFileSync(new URL(`../games/${yol}`, import.meta.url), 'utf8');
     assert.match(s, /core\/oyun-odul\.js/, yol);
     assert.match(s, /oyunOdulu\(\{/, yol);

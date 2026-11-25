@@ -1,0 +1,214 @@
+/* Kutu Kapmaca. Renkler yalnız base.css değişkenlerinden. Yerleşim Satranç ile aynı aile. */
+
+.kk {
+  --c0: var(--accent);
+  --c1: var(--plum);
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto auto auto;
+  align-content: safe center;
+  grid-template-areas: "opp" "stage" "me" "foot";
+  gap: 8px;
+  width: 100%;
+  max-width: 620px;
+  margin: 0 auto;
+  padding: 8px 12px calc(10px + var(--safe-bottom, 0px));
+  box-sizing: border-box;
+  overflow: hidden;
+}
+.kk .p0 { --c: var(--c0); }
+.kk .p1 { --c: var(--c1); }
+
+/* Oyuncu şeridi */
+.kk-plate {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 4px 8px 4px 6px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  outline: 2px solid transparent;
+  outline-offset: -2px;
+  transition: background-color .2s ease, outline-color .2s ease;
+}
+.kk-plate.is-opp { grid-area: opp; }
+.kk-plate.is-me { grid-area: me; }
+.kk-plate.is-turn { background: var(--accent-soft); outline-color: var(--accent); }
+.kk-swatch {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--c);
+  color: var(--surface);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  box-shadow: var(--shadow-sm);
+}
+.kk-who { min-width: 0; flex: 1; display: flex; flex-direction: column; line-height: 1.2; }
+.kk-name { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-weight: 800; }
+.kk-sub { font-size: .8125rem; color: var(--muted); }
+.kk-wins {
+  flex: none;
+  min-width: 34px;
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  font-family: var(--font-display);
+  font-weight: 600;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Tahta: nokta ve kutu izleri sırayla */
+.kk-stage {
+  grid-area: stage;
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+}
+.kk-board {
+  --kk-n: 4;
+  --kk-k: 40px;
+  --kk-d: 10px;
+  display: grid;
+  grid-template-columns: repeat(var(--kk-n), var(--kk-d) var(--kk-k)) var(--kk-d);
+  grid-template-rows: repeat(var(--kk-n), var(--kk-d) var(--kk-k)) var(--kk-d);
+  padding: 12px;
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line), var(--shadow-lg);
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  outline: 3px solid transparent;
+  outline-offset: 3px;
+  transition: outline-color .25s ease;
+}
+.kk-board.is-mine { outline-color: color-mix(in srgb, var(--accent) 55%, transparent); }
+.kk-board.is-loading { opacity: .35; }
+
+.kk-dot {
+  z-index: 3;
+  align-self: center;
+  justify-self: center;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: var(--text);
+  transform: scale(.72);
+  pointer-events: none;
+}
+
+.kk-line {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: default;
+  -webkit-tap-highlight-color: transparent;
+}
+/* Dokunma alanı çizginin iki yanına taşar (en az 44 px) */
+.kk-line::before { content: ''; position: absolute; }
+.kk-line.is-h::before { inset: calc(var(--kk-k) * -.32) 0; }
+.kk-line.is-v::before { inset: 0 calc(var(--kk-k) * -.32); }
+.kk-ink {
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--line) 80%, transparent);
+  transition: background-color .16s ease, transform .16s var(--ease);
+  pointer-events: none;
+}
+.kk-line.is-h .kk-ink { width: 100%; height: 30%; }
+.kk-line.is-v .kk-ink { width: 30%; height: 100%; }
+.kk-board.is-mine .kk-line.is-can { cursor: pointer; }
+.kk-board.is-mine .kk-line.is-can .kk-ink { background: color-mix(in srgb, var(--muted) 30%, transparent); }
+@media (hover: hover) {
+  .kk-board.is-mine .kk-line.is-can:hover .kk-ink { background: color-mix(in srgb, var(--accent) 55%, transparent); }
+}
+.kk-line:focus-visible { outline: none; }
+.kk-line:focus-visible .kk-ink { outline: 3px solid var(--focus); outline-offset: 3px; }
+.kk-line.is-on .kk-ink { background: var(--c); }
+.kk-line.is-h.is-on .kk-ink { height: 46%; }
+.kk-line.is-v.is-on .kk-ink { width: 46%; }
+.kk-line.is-last .kk-ink { animation: kk-draw .28s var(--ease) both; box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 30%, transparent); }
+
+.kk-box {
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  margin: 2px;
+  border-radius: 6px;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: calc(var(--kk-k) * .38);
+  color: var(--c);
+  pointer-events: none;
+}
+.kk-box.is-on { background: color-mix(in srgb, var(--c) 18%, transparent); }
+.kk-box.is-new { animation: kk-box .45s var(--ease) both; }
+
+/* Alt bölüm */
+.kk-foot {
+  grid-area: foot;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-height: 92px;
+}
+.kk-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 4px 14px;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-display);
+  font-variation-settings: 'SOFT' 100;
+  font-size: 1.05rem;
+  font-weight: 600;
+  text-align: center;
+  color: var(--muted);
+}
+.kk-status.is-turn { color: var(--accent-strong); }
+.kk-tools { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.kk-size > button { min-width: 64px; }
+.kk-cover { position: absolute; inset: 0; }
+
+@keyframes kk-draw {
+  from { transform: scale(.3); opacity: .2; }
+  to { transform: scale(1); opacity: 1; }
+}
+@keyframes kk-box {
+  from { transform: scale(.5); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+/* Yatay telefon: tahta solda, bilgiler sağda */
+@media (orientation: landscape) and (max-height: 560px) {
+  .kk {
+    max-width: 900px;
+    grid-template-columns: minmax(0, 1fr) minmax(200px, 270px);
+    grid-template-rows: auto auto minmax(0, 1fr);
+    align-content: stretch;
+    grid-template-areas: "stage opp" "stage me" "stage foot";
+  }
+  .kk-foot { justify-content: flex-start; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kk-ink { transition: none; }
+  .kk-line.is-last .kk-ink, .kk-box.is-new { animation: none; }
+}

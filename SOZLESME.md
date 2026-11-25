@@ -518,7 +518,7 @@ v3 bölümleri v1 ve v2'nin üstüne gelir. Çatışmada v3 geçerli.
 - **Canlı geçiş:** `schema.sql` kovanın `public` değerine ve eski politikaya dokunmaz, temizliği zamanlamaz. Bu adımlar `supabase/gecis/` altında, ayrı onayla.
 
 ## 27. Yeni sayfalar, oyunlar ve ortak modüller
-- SAYFALAR: `ruh`, `skor`, `yilimiz`, `rozetler`, `gunfoto`, `haftalik`, `harcama`, `konum` (Daha › Biz; Ayarlar'daki eski Mesafe bölümünün yerine), `sohbetozet` (Sohbet Özetimiz, Daha › Biz, `yilimiz`'ın arkasında; `sayfalar/sohbet-ozeti/`). GAMES: `satranc`, `pisti`, `duello` (Kelime Düellosu), `sudoku`.
+- SAYFALAR: `ruh`, `skor`, `yilimiz`, `rozetler`, `gunfoto`, `haftalik`, `harcama`, `konum` (Daha › Biz; Ayarlar'daki eski Mesafe bölümünün yerine), `sohbetozet` (Sohbet Özetimiz, Daha › Biz, `yilimiz`'ın arkasında; `sayfalar/sohbet-ozeti/`). GAMES: `satranc`, `pisti`, `duello` (Kelime Düellosu), `sudoku`, `mangala` (Türk mangalası), `kutu` (Kutu Kapmaca: noktalar ve kutular, 3×3 / 4×4 / 5×5; boyut yalnız ilk çizgiden önce değişir). İkisi de `bootMasa` üstünde, Masa oyunları grubunda; jeton verir.
 - Rekabetçi oyun bitişinde ev sahibi `logGame` yanında `skorKaydet(room, oyunId, { kazanan })` çağırır; kutlamaya `toplamSatiri(...)` eklenir.
 - Masa oyunları `games/dama/masa.js` `bootMasa` üstüne kurulur. `game.save?(s)` kayda gideni belirler (varsayılan `view`). "Sıra sende" bildirimini sırayı devreden cihaz yollar; `partnerGoruyor(partner, ns)` doğruysa yollanmaz.
 - `storage.js`: `uploadAudio(blob, roomId)` (`<oda>/<uuid>.webm|m4a`, en çok 2 MB); `uploadPhoto` yolu `.webp` ya da `.jpg`. Kova: `image/jpeg|webp|png`, `audio/webm|mp4`.

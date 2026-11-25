@@ -129,6 +129,22 @@ export const GAMES = [
     minutes: '10–30 dk',
   },
   {
+    id: 'mangala',
+    title: 'Mangala',
+    emoji: '🪨',
+    desc: 'Geleneksel Türk taş oyunu. Taşları dağıtın, çift yapıp toplayın; hazinesi dolu olan kazanır.',
+    players: '2',
+    minutes: '10–20 dk',
+  },
+  {
+    id: 'kutu',
+    title: 'Kutu Kapmaca',
+    emoji: '🔲',
+    desc: 'Sırayla noktaları birleştirin. Kutunun son kenarını çeken kutuyu alır ve yine oynar.',
+    players: '2',
+    minutes: '5–15 dk',
+  },
+  {
     id: 'kelime',
     title: 'Kelime Zinciri',
     emoji: '🔤',

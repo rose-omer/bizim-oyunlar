@@ -14,8 +14,9 @@ Adres: https://rose-omer.github.io/bizim-oyunlar/
   (ölçüler, sevdikleri, alerjiler), **Karar Çarkı**, **Not Bırak** (yazı, çizim, fotoğraf), **Konum** (canlı konum, mesafe),
   **Sohbet Özetimiz** (WhatsApp sohbeti dışa aktarımından özet).
 - **Yavrumuz:** birlikte baktığınız sanal yavru; yumurtayı ikiniz ısıtırsınız, çatlayınca besler, oynar, yıkar, uyutursunuz; bakımla büyür.
-- **Oyunlar (19):** Yapboz, Beni Ne Kadar Tanıyorsun, Aynı Kafa, Doğruluk mu Cesaret mi, Hafıza, Çiz Bakalım,
-  Kim Daha Çok, Hiç Yaptın mı, Derin Sohbet, Dama, Tavla, Dört Taş, XOX, Amiral Battı, Satranç, Pişti, Kelime Zinciri, Kelime Düellosu, Birlikte Sudoku.
+- **Oyunlar (21):** Yapboz, Beni Ne Kadar Tanıyorsun, Aynı Kafa, Doğruluk mu Cesaret mi, Hafıza, Çiz Bakalım,
+  Kim Daha Çok, Hiç Yaptın mı, Derin Sohbet, Dama, Tavla, Dört Taş, XOX, Amiral Battı, Satranç, Pişti, Mangala, Kutu Kapmaca,
+  Kelime Zinciri, Kelime Düellosu, Birlikte Sudoku.
 - **Güvenlik:** her cihaz odaya onayla girer (Ayarlar › Cihazlar); tek kullanımlık davet linki; kurtarma kodu.
 - **Ayarlar:** profil, başlangıç tarihi, PIN kilidi, tema, bildirim, yedek indirme ve geri yükleme.
 - **Güncelleme:** açık uygulama yeni yayını kendiliğinden alır. Android ana ekran widget'ı (gün sayacı).
@@ -39,7 +40,7 @@ Adres: https://rose-omer.github.io/bizim-oyunlar/
 2. **Odamızı kur** ile odayı açın. Linki sevgilinize gönderin; o **Odaya katıl** ile girer.
 3. Başlangıç tarihini girin; gün sayacı başlar.
 4. **Bugün** bölümünde ruh hâlinizi seçin, **Seni düşünüyorum** ile dokunuş gönderin.
-5. **Ne oynayalım?** altından oyun seçin; **Tüm oyunlar** 19 oyunu listeler.
+5. **Ne oynayalım?** altından oyun seçin; **Tüm oyunlar** 21 oyunu listeler.
 
 Görseller yerel test kipiyle alındı (`?yerel=1`, Supabase'siz).
 

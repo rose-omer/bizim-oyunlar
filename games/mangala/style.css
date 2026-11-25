@@ -1,0 +1,223 @@
+/* Mangala. Renkler yalnız base.css değişkenlerinden. Yerleşim Satranç ile aynı aile. */
+
+.mg {
+  --mg-wood: color-mix(in srgb, var(--tint-5) 70%, var(--surface));
+  --mg-edge: color-mix(in srgb, var(--tint-5) 60%, var(--text) 16%);
+  --mg-well: color-mix(in srgb, var(--tint-5) 35%, var(--bg));
+  --c0: var(--accent);
+  --c1: var(--plum);
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto auto auto;
+  align-content: safe center;
+  grid-template-areas: "opp" "stage" "me" "foot";
+  gap: 8px;
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 8px 8px calc(10px + var(--safe-bottom, 0px));
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+/* Oyuncu şeridi */
+.mg-plate {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 4px 8px 4px 6px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  outline: 2px solid transparent;
+  outline-offset: -2px;
+  transition: background-color .2s ease, outline-color .2s ease;
+}
+.mg-plate.is-opp { grid-area: opp; }
+.mg-plate.is-me { grid-area: me; }
+.mg-plate.is-turn { background: var(--accent-soft); outline-color: var(--accent); }
+.mg-swatch {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  margin-left: 2px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--c) 45%, var(--surface)) 0 22%, var(--c) 70%);
+  box-shadow: var(--shadow-sm);
+}
+.mg-swatch.p0 { --c: var(--c0); }
+.mg-swatch.p1 { --c: var(--c1); }
+.mg-who { min-width: 0; flex: 1; display: flex; flex-direction: column; line-height: 1.2; }
+.mg-name { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-weight: 800; }
+.mg-sub { font-size: .8125rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.mg-wins {
+  flex: none;
+  min-width: 34px;
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  font-family: var(--font-display);
+  font-weight: 600;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Tahta */
+.mg-stage {
+  grid-area: stage;
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+}
+.mg-board {
+  --mg-cell: 40px;
+  --mg-st: calc(var(--mg-cell) * .72);
+  display: grid;
+  grid-template-columns: var(--mg-st) repeat(6, var(--mg-cell)) var(--mg-st);
+  grid-template-rows: repeat(2, var(--mg-cell));
+  gap: 3px;
+  padding: 8px;
+  border-radius: calc(var(--mg-st) * .5 + 8px);
+  background: var(--mg-wood);
+  box-shadow: inset 0 0 0 2px var(--mg-edge), var(--shadow-lg);
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  outline: 3px solid transparent;
+  outline-offset: 3px;
+  transition: outline-color .25s ease;
+}
+.mg-board.is-mine { outline-color: color-mix(in srgb, var(--accent) 55%, transparent); }
+.mg-board.is-loading { opacity: .35; }
+
+.mg-pit,
+.mg-store {
+  position: relative;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: var(--mg-well);
+  box-shadow: inset 0 3px 7px color-mix(in srgb, var(--text) 22%, transparent);
+  color: var(--text);
+  font: inherit;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color .18s ease, box-shadow .18s ease, transform .16s var(--ease);
+}
+.mg-pit { border-radius: 50%; cursor: default; }
+.mg-store { border-radius: calc(var(--mg-st) * .5); }
+.mg-store.is-me { --c: var(--c0); }
+.mg-store.is-opp { --c: var(--c1); }
+.mg-store.is-turn { box-shadow: inset 0 3px 7px color-mix(in srgb, var(--text) 22%, transparent), 0 0 0 2.5px color-mix(in srgb, var(--c) 70%, transparent); }
+.mg-pit:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; z-index: 2; }
+.mg-board.is-mine .mg-pit.is-can { cursor: pointer; }
+.mg-board.is-mine .mg-pit.is-can.is-me { box-shadow: inset 0 3px 7px color-mix(in srgb, var(--text) 22%, transparent), 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent); }
+.mg-pit.is-sel { transform: translateY(-3px); background: color-mix(in srgb, var(--accent) 22%, var(--mg-well)); box-shadow: inset 0 3px 7px color-mix(in srgb, var(--text) 18%, transparent), 0 0 0 3px var(--accent); }
+.mg-pit.is-aim,
+.mg-store.is-aim { background: color-mix(in srgb, var(--accent) 30%, var(--mg-well)); }
+.mg-pit.is-end,
+.mg-store.is-end { background: color-mix(in srgb, var(--plum) 20%, var(--mg-well)); }
+.mg-pit.is-cap { animation: mg-cap .6s var(--ease) both; }
+
+/* Taşlar: küçük renkli boncuklar; sayı köşede */
+.mg-tas-alan {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: center;
+  justify-content: center;
+  gap: 2px;
+  width: 74%;
+  max-height: 74%;
+  pointer-events: none;
+}
+.mg-store .mg-tas-alan { width: 80%; max-height: 80%; }
+.mg-tas {
+  --t: var(--tint-1);
+  width: calc(var(--mg-cell) * .17);
+  height: calc(var(--mg-cell) * .17);
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--t) 30%, var(--surface)) 0 25%, color-mix(in srgb, var(--t) 75%, var(--text) 25%) 80%);
+  box-shadow: 0 1px 1px color-mix(in srgb, var(--text) 30%, transparent);
+}
+.mg-tas.t1 { --t: var(--tint-2); }
+.mg-tas.t2 { --t: var(--tint-4); }
+.mg-tas.t3 { --t: var(--tint-6); }
+.mg-sayi {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  min-width: 20px;
+  padding: 1px 5px;
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  font-size: .75rem;
+  font-weight: 800;
+  line-height: 1.35;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+.mg-pit.is-opp .mg-sayi { top: -2px; bottom: auto; }
+.mg-store .mg-sayi { position: static; grid-area: 1 / 1; align-self: end; margin-bottom: 8px; font-size: .9rem; }
+.mg-store .mg-tas-alan { grid-area: 1 / 1; }
+.mg-pit.is-empty .mg-sayi { color: var(--muted); }
+
+/* Alt bölüm */
+.mg-foot {
+  grid-area: foot;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-height: 92px;
+}
+.mg-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 4px 14px;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-display);
+  font-variation-settings: 'SOFT' 100;
+  font-size: 1.05rem;
+  font-weight: 600;
+  text-align: center;
+  color: var(--muted);
+}
+.mg-status.is-turn { color: var(--accent-strong); }
+.mg-status.is-alert { background: var(--accent-soft); color: var(--accent-strong); }
+.mg-tools { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.mg-cover { position: absolute; inset: 0; }
+.mg-rules { text-align: left; max-height: 100%; overflow-y: auto; }
+.mg-rules .masa-card-title { text-align: center; }
+.mg-rules-list { display: grid; gap: 6px; margin: 0; padding-left: 20px; font-size: .9375rem; line-height: 1.4; }
+
+@keyframes mg-cap {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.12); background: color-mix(in srgb, var(--good) 35%, var(--mg-well)); }
+  100% { transform: scale(1); }
+}
+
+/* Yatay telefon: tahta solda, bilgiler sağda */
+@media (orientation: landscape) and (max-height: 560px) {
+  .mg {
+    max-width: 960px;
+    grid-template-columns: minmax(0, 1fr) minmax(200px, 270px);
+    grid-template-rows: auto auto minmax(0, 1fr);
+    align-content: stretch;
+    grid-template-areas: "stage opp" "stage me" "stage foot";
+  }
+  .mg-foot { justify-content: flex-start; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mg-pit, .mg-store { transition: none; }
+  .mg-pit.is-cap { animation: none; }
+}

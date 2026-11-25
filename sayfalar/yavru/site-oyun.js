@@ -7,7 +7,7 @@ import { toDay } from '../../js/core/gunler.js';
 import { jetonKaydi, jetonKazan } from './jeton.js';
 
 export const SITE_OYUNLARI = Object.freeze(['amiral', 'dama', 'dorttas', 'satranc', 'tavla', 'pisti', 'duello', 'kelime', 'sudoku',
-  'hafiza', 'ciz', 'yapboz', 'tanis', 'aynikafa', 'kimdaha', 'hicyaptin', 'derin', 'dogruluk', 'mangala', 'kutu']);
+  'hafiza', 'ciz', 'yapboz', 'tanis', 'aynikafa', 'kimdaha', 'hicyaptin', 'derin', 'dogruluk', 'mangala', 'kutu', 'reversi', 'hikaye']);
 /** kazan/kayip/beraber: rekabet; ortak: takım oyunu. */
 export const SITE_ODUL = Object.freeze({ kazan: 20, beraber: 15, kayip: 12, ortak: 15 });
 export const OYUN_HAK = 3;

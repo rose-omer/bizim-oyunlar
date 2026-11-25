@@ -145,6 +145,22 @@ export const GAMES = [
     minutes: '5–15 dk',
   },
   {
+    id: 'reversi',
+    title: 'Reversi',
+    emoji: '⚪',
+    desc: 'Taşını koy, aradaki taşları sıkıştırıp kendi rengine çevir. Tahtada çok taşı olan kazanır.',
+    players: '2',
+    minutes: '10–25 dk',
+  },
+  {
+    id: 'hikaye',
+    title: 'Birlikte Hikâye',
+    emoji: '📖',
+    desc: 'Bir açılış cümlesiyle başlayın, sırayla birer cümle ekleyin. Sonunda ikinizin hikâyesi çıkar.',
+    players: '2',
+    minutes: '10–20 dk',
+  },
+  {
     id: 'kelime',
     title: 'Kelime Zinciri',
     emoji: '🔤',
